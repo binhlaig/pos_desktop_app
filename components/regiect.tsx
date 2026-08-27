@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { fetchStaffById } from "@/lib/staff-validation";
 
 import {
   AlertTriangle,
@@ -34,6 +35,7 @@ import {
   Flame,
   GlassWater,
   Apple,
+  Paperclip,
 } from "lucide-react";
 
 import {
@@ -520,6 +522,46 @@ function authHeaders(): Record<string, string> {
         Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
       }
     : {};
+}
+
+function normalizeValidatedStaff(
+  payload: unknown,
+  fallbackStaffId: string,
+): NonNullable<StaffSessionResponse["staff"]> | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const root = payload as Record<string, unknown>;
+  const nested = root.staff ?? root.data ?? root.result ?? root.user ?? root;
+
+  if (!nested || typeof nested !== "object") return null;
+
+  const staff = nested as Record<string, unknown>;
+  const readString = (keys: string[]) => {
+    for (const key of keys) {
+      const value = staff[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+      if (typeof value === "number") return String(value);
+    }
+    return "";
+  };
+  const role = readString(["role", "staffRole"]).toLowerCase();
+
+  return {
+    id:
+      readString([
+        "staffId",
+        "staff_id",
+        "staffCode",
+        "staff_code",
+        "id",
+        "username",
+      ]) || fallbackStaffId,
+    name: readString(["staffName", "name", "fullName", "username"]),
+    role:
+      role === "supervise" || role === "supervisor" || role === "admin"
+        ? "supervise"
+        : "staff",
+  };
 }
 
 function ProductVisual({
@@ -1160,24 +1202,23 @@ export default function RegisterPOSPage() {
       setStaffLoginLoading(true);
       setStaffLoginError("");
 
-      const res = await fetch("/api/pos/staff-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffId: nextStaffId }),
-      });
+      const accessToken = getAccessToken();
 
-      const data: StaffSessionResponse | null = await res.json().catch(() => null);
-
-      if (!res.ok || !data?.staff?.id) {
-        throw new Error(
-          data?.message || "Staff ID ကို ဒီ owner ရဲ့ shop ထဲမှာမတွေ့ပါ။"
-        );
+      if (!accessToken) {
+        throw new Error("401 Unauthorized: Login session has expired.");
       }
 
-      setStaffId(data.staff.id);
-      setStaffIdDraft(data.staff.id);
-      setStaffName(data.staff.name || "");
-      setStaffRole(data.staff.role === "supervise" ? "supervise" : "staff");
+      const payload = await fetchStaffById(nextStaffId, accessToken);
+      const staff = normalizeValidatedStaff(payload, nextStaffId);
+
+      if (!staff?.id) {
+        throw new Error("Staff validation returned an invalid response.");
+      }
+
+      setStaffId(staff.id);
+      setStaffIdDraft(staff.id);
+      setStaffName(staff.name || "");
+      setStaffRole(staff.role === "supervise" ? "supervise" : "staff");
 
       await loadOwnerProducts();
       await loadReceiptSetting();
@@ -2932,7 +2973,7 @@ function POSActionsDialog({
       desc: "Receipt No နဲ့ရှာပြီး item return / refund လုပ်မယ်",
       badge: "Return",
       icon: <RotateCcw />,
-      onClick: () => routerPush("/refund"),
+      onClick: () => routerPush("/settings/refund"),
     },
     {
       label: "Receipt Shop Info",
@@ -2940,6 +2981,13 @@ function POSActionsDialog({
       badge: "Settings",
       icon: <Store />,
       onClick: () => routerPush("/settings/shop"),
+    },
+    {
+      label: "Receipt Info",
+      desc: "payment လုပ်ပြီး receipt မှာထွက်မယ့် info",
+      badge: "Settings",
+      icon: <Paperclip />,
+      onClick: () => routerPush("/settings/receipts"),
     },
     {
       label: "Clear Cart",

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BusinessTypeGuard } from "@/components/dashboard/business-type-guard";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
+import { fetchStaffById } from "@/lib/staff-validation";
 import {
   Armchair,
   BadgePercent,
@@ -72,6 +73,7 @@ type CartItem = {
   price: number;
   stock: number | null;
   qty: number;
+  kitchenSentQty: number;
   note?: string;
   modifiers: string[];
 };
@@ -822,6 +824,12 @@ function mapOpenOrderItemToCartItem(item: Record<string, unknown>): CartItem {
     1,
     pickNumber(item, ["quantity", "qty", "count", "productQuantity"]),
   );
+  const savedKitchenSentQty = pickOptionalNumber(item, [
+    "kitchenSentQty",
+    "kitchen_sent_qty",
+    "sentToKitchenQty",
+    "sent_to_kitchen_qty",
+  ]);
   const note = pickString(item, [
     "kitchenNote",
     "kitchen_note",
@@ -841,6 +849,10 @@ function mapOpenOrderItemToCartItem(item: Record<string, unknown>): CartItem {
     price,
     stock,
     qty,
+    // Existing OPEN-order items were already sent on an earlier ticket unless
+    // the backend explicitly returns a sent quantity. This prevents them from
+    // being included again when the cashier adds a second round.
+    kitchenSentQty: Math.max(0, savedKitchenSentQty ?? qty),
     note,
     modifiers: parseModifiers(item.modifiers ?? item.modifier),
   };
@@ -1031,6 +1043,7 @@ export default function RestaurantCashierPOSPage() {
   const [kitchenError, setKitchenError] = useState("");
   const [kitchenSuccessOpen, setKitchenSuccessOpen] = useState(false);
   const [kitchenSuccessMessage, setKitchenSuccessMessage] = useState("");
+  const [kitchenSuccessItemCount, setKitchenSuccessItemCount] = useState(0);
   const [cashReceived, setCashReceived] = useState("");
 
   useEffect(() => {
@@ -1160,32 +1173,7 @@ export default function RestaurantCashierPOSPage() {
         throw new Error(MISSING_TOKEN_MESSAGE);
       }
 
-      const staffUrl = `${API_BASE}/api/staff/by-staff-id/${encodeURIComponent(nextStaffId)}`;
-      logRequestAuth(staffUrl, usableToken);
-
-      const res = await fetch(staffUrl, {
-        method: "GET",
-        headers: authHeaders(usableToken),
-        cache: "no-store",
-      });
-
-      const authOrFeatureError = await getAuthOrFeatureError(res);
-      if (authOrFeatureError) throw new Error(authOrFeatureError);
-
-      if (res.status === 404) {
-        throw new Error(STAFF_NOT_FOUND_MESSAGE);
-      }
-
-      const data = await readResponsePayload(res);
-      const backendMessage = responsePayloadText(data);
-
-      if (res.status === 500 && /staff not found/i.test(backendMessage)) {
-        throw new Error(STAFF_NOT_FOUND_MESSAGE);
-      }
-
-      if (!res.ok) {
-        throw new Error(backendMessage || STAFF_NOT_FOUND_MESSAGE);
-      }
+      const data = await fetchStaffById(nextStaffId, usableToken);
 
       const staff = normalizeStaffResponse(data, nextStaffId);
 
@@ -1727,6 +1715,7 @@ export default function RestaurantCashierPOSPage() {
           price: item.price,
           stock: item.stock,
           qty: 1,
+          kitchenSentQty: 0,
           modifiers: [],
           note: "",
         },
@@ -1819,6 +1808,18 @@ export default function RestaurantCashierPOSPage() {
       return;
     }
 
+    const pendingKitchenItems = cart
+      .map((item) => ({
+        ...item,
+        pendingQty: Math.max(item.qty - item.kitchenSentQty, 0),
+      }))
+      .filter((item) => item.pendingQty > 0);
+
+    if (pendingKitchenItems.length === 0) {
+      setKitchenError("Kitchen ကိုပို့ရန် အသစ်ထပ်မှာထားသော item မရှိပါ။");
+      return;
+    }
+
     const kitchenOrder: KitchenOrderPayload = {
       orderType: orderType || "DINE_IN",
       ...(orderType === "DINE_IN" && selectedTable
@@ -1836,12 +1837,14 @@ export default function RestaurantCashierPOSPage() {
       tax,
       discount,
       total,
-      items: cart.map((item) => ({
+      // Only the quantity added after the previous successful kitchen ticket
+      // belongs to this ticket. The complete cart is still kept for payment.
+      items: pendingKitchenItems.map((item) => ({
         menuItemId: Number.isFinite(Number(item.menuItemId))
           ? Number(item.menuItemId)
           : null,
         itemName: item.name,
-        quantity: item.qty,
+        quantity: item.pendingQty,
         unitPrice: item.price,
         modifiers: item.modifiers,
         kitchenNote: item.note || "",
@@ -1851,6 +1854,15 @@ export default function RestaurantCashierPOSPage() {
     try {
       setKitchenSaving(true);
       setKitchenError("");
+
+      // A dine-in kitchen ticket must always belong to a persisted OPEN order.
+      // Keeping the cart only in React state causes it to disappear when the
+      // cashier opens the Kitchen page or reloads this page. The OPEN order is
+      // also what lets the backend mark the selected table as BUSY and restore
+      // the unpaid items when the table is selected again.
+      if (orderType === "DINE_IN") {
+        await saveOpenOrder();
+      }
 
       const kitchenUrl = `${API_BASE}/api/restaurant/kitchen/tickets`;
       logRequestAuth(kitchenUrl, usableToken);
@@ -1892,7 +1904,19 @@ export default function RestaurantCashierPOSPage() {
           ? `Kitchen order ပို့ပြီးပါပြီ။ Ticket No: ${ticketNo}`
           : "Kitchen order ပို့ပြီးပါပြီ။",
       );
+      setKitchenSuccessItemCount(
+        pendingKitchenItems.reduce((sum, item) => sum + item.pendingQty, 0),
+      );
       setKitchenSuccessOpen(true);
+
+      // Mark the current quantities as sent only after the ticket API succeeds.
+      // Further additions to the same item will therefore send only the delta.
+      setCart((currentCart) =>
+        currentCart.map((item) => ({
+          ...item,
+          kitchenSentQty: item.qty,
+        })),
+      );
 
       await fetchTables();
     } catch (err) {
@@ -3714,7 +3738,9 @@ export default function RestaurantCashierPOSPage() {
 
                 <div className="mt-2 flex items-center justify-between text-sm font-black">
                   <span>Items</span>
-                  <span className="text-orange-500">{cart.length}</span>
+                  <span className="text-orange-500">
+                    {kitchenSuccessItemCount}
+                  </span>
                 </div>
 
                 <div className="mt-2 flex items-center justify-between text-sm font-black">

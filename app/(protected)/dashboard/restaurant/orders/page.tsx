@@ -1,4 +1,8 @@
-"use client";
+
+
+
+
+"use client"
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -16,6 +20,7 @@ import {
   Eye,
   Loader2,
   PackageCheck,
+  Printer,
   RefreshCcw,
   Search,
   ShoppingBag,
@@ -83,6 +88,28 @@ type RestaurantOrder = {
   updatedAt?: string | null;
   paidAt?: string | null;
   items?: OrderItem[];
+};
+
+type RestaurantPayment = {
+  id: number | string;
+  orderId: number | string | null;
+  orderNo?: string | null;
+  paymentNo: string | null;
+  paymentMethod: string | null;
+  amount: number;
+  cashReceived: number;
+  changeAmount: number;
+  status: string | null;
+  paidAt?: string | null;
+  createdAt?: string | null;
+};
+
+type KitchenTicket = {
+  orderId: number | string | null;
+  orderNo: string | null;
+  ticketNo: string | null;
+  status: string | null;
+  priority: string | null;
 };
 
 const API_BASE =
@@ -375,16 +402,37 @@ function unwrapOrdersPayload(data: unknown): unknown[] {
   if (Array.isArray(data)) return data;
 
   const root = asRecord(data);
+  const directLists = [
+    root.orders,
+    root.payments,
+    root.tickets,
+    root.content,
+    root.items,
+    root.results,
+  ];
 
-  const list =
-    root.orders ||
-    root.data ||
-    root.content ||
-    root.items ||
-    root.results ||
-    root.result;
+  for (const list of directLists) {
+    if (Array.isArray(list)) return list;
+  }
 
-  return Array.isArray(list) ? list : [];
+  for (const key of ["data", "result"]) {
+    const nested = root[key];
+    if (Array.isArray(nested)) return nested;
+
+    const nestedRecord = asRecord(nested);
+    for (const list of [
+      nestedRecord.orders,
+      nestedRecord.payments,
+      nestedRecord.tickets,
+      nestedRecord.content,
+      nestedRecord.items,
+      nestedRecord.results,
+    ]) {
+      if (Array.isArray(list)) return list;
+    }
+  }
+
+  return [];
 }
 
 function mapOrderItem(raw: unknown): OrderItem {
@@ -427,15 +475,17 @@ function mapOrderItem(raw: unknown): OrderItem {
 }
 
 function mapOrder(raw: unknown): RestaurantOrder {
-  const record = asRecord(raw);
+  const outerRecord = asRecord(raw);
+  const nestedOrder = asRecord(outerRecord.order);
+  const nestedPayment = asRecord(outerRecord.payment);
+  const record = {
+    ...nestedOrder,
+    ...outerRecord,
+  };
 
-  const itemsSource = Array.isArray(record.items)
-    ? record.items
-    : Array.isArray(record.orderItems)
-      ? record.orderItems
-      : Array.isArray(record.order_items)
-        ? record.order_items
-        : [];
+  const itemsSource = [record.items, record.orderItems, record.order_items].find(
+    Array.isArray,
+  ) || [];
 
   const items = itemsSource.map(mapOrderItem);
 
@@ -463,7 +513,10 @@ function mapOrder(raw: unknown): RestaurantOrder {
       pickString(record, ["ticketNo", "ticket_no"]) ||
       pickString(record, ["paymentNo", "payment_no"]),
     ticketNo: pickString(record, ["ticketNo", "ticket_no"]) || null,
-    paymentNo: pickString(record, ["paymentNo", "payment_no"]) || null,
+    paymentNo:
+      pickString(record, ["paymentNo", "payment_no"]) ||
+      pickString(nestedPayment, ["paymentNo", "payment_no"]) ||
+      null,
     orderType:
       pickString(record, ["orderType", "order_type", "type"]) || "DINE_IN",
     tableId: pickNumber(record, ["tableId", "table_id"]) || null,
@@ -476,21 +529,212 @@ function mapOrder(raw: unknown): RestaurantOrder {
     cashierName:
       pickString(record, ["cashierName", "cashier_name", "staffName"]) || null,
     paymentMethod:
-      pickString(record, ["paymentMethod", "payment_method"]) || null,
+      pickString(record, ["paymentMethod", "payment_method"]) ||
+      pickString(nestedPayment, ["paymentMethod", "payment_method", "method"]) ||
+      null,
     subtotal,
     serviceCharge,
     tax,
     discount,
     total,
-    cashReceived: pickNumber(record, ["cashReceived", "cash_received"]),
-    changeAmount: pickNumber(record, ["changeAmount", "change_amount"]),
+    cashReceived:
+      pickNumber(record, ["cashReceived", "cash_received"]) ||
+      pickNumber(nestedPayment, ["cashReceived", "cash_received"]),
+    changeAmount:
+      pickNumber(record, ["changeAmount", "change_amount"]) ||
+      pickNumber(nestedPayment, ["changeAmount", "change_amount"]),
     note: pickString(record, ["note", "remark"]) || null,
     createdAt:
       pickString(record, ["createdAt", "created_at", "orderedAt"]) || null,
     updatedAt: pickString(record, ["updatedAt", "updated_at"]) || null,
-    paidAt: pickString(record, ["paidAt", "paid_at"]) || null,
+    paidAt:
+      pickString(record, ["paidAt", "paid_at"]) ||
+      pickString(nestedPayment, ["paidAt", "paid_at", "createdAt", "created_at"]) ||
+      null,
     items,
   };
+}
+
+function mapPayment(raw: unknown): RestaurantPayment {
+  const outer = asRecord(raw);
+  const record = { ...asRecord(outer.payment), ...outer };
+
+  return {
+    id: pickString(record, ["id", "paymentId", "payment_id"]) || crypto.randomUUID(),
+    orderId: pickString(record, ["orderId", "order_id"]) || null,
+    orderNo: pickString(record, ["orderNo", "order_no"]) || null,
+    paymentNo: pickString(record, ["paymentNo", "payment_no"]) || null,
+    paymentMethod:
+      pickString(record, ["paymentMethod", "payment_method", "method"]) || null,
+    amount: pickNumber(record, ["amount", "total"]),
+    cashReceived: pickNumber(record, ["cashReceived", "cash_received"]),
+    changeAmount: pickNumber(record, ["changeAmount", "change_amount"]),
+    status: pickString(record, ["status", "paymentStatus", "payment_status"]) || null,
+    paidAt:
+      pickString(record, ["paidAt", "paid_at", "createdAt", "created_at"]) || null,
+    createdAt: pickString(record, ["createdAt", "created_at"]) || null,
+  };
+}
+
+function mapKitchenTicket(raw: unknown): KitchenTicket {
+  const outer = asRecord(raw);
+  const record = { ...asRecord(outer.ticket), ...outer };
+
+  return {
+    orderId: pickString(record, ["orderId", "order_id"]) || null,
+    orderNo: pickString(record, ["orderNo", "order_no"]) || null,
+    ticketNo: pickString(record, ["ticketNo", "ticket_no"]) || null,
+    status: pickString(record, ["status", "kitchenStatus", "kitchen_status"]) || null,
+    priority: pickString(record, ["priority"]) || null,
+  };
+}
+
+function enrichOrders(
+  orders: RestaurantOrder[],
+  payments: RestaurantPayment[],
+  tickets: KitchenTicket[],
+) {
+  const paymentByOrderId = new Map<string, RestaurantPayment>();
+  const paymentByOrderNo = new Map<string, RestaurantPayment>();
+  const ticketByOrderId = new Map<string, KitchenTicket>();
+  const ticketByOrderNo = new Map<string, KitchenTicket>();
+
+  payments.forEach((payment) => {
+    if (payment.orderId != null) paymentByOrderId.set(String(payment.orderId), payment);
+    if (payment.orderNo) paymentByOrderNo.set(payment.orderNo, payment);
+  });
+  tickets.forEach((ticket) => {
+    if (ticket.orderId != null) ticketByOrderId.set(String(ticket.orderId), ticket);
+    if (ticket.orderNo) ticketByOrderNo.set(ticket.orderNo, ticket);
+  });
+
+  return orders.map((order) => {
+    const payment =
+      paymentByOrderId.get(String(order.id)) ||
+      (order.orderNo ? paymentByOrderNo.get(order.orderNo) : undefined);
+    const ticket =
+      ticketByOrderId.get(String(order.id)) ||
+      (order.orderNo ? ticketByOrderNo.get(order.orderNo) : undefined);
+
+    return {
+      ...order,
+      ticketNo: ticket?.ticketNo ?? order.ticketNo ?? null,
+      priority: ticket?.priority ?? order.priority ?? null,
+      paymentNo: payment?.paymentNo ?? order.paymentNo ?? null,
+      paymentMethod: payment?.paymentMethod ?? order.paymentMethod ?? null,
+      cashReceived: payment?.cashReceived ?? order.cashReceived ?? 0,
+      changeAmount: payment?.changeAmount ?? order.changeAmount ?? 0,
+      paidAt: payment?.paidAt ?? order.paidAt ?? null,
+      status:
+        String(payment?.status || "").toUpperCase() === "PAID"
+          ? "PAID"
+          : order.status,
+    };
+  });
+}
+
+function getPaymentLabel(order: RestaurantOrder) {
+  if (order.paymentMethod) return order.paymentMethod.toUpperCase();
+  if (String(order.status).toUpperCase() === "PAID" || order.paymentNo) return "PAID";
+  return "UNPAID";
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function buildOrderReceiptHtml(order: RestaurantOrder) {
+  const orderLabel = order.orderNo || order.paymentNo || order.ticketNo || `ORD-${order.id}`;
+  const itemRows = (order.items || [])
+    .map((item) => {
+      const lineTotal =
+        Number(item.totalPrice || 0) ||
+        Number(item.unitPrice || 0) * Number(item.quantity || 1);
+      const itemModifiers = parseModifiers(item.modifiers);
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(item.itemName)}</strong>
+            ${itemModifiers.length ? `<small>${escapeHtml(itemModifiers.join(", "))}</small>` : ""}
+            ${item.kitchenNote ? `<small>Note: ${escapeHtml(item.kitchenNote)}</small>` : ""}
+          </td>
+          <td class="center">${escapeHtml(item.quantity || 1)}</td>
+          <td class="right">${formatMoney(item.unitPrice)}</td>
+          <td class="right">${formatMoney(lineTotal)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>${escapeHtml(orderLabel)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { width: 80mm; margin: 0 auto; padding: 5mm; color: #111827; font-family: Arial, sans-serif; font-size: 11px; }
+        h1 { margin: 0; text-align: center; font-size: 18px; }
+        .subtitle { margin: 4px 0 12px; text-align: center; color: #6b7280; }
+        .line { display: flex; justify-content: space-between; gap: 12px; margin: 5px 0; }
+        .divider { margin: 10px 0; border-top: 1px dashed #9ca3af; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 6px 2px; vertical-align: top; border-bottom: 1px dashed #e5e7eb; }
+        th { text-align: left; font-size: 10px; }
+        small { display: block; margin-top: 2px; color: #6b7280; }
+        .center { text-align: center; }
+        .right { text-align: right; }
+        .total { margin-top: 6px; padding-top: 8px; border-top: 1px solid #111827; font-size: 14px; font-weight: 800; }
+        @page { size: 80mm auto; margin: 0; }
+        @media print { body { width: 80mm; } }
+      </style>
+    </head>
+    <body>
+      <h1>Restaurant Receipt</h1>
+      <div class="subtitle">Re-print</div>
+      <div class="line"><span>Order</span><strong>${escapeHtml(orderLabel)}</strong></div>
+      <div class="line"><span>Payment No</span><strong>${escapeHtml(order.paymentNo || "-")}</strong></div>
+      <div class="line"><span>Date</span><strong>${escapeHtml(formatDateTime(order.paidAt || order.createdAt || order.updatedAt))}</strong></div>
+      <div class="line"><span>Type</span><strong>${escapeHtml(normalizeOrderType(order.orderType))}</strong></div>
+      ${normalizeOrderType(order.orderType) === "DINE_IN" ? `<div class="line"><span>Table</span><strong>${escapeHtml(order.tableNo || "-")}</strong></div>` : ""}
+      <div class="line"><span>Staff</span><strong>${escapeHtml(order.staffName || order.cashierName || "-")}</strong></div>
+      <div class="line"><span>Staff ID</span><strong>${escapeHtml(order.staffId || "-")}</strong></div>
+      <div class="divider"></div>
+      <table>
+        <thead><tr><th>Item</th><th class="center">Qty</th><th class="right">Price</th><th class="right">Amount</th></tr></thead>
+        <tbody>${itemRows || `<tr><td colspan="4" class="center">No order items</td></tr>`}</tbody>
+      </table>
+      <div class="line"><span>Subtotal</span><strong>${formatMoney(order.subtotal)} Ks</strong></div>
+      <div class="line"><span>Service</span><strong>${formatMoney(order.serviceCharge)} Ks</strong></div>
+      <div class="line"><span>Tax</span><strong>${formatMoney(order.tax)} Ks</strong></div>
+      <div class="line"><span>Discount</span><strong>${formatMoney(order.discount)} Ks</strong></div>
+      <div class="line total"><span>Total</span><span>${formatMoney(order.total)} Ks</span></div>
+      <div class="line"><span>Payment</span><strong>${escapeHtml(getPaymentLabel(order))}</strong></div>
+      <div class="line"><span>Cash Received</span><strong>${formatMoney(order.cashReceived)} Ks</strong></div>
+      <div class="line"><span>Change</span><strong>${formatMoney(order.changeAmount)} Ks</strong></div>
+      <div class="line"><span>Paid At</span><strong>${escapeHtml(formatDateTime(order.paidAt))}</strong></div>
+    </body>
+  </html>`;
+}
+
+function reprintOrder(order: RestaurantOrder) {
+  const printWindow = window.open("", "_blank", "width=420,height=760");
+
+  if (!printWindow) {
+    window.alert("Print window ကို browser က block လုပ်ထားပါတယ်။ Pop-up ကို Allow လုပ်ပါ။");
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(buildOrderReceiptHtml(order));
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => printWindow.print(), 250);
 }
 
 function OrderTypeIcon({
@@ -622,6 +866,7 @@ export default function RestaurantOrdersPage() {
     return counts;
   }, [orders, selectedDate]);
 
+  /* Legacy cross-endpoint loader retained in source history only.
   async function fetchOrders() {
     setLoading(true);
     setError("");
@@ -634,12 +879,12 @@ export default function RestaurantOrdersPage() {
       }
 
       const urls = [
+        `${API_BASE}/api/restaurant/kitchen/tickets`,
         `${API_BASE}/api/restaurant/orders`,
         `${API_BASE}/api/restaurant/payments`,
-        `${API_BASE}/api/restaurant/kitchen/tickets`,
       ];
 
-      let loadedData: unknown = null;
+      const loadedPayloads: unknown[] = [];
       let lastError = "";
 
       for (const url of urls) {
@@ -655,11 +900,15 @@ export default function RestaurantOrdersPage() {
         }
 
         const authOrFeatureError = await getAuthOrFeatureError(res);
-        if (authOrFeatureError) throw new Error(authOrFeatureError);
+        if (authOrFeatureError) {
+          if (res.status === 401) throw new Error(authOrFeatureError);
+          lastError = authOrFeatureError;
+          continue;
+        }
 
         if (res.ok) {
-          loadedData = await res.json().catch(() => []);
-          break;
+          loadedPayloads.push(await res.json().catch(() => []));
+          continue;
         }
 
         lastError = await getApiErrorMessage(
@@ -668,12 +917,13 @@ export default function RestaurantOrdersPage() {
         );
       }
 
-      if (!loadedData) {
+      if (loadedPayloads.length === 0) {
         throw new Error(lastError || "Restaurant orders များကိုယူမရပါ။");
       }
 
-      const mappedOrders = unwrapOrdersPayload(loadedData)
-        .map(mapOrder)
+      const mappedOrders = mergeRestaurantOrders(
+        loadedPayloads.flatMap(unwrapOrdersPayload).map(mapOrder),
+      )
         .sort((a, b) => {
           const aTime = new Date(
             a.paidAt || a.createdAt || a.updatedAt || 0,
@@ -697,6 +947,84 @@ export default function RestaurantOrdersPage() {
     }
   }
 
+  */
+  async function fetchCanonicalOrders() {
+    setLoading(true);
+    setError("");
+
+    try {
+      if (!getAccessToken()) throw new Error(MISSING_TOKEN_MESSAGE);
+
+      async function loadEndpoint(url: string) {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: authHeaders(),
+          cache: "no-store",
+        }).catch(() => null);
+
+        if (!res) throw new Error("Server is unavailable.");
+
+        const authOrFeatureError = await getAuthOrFeatureError(res);
+        if (authOrFeatureError) throw new Error(authOrFeatureError);
+        if (!res.ok) {
+          throw new Error(
+            await getApiErrorMessage(res, "Restaurant data could not be loaded."),
+          );
+        }
+
+        return res.json().catch(() => []);
+      }
+
+      // Orders are authoritative: failure here prevents rendering partial records.
+      const orderPayload = await loadEndpoint(
+        `${API_BASE}/api/restaurant/orders`,
+      );
+      const [paymentResult, ticketResult] = await Promise.allSettled([
+        loadEndpoint(`${API_BASE}/api/restaurant/payments`),
+        loadEndpoint(`${API_BASE}/api/restaurant/kitchen/tickets`),
+      ]);
+
+      const authoritativeOrders = Array.from(
+        new Map(
+          unwrapOrdersPayload(orderPayload)
+            .map(mapOrder)
+            .map((order) => [String(order.id), order] as const),
+        ).values(),
+      );
+      const payments =
+        paymentResult.status === "fulfilled"
+          ? unwrapOrdersPayload(paymentResult.value).map(mapPayment)
+          : [];
+      const tickets =
+        ticketResult.status === "fulfilled"
+          ? unwrapOrdersPayload(ticketResult.value).map(mapKitchenTicket)
+          : [];
+      const warnings: string[] = [];
+
+      if (paymentResult.status === "rejected") {
+        warnings.push("Payment information is temporarily unavailable.");
+      }
+      if (ticketResult.status === "rejected") {
+        warnings.push("Kitchen ticket information is temporarily unavailable.");
+      }
+
+      const mappedOrders = enrichOrders(authoritativeOrders, payments, tickets).sort(
+        (a, b) =>
+          new Date(b.paidAt || b.createdAt || b.updatedAt || 0).getTime() -
+          new Date(a.paidAt || a.createdAt || a.updatedAt || 0).getTime(),
+      );
+
+      setOrders(mappedOrders);
+      setError(warnings.join(" "));
+      setPage(1);
+    } catch (err) {
+      setOrders([]);
+      setError(err instanceof Error ? err.message : "Restaurant orders loading error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function resetFilters() {
     setSelectedStatus("ALL");
     setSelectedType("ALL");
@@ -706,7 +1034,7 @@ export default function RestaurantOrdersPage() {
   }
 
   useEffect(() => {
-    fetchOrders();
+    fetchCanonicalOrders();
   }, []);
 
   useEffect(() => {
@@ -753,7 +1081,7 @@ export default function RestaurantOrdersPage() {
               </button>
 
               <button
-                onClick={fetchOrders}
+                onClick={fetchCanonicalOrders}
                 disabled={loading}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition hover:bg-slate-800 disabled:opacity-60"
               >
@@ -943,7 +1271,6 @@ export default function RestaurantOrdersPage() {
                   <tr>
                     <th className="px-4 py-3">Order</th>
                     <th className="px-4 py-3">Table / Type</th>
-                    <th className="px-4 py-3">Items</th>
                     <th className="px-4 py-3">Staff</th>
                     <th className="px-4 py-3">Payment</th>
                     <th className="px-4 py-3">Total</th>
@@ -958,7 +1285,7 @@ export default function RestaurantOrdersPage() {
                     const status = normalizeStatus(order.status);
                     const meta = statusStyle[status];
                     return (
-                      <tr key={order.id} className="bg-white hover:bg-slate-50">
+                      <tr key={`order-${order.id}`} className="bg-white hover:bg-slate-50">
                         <td className="px-4 py-4 align-top">
                           <div className="font-black text-slate-950">
                             {order.orderNo || order.ticketNo || `ORD-${order.id}`}
@@ -985,18 +1312,39 @@ export default function RestaurantOrdersPage() {
                           </div>
                         </td>
 
-                        <td className="max-w-[300px] px-4 py-4 align-top">
-                          <div className="line-clamp-2 text-sm font-bold text-slate-700">
-                            {order.items?.length
-                              ? order.items
-                                  .slice(0, 3)
-                                  .map(
-                                    (item) =>
-                                      `${item.quantity || 1}x ${item.itemName}`,
-                                  )
-                                  .join(", ")
-                              : "-"}
-                          </div>
+                      
+                        {/* <td className="max-w-[300px] px-4 py-4 align-top">
+                          {order.items?.length ? (
+                            <div className="space-y-1.5">
+                              {order.items.slice(0, 3).map((item, index) => (
+                                <div
+                                  key={`${item.id || index}`}
+                                  className="flex items-start justify-between gap-3 text-sm"
+                                >
+                                  <span className="font-bold text-slate-700">
+                                    {item.quantity || 1}x {item.itemName}
+                                  </span>
+                                  <span className="shrink-0 font-black text-slate-500">
+                                    {formatMoney(
+                                      item.totalPrice ||
+                                        Number(item.unitPrice || 0) *
+                                          Number(item.quantity || 1),
+                                    )}{" "}
+                                    Ks
+                                  </span>
+                                </div>
+                              ))}
+                              {order.items.length > 3 && (
+                                <div className="text-xs font-black text-slate-400">
+                                  +{order.items.length - 3} more
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-sm font-bold text-slate-400">
+                              No order items
+                            </div>
+                          )}
 
                           <div className="mt-1 text-xs font-black text-orange-500">
                             {order.items?.reduce(
@@ -1005,7 +1353,7 @@ export default function RestaurantOrdersPage() {
                             ) || 0}{" "}
                             items
                           </div>
-                        </td>
+                        </td> */}
 
                         <td className="px-4 py-4 align-top">
                           <div className="font-bold text-slate-700">
@@ -1020,7 +1368,7 @@ export default function RestaurantOrdersPage() {
                         </td>
 
                         <td className="px-4 py-4 align-top">
-                          <PaymentBadge method={order.paymentMethod} />
+                          <PaymentBadge order={order} />
                         </td>
 
                         <td className="px-4 py-4 align-top">
@@ -1044,13 +1392,22 @@ export default function RestaurantOrdersPage() {
                         </td>
 
                         <td className="px-4 py-4 align-top text-right">
-                          <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white transition hover:bg-slate-800"
-                          >
-                            <Eye size={16} />
-                            View
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white transition hover:bg-slate-800"
+                            >
+                              <Eye size={16} />
+                              View
+                            </button>
+                            <button
+                              onClick={() => reprintOrder(order)}
+                              className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-sm font-black text-white transition hover:bg-orange-600"
+                            >
+                              <Printer size={16} />
+                              Re-print
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1153,8 +1510,8 @@ function SummaryCard({
   );
 }
 
-function PaymentBadge({ method }: { method?: PaymentMethod | null }) {
-  const normalized = String(method || "UNPAID").toUpperCase();
+function PaymentBadge({ order }: { order: RestaurantOrder }) {
+  const normalized = getPaymentLabel(order);
 
   const Icon =
     normalized === "CASH"
@@ -1207,12 +1564,21 @@ function OrderDetailDialog({
             </p>
           </div>
 
-          <button
-            onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-100 text-slate-700 transition hover:bg-slate-200"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => reprintOrder(order)}
+              className="inline-flex h-10 items-center gap-2 rounded-2xl bg-orange-500 px-4 text-sm font-black text-white transition hover:bg-orange-600"
+            >
+              <Printer size={17} />
+              Re-print
+            </button>
+            <button
+              onClick={onClose}
+              className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-100 text-slate-700 transition hover:bg-slate-200"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="max-h-[calc(90vh-90px)] overflow-y-auto p-5">
@@ -1258,6 +1624,12 @@ function OrderDetailDialog({
             </div>
 
             <div className="divide-y divide-slate-100">
+              {(order.items || []).length === 0 && (
+                <div className="p-6 text-center text-sm font-bold text-slate-400">
+                  ဒီ order အတွက် items data မရှိပါ။
+                </div>
+              )}
+
               {(order.items || []).map((item, index) => {
                 const modifiers = parseModifiers(item.modifiers);
 
@@ -1328,7 +1700,7 @@ function OrderDetailDialog({
 
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-500">Payment</span>
-                  <PaymentBadge method={order.paymentMethod} />
+                  <PaymentBadge order={order} />
                 </div>
               </div>
 

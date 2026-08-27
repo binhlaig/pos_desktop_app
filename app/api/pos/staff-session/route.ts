@@ -13,9 +13,11 @@ type Attempt = {
   error?: string;
 };
 
-const BACKEND_BASE = process.env.REMOTE_API_BASE_URL || "http://localhost:8080";
+const BACKEND_BASE = (
+  process.env.REMOTE_API_BASE_URL || "http://localhost:8080"
+).replace(/\/+$/, "");
 const STAFF_VALIDATE_PATH =
-  process.env.REMOTE_STAFF_VALIDATE_PATH || "/api/staff/validate";
+  process.env.REMOTE_STAFF_VALIDATE_PATH || "/api/staff/by-staff-id";
 const STAFF_LIST_PATH = process.env.REMOTE_STAFF_LIST_PATH || "/api/staff";
 const STAFF_ID_KEYS = [
   "staffId",
@@ -134,6 +136,20 @@ const staffMatchesOwnerShop = (
 async function backendFetch(path: string, init: RequestInit) {
   const url = path.startsWith("http") ? path : `${BACKEND_BASE}${path}`;
   return fetch(url, init);
+}
+
+function staffValidatePath(staffId: string) {
+  const encodedStaffId = encodeURIComponent(staffId);
+
+  if (STAFF_VALIDATE_PATH.includes("{staffId}")) {
+    return STAFF_VALIDATE_PATH.replace("{staffId}", encodedStaffId);
+  }
+
+  if (/\/by-staff-id\/?$/.test(STAFF_VALIDATE_PATH)) {
+    return `${STAFF_VALIDATE_PATH.replace(/\/+$/, "")}/${encodedStaffId}`;
+  }
+
+  return STAFF_VALIDATE_PATH;
 }
 
 async function backendFetchAttempt(
@@ -289,11 +305,13 @@ export async function POST(request: Request) {
   const validateLooksLikeListPath =
     STAFF_VALIDATE_PATH === STAFF_LIST_PATH ||
     /\/api\/staffs?\/?$/.test(STAFF_VALIDATE_PATH);
+  const validatePath = staffValidatePath(staffId);
+  const validateUsesPathParameter = validatePath !== STAFF_VALIDATE_PATH;
 
-  const validateRes = validateLooksLikeListPath
+  const validateRes = validateLooksLikeListPath || validateUsesPathParameter
     ? null
     : await backendFetchAttempt(
-        STAFF_VALIDATE_PATH,
+        validatePath,
         {
           method: "POST",
           headers: authHeaders,
@@ -344,7 +362,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const validateGetPath = `${STAFF_VALIDATE_PATH}?${query.toString()}`;
+  const validateGetPath = validateUsesPathParameter
+    ? validatePath
+    : `${validatePath}?${query.toString()}`;
   const validateGetRes = validateLooksLikeListPath
     ? null
     : await backendFetchAttempt(

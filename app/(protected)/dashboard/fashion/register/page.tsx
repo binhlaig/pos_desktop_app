@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BusinessTypeGuard } from "@/components/dashboard/business-type-guard";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
+import { fetchStaffById } from "@/lib/staff-validation";
 import {
   BadgePercent,
   Check,
@@ -639,24 +640,14 @@ export default function FashionRegisterPage() {
         throw new Error(MISSING_TOKEN_MESSAGE);
       }
 
-      const res = await fetch(
-        `${API_BASE}/api/staff/by-staff-id/${encodeURIComponent(nextStaffId)}`,
-        {
-          method: "GET",
-          headers: authHeaders(),
-          cache: "no-store",
-        },
+      const data = asRecord(
+        await fetchStaffById(nextStaffId, getAccessToken() || ""),
       );
 
-      if (res.status === 401 || res.status === 403) {
-        throw new Error(MISSING_TOKEN_MESSAGE);
-      }
-
-      if (!res.ok) {
+      if (Object.keys(data).length === 0) {
         throw new Error("ဒီ Staff ID ကို မတွေ့ပါ။");
       }
 
-      const data = asRecord(await res.json().catch(() => null));
       const staff = Object.keys(asRecord(data.staff)).length
         ? asRecord(data.staff)
         : Object.keys(asRecord(data.data)).length
