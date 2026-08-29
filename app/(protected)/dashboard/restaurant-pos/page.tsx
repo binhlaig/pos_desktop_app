@@ -1,13 +1,22 @@
-"use client";
+
+"use client"
+// UPDATED: Fashion-POS-style payment assistance and latest cart item priority.
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  DragDropProvider,
+  DragOverlay,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/react";
 import { BusinessTypeGuard } from "@/components/dashboard/business-type-guard";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
 import { fetchStaffById } from "@/lib/staff-validation";
 import {
+  ArrowLeft,
   Armchair,
   BadgePercent,
   Banknote,
@@ -18,6 +27,7 @@ import {
   Clock3,
   Coffee,
   CreditCard,
+  GripVertical,
   IdCard,
   Loader2,
   Minus,
@@ -76,6 +86,19 @@ type CartItem = {
   kitchenSentQty: number;
   note?: string;
   modifiers: string[];
+};
+
+type RestaurantCartDraft = {
+  version: 1;
+  savedAt: number;
+  staffId: string;
+  orderType: OrderType;
+  selectedTableId: number | null;
+  discount: number;
+  serviceChargeEnabled: boolean;
+  serviceChargeRatePercent: number;
+  taxRatePercent: number;
+  items: CartItem[];
 };
 
 type RestaurantTable = {
@@ -152,6 +175,7 @@ type PaymentOrderPayload = Omit<KitchenOrderPayload, "items" | "priority"> & {
 type PaymentReceiptData = PaymentOrderPayload & {
   orderNo: string;
   paymentNo: string;
+  receiptNo: string;
   paidAt: string;
   cashierName: string;
   cashierStaffId: string;
@@ -243,7 +267,7 @@ function buildPaymentReceiptHtml(
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Receipt ${escapeHtml(receipt.paymentNo)}</title>
+        <title>Receipt ${escapeHtml(receipt.receiptNo)}</title>
         <style>
           * { box-sizing: border-box; }
           body {
@@ -343,7 +367,8 @@ function buildPaymentReceiptHtml(
 
           <div class="divider"></div>
 
-          <div class="line"><span>Receipt No</span><strong>${escapeHtml(receipt.paymentNo)}</strong></div>
+          <div class="line"><span>Receipt No</span><strong>${escapeHtml(receipt.receiptNo)}</strong></div>
+          <div class="line"><span>Payment No</span><strong>${escapeHtml(receipt.paymentNo)}</strong></div>
           <div class="line"><span>Order No</span><strong>${escapeHtml(receipt.orderNo)}</strong></div>
           <div class="line"><span>Date</span><strong>${escapeHtml(formatReceiptDate(receipt.paidAt))}</strong></div>
           <div class="line"><span>Order Type</span><strong>${escapeHtml(receipt.orderType)}</strong></div>
@@ -424,6 +449,37 @@ const FEATURE_DISABLED_MESSAGE =
   "ဒီဆိုင် plan မှာ Restaurant feature မဖွင့်ထားပါ။ Super Admin > Shop Feature Control မှာ Restaurant Feature Gate ကို ON လုပ်ပါ။";
 const CART_ITEMS_PER_PAGE = 3;
 const MENU_ITEMS_PER_PAGE = 8;
+const CART_DROP_ID = "restaurant-cart-drop-zone";
+const MOBILE_CART_DROP_ID = "restaurant-mobile-cart-drop-zone";
+const CART_WIDTH_STORAGE_KEY = "restaurant_pos_cart_width";
+const DEFAULT_CART_WIDTH = 430;
+const MIN_CART_WIDTH = 340;
+const MAX_CART_WIDTH = 680;
+const CART_DRAFT_VERSION = 1;
+const CART_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;
+const CART_DRAFT_KEY_PREFIX = "restaurant_pos_cart_draft_v1";
+
+function getShopDraftScope(token?: string | null) {
+  try {
+    const rawToken = token?.replace(/^Bearer\s+/i, "").trim();
+    const payloadPart = rawToken?.split(".")[1];
+    if (!payloadPart) return "current-shop";
+
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const payload = JSON.parse(globalThis.atob(padded)) as Record<string, unknown>;
+
+    return String(
+      payload.shopId || payload.shop_id || payload.shopCode || payload.shop_code || "current-shop",
+    );
+  } catch {
+    return "current-shop";
+  }
+}
+
+function getRestaurantCartDraftKey(staffId: string, token?: string | null) {
+  return `${CART_DRAFT_KEY_PREFIX}:${getShopDraftScope(token)}:${staffId}`;
+}
 
 function getAccessToken() {
   if (typeof window === "undefined") return null;
@@ -994,6 +1050,180 @@ function formatPaymentErrorMessage(message: string) {
   return normalized;
 }
 
+function DraggableMenuCard({
+  menuItemId,
+  disabled,
+  onClick,
+  className,
+  children,
+}: {
+  menuItemId: string;
+  disabled: boolean;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const { ref, isDragging } = useDraggable({
+    id: `restaurant-menu:${menuItemId}`,
+    disabled,
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${className} touch-none select-none cursor-grab active:cursor-grabbing ${
+        isDragging ? "scale-[0.98] opacity-35" : ""
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RestaurantCartDropSurface({
+  dragging,
+  darkMode,
+  addedFeedbackVisible,
+  children,
+}: {
+  dragging: boolean;
+  darkMode: boolean;
+  addedFeedbackVisible: boolean;
+  children: React.ReactNode;
+}) {
+  const { ref, isDropTarget } = useDroppable({ id: CART_DROP_ID });
+
+  return (
+    <div
+      ref={ref}
+      data-restaurant-cart-target="true"
+      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] border shadow-sm transition ${
+        isDropTarget
+          ? darkMode
+            ? "border-emerald-400 bg-emerald-500/10 ring-4 ring-emerald-400/25"
+            : "border-emerald-400 bg-emerald-50 ring-4 ring-emerald-300/35"
+          : dragging
+            ? darkMode
+              ? "border-orange-400 bg-orange-500/10 ring-4 ring-orange-400/20"
+              : "border-orange-400 bg-orange-50 ring-4 ring-orange-300/30"
+            : darkMode
+              ? "border-white/10 bg-slate-950/95"
+              : "border-orange-100 bg-white/95"
+      }`}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-30 rounded-2xl bg-orange-500 px-4 py-2 text-center text-xs font-black text-white shadow-lg">
+          {isDropTarget ? "Release to add item" : "Drop here to add item"}
+        </div>
+      )}
+      <AnimatePresence>
+        {addedFeedbackVisible && !dragging && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.94 }}
+            className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg shadow-emerald-500/30"
+          >
+            <Check size={16} /> Added to Cart
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {children}
+    </div>
+  );
+}
+
+function RestaurantMobileCartBar({
+  darkMode,
+  dragging,
+  itemCount,
+  total,
+  onViewCart,
+  onKitchen,
+  onPayment,
+  kitchenSaving,
+  addedFeedbackVisible,
+}: {
+  darkMode: boolean;
+  dragging: boolean;
+  itemCount: number;
+  total: number;
+  onViewCart: () => void;
+  onKitchen: () => void;
+  onPayment: () => void;
+  kitchenSaving: boolean;
+  addedFeedbackVisible: boolean;
+}) {
+  const { ref, isDropTarget } = useDroppable({ id: MOBILE_CART_DROP_ID });
+  const hasItems = itemCount > 0;
+
+  return (
+    <div
+      ref={ref}
+      data-restaurant-cart-target="true"
+      className={`fixed inset-x-2 bottom-2 z-50 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl transition-colors lg:landscape:hidden ${
+        isDropTarget
+          ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
+          : dragging
+            ? "border-orange-400 bg-orange-500 text-white ring-4 ring-orange-400/20"
+            : addedFeedbackVisible
+              ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
+            : darkMode
+              ? "border-white/10 bg-slate-900/95 text-white"
+              : "border-orange-100 bg-white/95 text-slate-950"
+      }`}
+      style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
+    >
+      {dragging ? (
+        <div className="flex min-h-14 items-center justify-center gap-2 px-3 text-sm font-black">
+          <ShoppingBag size={20} />
+          {isDropTarget ? "Release to add item" : "Drag menu item here"}
+        </div>
+      ) : (
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2">
+          <button
+            type="button"
+            onClick={onViewCart}
+            className="min-w-0 rounded-xl px-2 py-1 text-left"
+          >
+            <span className="block truncate text-xs font-black text-orange-500">
+              {itemCount} items · {formatMoney(total)} Ks
+            </span>
+            <span className="block text-[11px] font-bold opacity-70">View cart</span>
+          </button>
+          <button
+            type="button"
+            onClick={onKitchen}
+            disabled={!hasItems || kitchenSaving}
+            className="grid h-11 w-11 place-items-center rounded-xl bg-slate-950 text-white disabled:opacity-40"
+            aria-label="Send to kitchen"
+          >
+            {kitchenSaving ? <Loader2 size={18} className="animate-spin" /> : <ChefHat size={18} />}
+          </button>
+          <button
+            type="button"
+            onClick={onViewCart}
+            className="rounded-xl bg-orange-100 px-3 py-3 text-xs font-black text-orange-700"
+          >
+            Cart
+          </button>
+          <button
+            type="button"
+            onClick={onPayment}
+            disabled={!hasItems}
+            className="rounded-xl bg-orange-500 px-3 py-3 text-xs font-black text-white disabled:opacity-40"
+          >
+            Pay
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RestaurantCashierPOSPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -1009,6 +1239,14 @@ export default function RestaurantCashierPOSPage() {
   const [tablesLoading, setTablesLoading] = useState(true);
   const [tablesError, setTablesError] = useState("");
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
+  const [tableDialogOpen, setTableDialogOpen] = useState(false);
+  const [tableSearch, setTableSearch] = useState("");
+  const [tableStatusFilter, setTableStatusFilter] = useState("ALL");
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [exitSaving, setExitSaving] = useState(false);
+  const [exitError, setExitError] = useState("");
+  const [restoredDraftKey, setRestoredDraftKey] = useState("");
+  const [draftRestoreMessage, setDraftRestoreMessage] = useState("");
   const [openOrderLoading, setOpenOrderLoading] = useState(false);
   const [openOrderError, setOpenOrderError] = useState("");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -1018,6 +1256,21 @@ export default function RestaurantCashierPOSPage() {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartPage, setCartPage] = useState(1);
+  const [lastAddedMenuItemId, setLastAddedMenuItemId] = useState("");
+  const [addedFeedbackVisible, setAddedFeedbackVisible] = useState(false);
+  const [flyingItem, setFlyingItem] = useState<{
+    token: number;
+    item: MenuItem;
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+  } | null>(null);
+  const addedFeedbackTimerRef = useRef<number | null>(null);
+  const [draggingMenuItemId, setDraggingMenuItemId] = useState("");
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [cartWidth, setCartWidth] = useState(DEFAULT_CART_WIDTH);
+  const [isResizingCart, setIsResizingCart] = useState(false);
+  const cartResizeStartRef = useRef({ pointerX: 0, width: DEFAULT_CART_WIDTH });
+  const suppressMenuClickRef = useRef(false);
   const [menuPage, setMenuPage] = useState(1);
   const [discount, setDiscount] = useState(0);
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(true);
@@ -1045,6 +1298,7 @@ export default function RestaurantCashierPOSPage() {
   const [kitchenSuccessMessage, setKitchenSuccessMessage] = useState("");
   const [kitchenSuccessItemCount, setKitchenSuccessItemCount] = useState(0);
   const [cashReceived, setCashReceived] = useState("");
+  const cashInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -1123,6 +1377,23 @@ export default function RestaurantCashierPOSPage() {
     [tables, selectedTableId],
   );
 
+  const filteredTables = useMemo(() => {
+    const keyword = tableSearch.trim().toLowerCase();
+
+    return tables.filter((table) => {
+      const status = (table.status || "FREE").toUpperCase();
+      const matchesStatus =
+        tableStatusFilter === "ALL" || status === tableStatusFilter;
+      const matchesSearch =
+        !keyword ||
+        table.tableNo.toLowerCase().includes(keyword) ||
+        table.tableName?.toLowerCase().includes(keyword) ||
+        table.floorName?.toLowerCase().includes(keyword);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [tables, tableSearch, tableStatusFilter]);
+
   const subtotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
     [cart],
@@ -1135,8 +1406,28 @@ export default function RestaurantCashierPOSPage() {
     (subtotal + serviceCharge - discount) * (taxRatePercent / 100),
   );
   const total = Math.max(subtotal + serviceCharge + tax - discount, 0);
+  const draggingMenuItem = menuItems.find(
+    (item) => item.id === draggingMenuItemId,
+  );
   const cashNumber = Number(cashReceived || 0);
   const change = Math.max(cashNumber - total, 0);
+  const remainingAmount = Math.max(total - cashNumber, 0);
+  const cashIsEnough = paymentMethod !== "CASH" || cashNumber >= total;
+
+  const quickCashAmounts = useMemo(() => {
+    if (total <= 0) return [];
+
+    return Array.from(
+      new Set([
+        total,
+        Math.ceil(total / 1000) * 1000,
+        Math.ceil(total / 5000) * 5000,
+        Math.ceil(total / 10000) * 10000,
+      ]),
+    )
+      .filter((amount) => amount >= total)
+      .slice(0, 4);
+  }, [total]);
 
   const cartTotalPages = Math.max(
     1,
@@ -1552,6 +1843,52 @@ export default function RestaurantCashierPOSPage() {
     }
   }
 
+  function handleGoToDashboard() {
+    if (cart.length === 0) {
+      if (activeStaff) {
+        localStorage.removeItem(
+          getRestaurantCartDraftKey(activeStaff.staffId, sessionAccessToken),
+        );
+      }
+      router.push("/dashboard");
+      return;
+    }
+
+    setExitError("");
+    setExitConfirmOpen(true);
+  }
+
+  async function saveOrderAndExit() {
+    try {
+      setExitSaving(true);
+      setExitError("");
+      await saveOpenOrder();
+      if (activeStaff) {
+        localStorage.removeItem(
+          getRestaurantCartDraftKey(activeStaff.staffId, sessionAccessToken),
+        );
+      }
+      setExitConfirmOpen(false);
+      router.push("/dashboard");
+    } catch (error) {
+      setExitError(
+        error instanceof Error ? error.message : "Order ကို save မလုပ်နိုင်ပါ။",
+      );
+    } finally {
+      setExitSaving(false);
+    }
+  }
+
+  function discardOrderAndExit() {
+    if (activeStaff) {
+      localStorage.removeItem(
+        getRestaurantCartDraftKey(activeStaff.staffId, sessionAccessToken),
+      );
+    }
+    clearOrder();
+    router.push("/dashboard");
+  }
+
   async function handleSelectTable(table: RestaurantTable) {
     setOpenOrderLoading(true);
     setOpenOrderError("");
@@ -1570,6 +1907,7 @@ export default function RestaurantCashierPOSPage() {
       setSelectedTableId(table.id);
       await loadOpenOrderByTable(table.id);
       await fetchTables();
+      setTableDialogOpen(false);
     } catch (err) {
       setOpenOrderError(
         err instanceof Error ? err.message : "Table order switching error",
@@ -1616,12 +1954,228 @@ export default function RestaurantCashierPOSPage() {
   }, [activeStaff]);
 
   useEffect(() => {
+    if (!activeStaff) {
+      setRestoredDraftKey("");
+      return;
+    }
+
+    const draftKey = getRestaurantCartDraftKey(
+      activeStaff.staffId,
+      sessionAccessToken,
+    );
+    const storedDraft = localStorage.getItem(draftKey);
+
+    if (storedDraft) {
+      try {
+        const draft = JSON.parse(storedDraft) as Partial<RestaurantCartDraft>;
+        const isFresh =
+          draft.version === CART_DRAFT_VERSION &&
+          typeof draft.savedAt === "number" &&
+          Date.now() - draft.savedAt <= CART_DRAFT_TTL_MS;
+        const validItems = Array.isArray(draft.items)
+          ? draft.items.filter(
+              (item): item is CartItem =>
+                Boolean(
+                  item &&
+                    typeof item.id === "string" &&
+                    typeof item.menuItemId === "string" &&
+                    typeof item.name === "string" &&
+                    Number.isFinite(item.price) &&
+                    Number.isFinite(item.qty) &&
+                    item.qty > 0 &&
+                    Array.isArray(item.modifiers),
+                ),
+            )
+          : [];
+
+        if (isFresh && validItems.length > 0) {
+          const restoredOrderType =
+            draft.orderType === "DINE_IN" ||
+            draft.orderType === "TAKEAWAY" ||
+            draft.orderType === "DELIVERY"
+              ? draft.orderType
+              : "DINE_IN";
+
+          setOrderType(restoredOrderType);
+          setSelectedTableId(
+            typeof draft.selectedTableId === "number"
+              ? draft.selectedTableId
+              : null,
+          );
+          setCart(validItems);
+          setCartPage(1);
+          setDiscount(Math.max(0, Number(draft.discount || 0)));
+          setServiceChargeEnabled(draft.serviceChargeEnabled !== false);
+          if (
+            typeof draft.serviceChargeRatePercent === "number" &&
+            Number.isFinite(draft.serviceChargeRatePercent)
+          ) {
+            setServiceChargeRatePercent(
+              Math.max(0, Number(draft.serviceChargeRatePercent)),
+            );
+          }
+          if (
+            typeof draft.taxRatePercent === "number" &&
+            Number.isFinite(draft.taxRatePercent)
+          ) {
+            setTaxRatePercent(Math.max(0, Number(draft.taxRatePercent)));
+          }
+          setDraftRestoreMessage(
+            `Previous order restored · ${validItems.reduce((sum, item) => sum + item.qty, 0)} items`,
+          );
+        } else {
+          localStorage.removeItem(draftKey);
+        }
+      } catch {
+        localStorage.removeItem(draftKey);
+      }
+    }
+
+    setRestoredDraftKey(draftKey);
+  }, [activeStaff, sessionAccessToken]);
+
+  useEffect(() => {
+    if (!draftRestoreMessage) return;
+
+    const timer = window.setTimeout(() => setDraftRestoreMessage(""), 3200);
+    return () => window.clearTimeout(timer);
+  }, [draftRestoreMessage]);
+
+  useEffect(() => {
+    if (!activeStaff) return;
+
+    const draftKey = getRestaurantCartDraftKey(
+      activeStaff.staffId,
+      sessionAccessToken,
+    );
+    if (restoredDraftKey !== draftKey) return;
+
+    if (cart.length === 0) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+
+    const draft: RestaurantCartDraft = {
+      version: CART_DRAFT_VERSION,
+      savedAt: Date.now(),
+      staffId: activeStaff.staffId,
+      orderType,
+      selectedTableId,
+      discount,
+      serviceChargeEnabled,
+      serviceChargeRatePercent,
+      taxRatePercent,
+      items: cart,
+    };
+
+    localStorage.setItem(draftKey, JSON.stringify(draft));
+  }, [
+    activeStaff,
+    cart,
+    discount,
+    orderType,
+    restoredDraftKey,
+    selectedTableId,
+    serviceChargeEnabled,
+    serviceChargeRatePercent,
+    sessionAccessToken,
+    taxRatePercent,
+  ]);
+
+  useEffect(() => {
+    if (
+      activeStaff &&
+      restoredDraftKey &&
+      orderType === "DINE_IN" &&
+      !selectedTableId
+    ) {
+      setTableDialogOpen(true);
+    }
+  }, [activeStaff, orderType, restoredDraftKey, selectedTableId]);
+
+  useEffect(() => {
     setCartPage((currentPage) => {
       const maxPage = Math.max(1, Math.ceil(cart.length / CART_ITEMS_PER_PAGE));
 
       return Math.min(currentPage, maxPage);
     });
   }, [cart.length]);
+
+  useEffect(() => {
+    if (!lastAddedMenuItemId) return;
+
+    const timer = window.setTimeout(() => {
+      setLastAddedMenuItemId("");
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [lastAddedMenuItemId]);
+
+  useEffect(() => {
+    return () => {
+      if (addedFeedbackTimerRef.current !== null) {
+        window.clearTimeout(addedFeedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const savedWidth = Number(localStorage.getItem(CART_WIDTH_STORAGE_KEY));
+
+    if (Number.isFinite(savedWidth) && savedWidth > 0) {
+      setCartWidth(
+        Math.min(MAX_CART_WIDTH, Math.max(MIN_CART_WIDTH, savedWidth)),
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(CART_WIDTH_STORAGE_KEY, String(cartWidth));
+  }, [cartWidth]);
+
+  useEffect(() => {
+    if (!isResizingCart) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const delta = cartResizeStartRef.current.pointerX - event.clientX;
+      const viewportMax = Math.max(
+        MIN_CART_WIDTH,
+        Math.min(MAX_CART_WIDTH, window.innerWidth * 0.55),
+      );
+
+      setCartWidth(
+        Math.min(
+          viewportMax,
+          Math.max(MIN_CART_WIDTH, cartResizeStartRef.current.width + delta),
+        ),
+      );
+    };
+
+    const finishResize = () => setIsResizingCart(false);
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishResize, { once: true });
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishResize);
+    };
+  }, [isResizingCart]);
+
+  useEffect(() => {
+    if (!paymentOpen || paymentMethod !== "CASH") return;
+
+    const timer = window.setTimeout(() => {
+      cashInputRef.current?.focus();
+      cashInputRef.current?.select();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [paymentOpen, paymentMethod]);
 
   useEffect(() => {
     setMenuPage(1);
@@ -1671,8 +2225,35 @@ export default function RestaurantCashierPOSPage() {
 
       setKitchenError(message);
       setPaymentError(message);
-      return;
+      return false;
     }
+
+    const currentItem = cart.find(
+      (cartItem) => cartItem.menuItemId === item.id,
+    );
+
+    if (
+      currentItem &&
+      item.stock !== null &&
+      currentItem.qty + 1 > item.stock
+    ) {
+      const message = formatStockError(
+        item.name,
+        item.stock,
+        currentItem.qty + 1,
+      );
+
+      setKitchenError(message);
+      setPaymentError(message);
+      return false;
+    }
+
+    const newCartItemId = crypto.randomUUID();
+
+    setKitchenError("");
+    setPaymentError("");
+    setLastAddedMenuItemId(item.id);
+    setCartPage(1);
 
     setCart((prev) => {
       const found = prev.find((cartItem) => cartItem.menuItemId === item.id);
@@ -1690,23 +2271,17 @@ export default function RestaurantCashierPOSPage() {
           return prev;
         }
 
-        setKitchenError("");
-        setPaymentError("");
+        const updatedItem = { ...found, qty: found.qty + 1 };
 
-        return prev.map((cartItem) =>
-          cartItem.menuItemId === item.id
-            ? { ...cartItem, qty: cartItem.qty + 1 }
-            : cartItem,
-        );
+        return [
+          updatedItem,
+          ...prev.filter((cartItem) => cartItem.id !== found.id),
+        ];
       }
 
-      setKitchenError("");
-      setPaymentError("");
-
       return [
-        ...prev,
         {
-          id: crypto.randomUUID(),
+          id: newCartItemId,
           menuItemId: item.id,
           dbId: item.dbId,
           barcode: item.barcode,
@@ -1719,9 +2294,149 @@ export default function RestaurantCashierPOSPage() {
           modifiers: [],
           note: "",
         },
+        ...prev,
       ];
     });
+    return true;
   };
+
+  function showCartAddedFeedback() {
+    setAddedFeedbackVisible(true);
+
+    if (addedFeedbackTimerRef.current !== null) {
+      window.clearTimeout(addedFeedbackTimerRef.current);
+    }
+
+    addedFeedbackTimerRef.current = window.setTimeout(() => {
+      setAddedFeedbackVisible(false);
+      addedFeedbackTimerRef.current = null;
+    }, 900);
+  }
+
+  function findCartAnimationTarget() {
+    const targets = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-restaurant-cart-target]"),
+    );
+    const visibleTarget = targets.find((target) => {
+      const rect = target.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    const rect = visibleTarget?.getBoundingClientRect();
+
+    return rect
+      ? {
+          x: rect.left + rect.width / 2,
+          y: rect.top + Math.min(90, rect.height / 2),
+        }
+      : { x: window.innerWidth - 44, y: window.innerHeight - 44 };
+  }
+
+  function animateItemToCart(
+    item: MenuItem,
+    sourceElement: HTMLButtonElement,
+  ) {
+    const sourceRect = sourceElement.getBoundingClientRect();
+
+    setFlyingItem({
+      token: Date.now() + Math.random(),
+      item,
+      from: {
+        x: sourceRect.left + sourceRect.width / 2,
+        y: sourceRect.top + sourceRect.height / 2,
+      },
+      to: findCartAnimationTarget(),
+    });
+  }
+
+  function getDndItemId(value: unknown) {
+    const record = asRecord(value);
+    const id = record.id;
+
+    return typeof id === "string" || typeof id === "number" ? String(id) : "";
+  }
+
+  function getDndOperation(event: unknown) {
+    const eventRecord = asRecord(event);
+    const operation = asRecord(eventRecord.operation);
+
+    return {
+      canceled: eventRecord.canceled === true,
+      sourceId:
+        getDndItemId(operation.source) || getDndItemId(eventRecord.active),
+      targetId:
+        getDndItemId(operation.target) || getDndItemId(eventRecord.over),
+    };
+  }
+
+  function handleMenuDragStart(event: unknown) {
+    const { sourceId } = getDndOperation(event);
+
+    if (sourceId.startsWith("restaurant-menu:")) {
+      suppressMenuClickRef.current = true;
+      setDraggingMenuItemId(sourceId.replace("restaurant-menu:", ""));
+    }
+  }
+
+  function handleMenuDragEnd(event: unknown) {
+    const { canceled, sourceId, targetId } = getDndOperation(event);
+    setDraggingMenuItemId("");
+
+    window.setTimeout(() => {
+      suppressMenuClickRef.current = false;
+    }, 120);
+
+    if (
+      canceled ||
+      (targetId !== CART_DROP_ID && targetId !== MOBILE_CART_DROP_ID)
+    ) {
+      return;
+    }
+
+    const menuItemId = sourceId.replace("restaurant-menu:", "");
+    const menuItem = menuItems.find((item) => item.id === menuItemId);
+
+    if (menuItem && addToCart(menuItem)) showCartAddedFeedback();
+  }
+
+  function handleMenuClick(
+    item: MenuItem,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) {
+    if (suppressMenuClickRef.current) return;
+
+    if (addToCart(item)) {
+      animateItemToCart(item, event.currentTarget);
+      showCartAddedFeedback();
+    }
+  }
+
+  function beginCartResize(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    cartResizeStartRef.current = {
+      pointerX: event.clientX,
+      width: cartWidth,
+    };
+    setIsResizingCart(true);
+  }
+
+  function openPaymentDialog() {
+    const stockError = validateCartStock();
+
+    if (stockError) {
+      setPaymentError(stockError);
+      setKitchenError(stockError);
+      return;
+    }
+
+    setPaymentError("");
+    setPaymentOpen(true);
+    setMobileCartOpen(false);
+  }
+
+  const isLastAddedItem = (item: CartItem) =>
+    Boolean(
+      lastAddedMenuItemId && item.menuItemId === lastAddedMenuItemId,
+    );
 
   const updateQty = (id: string, action: "plus" | "minus") => {
     setCart((prev) =>
@@ -1783,6 +2498,7 @@ export default function RestaurantCashierPOSPage() {
   const clearOrder = () => {
     setCart([]);
     setCartPage(1);
+    setLastAddedMenuItemId("");
     setDiscount(0);
     setCashReceived("");
     setPaymentOpen(false);
@@ -2061,9 +2777,81 @@ export default function RestaurantCashierPOSPage() {
         pickString(paymentRecord, ["paymentNo", "payment_no"]) ||
         `ORD-${Date.now()}`;
 
+      // Restaurant payment and the shared POS receipt are separate records.
+      // Save the receipt only after the restaurant payment has succeeded.
+      // A receipt failure must not submit the payment a second time.
+      const receiptPayload = {
+        staffId: activeStaff.staffId,
+        staffName: activeStaff.staffName,
+        paymentMethod,
+        subtotal,
+        taxAmount: tax,
+        discountPercent: 0,
+        discountAmount: discount,
+        grandTotal: total,
+        cashGiven: paymentMethod === "CASH" ? cashNumber : 0,
+        changeAmount: paymentMethod === "CASH" ? change : 0,
+        businessType: "RESTAURANT",
+        items: cart.map((item) => {
+          const productId = String(item.dbId || "").trim();
+
+          return {
+            productId,
+            product_id: productId,
+            productName: item.name,
+            product_name: item.name,
+            qty: item.qty,
+            quantity: item.qty,
+            price: item.price,
+            barcode: item.barcode || "",
+            sku: item.sku || "",
+            lineTotal: item.price * item.qty,
+            line_total: item.price * item.qty,
+          };
+        }),
+      };
+
+      let receiptNo = paymentNo;
+      let receiptSaveWarning = "";
+
+      try {
+        const receiptUrl = `${API_BASE}/api/pos/receipts`;
+        logRequestAuth(receiptUrl, usableToken);
+
+        const receiptResponse = await fetch(receiptUrl, {
+          method: "POST",
+          headers: authHeaders(usableToken),
+          body: JSON.stringify(receiptPayload),
+        });
+        const receiptBody = await receiptResponse.json().catch(() => null);
+        const receiptRecord = Object.keys(asRecord(asRecord(receiptBody).data))
+          .length
+          ? asRecord(asRecord(receiptBody).data)
+          : asRecord(receiptBody);
+
+        if (!receiptResponse.ok) {
+          throw new Error(
+            pickString(receiptRecord, ["message", "error", "details"]) ||
+              `Receipt save failed (${receiptResponse.status}).`,
+          );
+        }
+
+        receiptNo =
+          pickString(receiptRecord, [
+            "receiptNo",
+            "receipt_no",
+            "paymentNo",
+          ]) || paymentNo;
+      } catch (receiptError) {
+        receiptSaveWarning = `Payment ${paymentNo} သိမ်းပြီးပါပြီ၊ Receipt ကို database ထဲမသိမ်းနိုင်ပါ။ Payment ကို ထပ်မနှိပ်ပါနှင့်။ ${
+          receiptError instanceof Error ? receiptError.message : "Receipt save error"
+        }`;
+      }
+
       setPaymentReceiptData({
         ...paymentOrder,
         paymentNo,
+        receiptNo,
         orderNo,
         paidAt: new Date().toISOString(),
         cashierName: activeStaff.staffName,
@@ -2094,10 +2882,11 @@ export default function RestaurantCashierPOSPage() {
       );
       setCart([]);
       setCartPage(1);
+      setLastAddedMenuItemId("");
       setDiscount(0);
       setCashReceived("");
       setPaymentMethod("CASH");
-      setPaymentError("");
+      setPaymentError(receiptSaveWarning);
       setKitchenError("");
       setServiceChargeEnabled(true);
       await fetchMenuItems();
@@ -2274,14 +3063,18 @@ export default function RestaurantCashierPOSPage() {
   }
 
   return (
+    <DragDropProvider
+      onDragStart={handleMenuDragStart}
+      onDragEnd={handleMenuDragEnd}
+    >
     <main
       className={`min-h-screen ${
         darkMode ? "bg-slate-950 text-slate-50" : "bg-[#f8f3ea] text-slate-950"
-      }`}
+      } ${isResizingCart ? "cursor-col-resize" : ""}`}
     >
       <BusinessTypeGuard allow="RESTAURANT" />
 
-      <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-4 p-4 lg:p-6">
+      <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 p-2 pb-24 sm:p-3 sm:pb-24 lg:landscape:gap-4 lg:landscape:p-5">
         {/* Compact top toolbar - no large Restaurant Cashier POS card */}
         <div
           className={`sticky top-0 z-30 -mx-4 -mt-4 px-4 py-3 backdrop-blur-xl lg:-mx-6 lg:-mt-6 lg:px-6 ${
@@ -2292,6 +3085,20 @@ export default function RestaurantCashierPOSPage() {
         >
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleGoToDashboard}
+                className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition ring-1 ${
+                  darkMode
+                    ? "bg-white/10 text-white ring-white/10 hover:bg-white/15"
+                    : "bg-white text-slate-900 ring-orange-100 hover:bg-orange-50"
+                }`}
+                aria-label="Go to dashboard"
+              >
+                <ArrowLeft size={17} className="text-orange-500" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </button>
+
               <div
                 className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black ring-1 ${
                   darkMode
@@ -2326,18 +3133,6 @@ export default function RestaurantCashierPOSPage() {
                 <span className="text-orange-500">{formatMoney(total)} Ks</span>
               </div>
 
-              {orderType === "DINE_IN" && selectedTable && (
-                <div
-                  className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black ring-1 ${
-                    darkMode
-                      ? "bg-white/10 text-white ring-white/10"
-                      : "bg-white text-slate-900 ring-orange-100"
-                  }`}
-                >
-                  <Armchair size={17} className="text-orange-500" />
-                  <span>Table {selectedTable.tableNo}</span>
-                </div>
-              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -2367,10 +3162,7 @@ export default function RestaurantCashierPOSPage() {
               </button>
 
               <button
-                onClick={() => {
-                  setPaymentError("");
-                  setPaymentOpen(true);
-                }}
+                onClick={openPaymentDialog}
                 disabled={cart.length === 0}
                 className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-3 py-2 text-sm font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -2394,42 +3186,41 @@ export default function RestaurantCashierPOSPage() {
           </div>
         </div>
 
-        <section className="grid flex-1 grid-cols-1 gap-4 xl:grid-cols-[1.45fr_0.95fr]">
+        <section
+          className="grid flex-1 gap-4 lg:landscape:grid-cols-[minmax(0,1fr)_380px] xl:landscape:grid-cols-[minmax(0,1fr)_var(--restaurant-cart-width)]"
+          style={
+            { "--restaurant-cart-width": `${cartWidth}px` } as React.CSSProperties
+          }
+        >
           {/* Left side */}
           <div className="flex min-h-0 flex-col gap-4">
-            {/* Order type + tables */}
+            {/* Compact order controls + menu tools */}
             <div
-              className={`rounded-[2rem] border p-4 shadow-sm ${
+              className={`relative mb-2 shrink-0 rounded-[1.5rem] border p-3 shadow-sm ${
                 darkMode
-                  ? "border-white/10 bg-white/5"
-                  : "border-orange-100 bg-white/80"
+                  ? "border-white/10 bg-slate-950"
+                  : "border-orange-100 bg-[#fffdf9]"
               }`}
             >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+                <div className="grid shrink-0 grid-cols-3 gap-1.5">
                   {[
-                    {
-                      key: "DINE_IN" as OrderType,
-                      label: "Dine In",
-                      icon: <Utensils size={18} />,
-                    },
-                    {
-                      key: "TAKEAWAY" as OrderType,
-                      label: "Takeaway",
-                      icon: <ShoppingBag size={18} />,
-                    },
-                    {
-                      key: "DELIVERY" as OrderType,
-                      label: "Delivery",
-                      icon: <Package size={18} />,
-                    },
+                    { key: "DINE_IN" as OrderType, label: "Dine In", icon: <Utensils size={16} /> },
+                    { key: "TAKEAWAY" as OrderType, label: "Takeaway", icon: <ShoppingBag size={16} /> },
+                    { key: "DELIVERY" as OrderType, label: "Delivery", icon: <Package size={16} /> },
                   ].map((type) => (
                     <button
                       key={type.key}
-                      onClick={() => setOrderType(type.key)}
-                      className={`inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition ${
+                      type="button"
+                      onClick={() => {
+                        setOrderType(type.key);
+                        if (type.key === "DINE_IN" && !selectedTable) {
+                          setTableDialogOpen(true);
+                        }
+                      }}
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black transition ${
                         orderType === type.key
-                          ? "bg-orange-500 text-white shadow-lg shadow-orange-500/25"
+                          ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
                           : darkMode
                             ? "bg-white/10 text-slate-200 hover:bg-white/15"
                             : "bg-orange-50 text-slate-700 hover:bg-orange-100"
@@ -2441,158 +3232,96 @@ export default function RestaurantCashierPOSPage() {
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-600">
-                  <Clock3 size={18} />
-                  Open order · {new Date().toLocaleTimeString()}
-                </div>
-              </div>
-
-              {orderType === "DINE_IN" && (
-                <div className="mt-4">
-                  {openOrderLoading && (
-                    <div
-                      className={`mb-3 flex items-center gap-2 rounded-2xl border p-3 text-sm font-black ${
-                        darkMode
-                          ? "border-white/10 bg-white/5 text-slate-200"
-                          : "border-orange-100 bg-white text-slate-600"
-                      }`}
-                    >
-                      <Loader2 size={16} className="animate-spin" />
-                      Open order loading...
-                    </div>
-                  )}
-
-                  {openOrderError && (
-                    <div
-                      className={`mb-3 rounded-2xl border p-3 text-sm font-black ${
-                        darkMode
-                          ? "border-red-400/30 bg-red-500/10 text-red-200"
-                          : "border-red-100 bg-red-50 text-red-600"
-                      }`}
-                    >
-                      {openOrderError}
-                    </div>
-                  )}
-
-                  {tablesLoading ? (
-                    <div
-                      className={`rounded-2xl border p-4 text-sm font-black ${
-                        darkMode
-                          ? "border-white/10 bg-white/5 text-slate-200"
-                          : "border-orange-100 bg-white text-slate-600"
-                      }`}
-                    >
-                      Restaurant tables loading...
-                    </div>
-                  ) : tablesError ? (
-                    <div
-                      className={`rounded-2xl border p-4 text-sm font-black ${
-                        darkMode
-                          ? "border-red-400/30 bg-red-500/10 text-red-200"
-                          : "border-red-100 bg-red-50 text-red-600"
-                      }`}
-                    >
-                      {tablesError}
-                    </div>
-                  ) : tables.length === 0 ? (
-                    <div
-                      className={`rounded-2xl border border-dashed p-4 text-sm font-black ${
-                        darkMode
-                          ? "border-white/10 bg-white/5 text-slate-300"
-                          : "border-orange-200 bg-orange-50/70 text-slate-600"
-                      }`}
-                    >
-                      Table မရှိသေးပါ။ Restaurant Tables page မှာ table create
-                      လုပ်ပါ။
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                      {tables.map((table) => {
-                        const active = selectedTableId === table.id;
-
-                        return (
-                          <button
-                            key={table.id}
-                            onClick={() => handleSelectTable(table)}
-                            disabled={openOrderLoading}
-                            className={`rounded-2xl border p-3 text-left transition ${
-                              active
-                                ? "border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/25"
-                                : table.status === "BUSY"
-                                  ? darkMode
-                                    ? "border-red-400/30 bg-red-500/10 text-red-200"
-                                    : "border-red-100 bg-red-50 text-red-700"
-                                  : table.status === "RESERVED"
-                                    ? darkMode
-                                      ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
-                                      : "border-amber-100 bg-amber-50 text-amber-700"
-                                    : darkMode
-                                      ? "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-                                      : "border-slate-100 bg-white text-slate-700 hover:bg-orange-50"
-                            } disabled:cursor-not-allowed disabled:opacity-60`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <Armchair size={18} />
-                              {active && <Check size={17} />}
-                            </div>
-                            <div className="mt-2 text-lg font-black">
-                              {table.tableNo}
-                            </div>
-                            <div className="mt-1 text-xs font-bold opacity-75">
-                              {table.seats || 0} seats ·{" "}
-                              {table.status || "FREE"}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Categories + search */}
-            <div
-              className={`rounded-[2rem] border p-4 shadow-sm ${
-                darkMode
-                  ? "border-white/10 bg-white/5"
-                  : "border-orange-100 bg-white/80"
-              }`}
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {categories.map((category) => (
-                    <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id)}
-                      className={`whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-black transition ${
-                        selectedCategory === category.id
-                          ? "bg-slate-950 text-white shadow-lg shadow-slate-900/20"
-                          : darkMode
-                            ? "bg-white/10 text-slate-200 hover:bg-white/15"
-                            : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-orange-50"
-                      }`}
-                    >
-                      <span className="mr-2">{category.icon}</span>
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
+                {orderType === "DINE_IN" && (
+                  <button
+                    type="button"
+                    onClick={() => setTableDialogOpen(true)}
+                    className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                      selectedTable
+                        ? darkMode
+                          ? "border-emerald-400/30 bg-emerald-500/10"
+                          : "border-emerald-100 bg-emerald-50"
+                        : darkMode
+                          ? "border-amber-400/30 bg-amber-500/10"
+                          : "border-amber-200 bg-amber-50"
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {openOrderLoading ? (
+                        <Loader2 size={17} className="shrink-0 animate-spin text-orange-500" />
+                      ) : (
+                        <Armchair size={17} className="shrink-0 text-orange-500" />
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-black">
+                          {selectedTable
+                            ? `Table ${selectedTable.tableNo} · ${selectedTable.seats || 0} seats`
+                            : "Table မရွေးရသေးပါ"}
+                        </span>
+                        <span className="block truncate text-[10px] font-bold opacity-65">
+                          {selectedTable
+                            ? `${selectedTable.floorName || "Main floor"} · ${selectedTable.status || "FREE"}`
+                            : "Dine In order အတွက် table ရွေးပါ"}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-lg bg-orange-500 px-2.5 py-1.5 text-[10px] font-black text-white">
+                      {selectedTable ? "Change" : "Select"}
+                    </span>
+                  </button>
+                )}
 
                 <div
-                  className={`flex min-w-full items-center gap-2 rounded-2xl px-4 py-3 lg:min-w-[320px] ${
-                    darkMode ? "bg-slate-900" : "bg-slate-100"
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 ${
+                    darkMode ? "bg-white/10" : "bg-slate-100"
                   }`}
                 >
-                  <Search size={18} className="text-slate-400" />
+                  <Search size={17} className="shrink-0 text-slate-400" />
                   <input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search menu..."
-                    className="w-full bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search food, drink or barcode..."
+                    className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
                   />
+                  {search && (
+                    <button type="button" onClick={() => setSearch("")} className="text-slate-400">
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
+
+              <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-black transition ${
+                      selectedCategory === category.id
+                        ? "bg-slate-950 text-white shadow-md"
+                        : darkMode
+                          ? "bg-white/10 text-slate-200 hover:bg-white/15"
+                          : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-orange-50"
+                    }`}
+                  >
+                    <span className="mr-1.5">{category.icon}</span>
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+
+              {(openOrderError || (orderType === "DINE_IN" && !selectedTable)) && (
+                <div
+                  className={`mt-2 rounded-xl px-3 py-2 text-xs font-black ${
+                    openOrderError
+                      ? "bg-red-500/10 text-red-500"
+                      : "bg-amber-500/10 text-amber-600"
+                  }`}
+                >
+                  {openOrderError || "Menu ရွေးနိုင်ပါတယ်။ Kitchen မပို့မီ table ရွေးပေးပါ။"}
+                </div>
+              )}
             </div>
 
             {/* Menu grid */}
@@ -2741,14 +3470,17 @@ export default function RestaurantCashierPOSPage() {
                     className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
                   >
                     {paginatedMenu.map((item) => (
-                      <motion.button
+                      <DraggableMenuCard
                         key={item.id}
-                        layout
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => addToCart(item)}
+                        menuItemId={item.id}
+                        onClick={(event) => handleMenuClick(item, event)}
                         disabled={!item.available}
                         className={`group rounded-[1.75rem] border p-4 text-left shadow-sm transition ${
-                          darkMode
+                          lastAddedMenuItemId === item.id
+                            ? darkMode
+                              ? "border-emerald-400 bg-emerald-500/15 ring-2 ring-emerald-400/30"
+                              : "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300/40"
+                            : darkMode
                             ? "border-white/10 bg-slate-900/60 hover:bg-white/10"
                             : "border-orange-100 bg-white hover:border-orange-200 hover:shadow-md"
                         } disabled:cursor-not-allowed disabled:opacity-60`}
@@ -2823,11 +3555,21 @@ export default function RestaurantCashierPOSPage() {
                             </p>
                           </div>
 
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white transition group-hover:bg-orange-500">
-                            <Plus size={20} />
+                          <div
+                            className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-white transition ${
+                              lastAddedMenuItemId === item.id
+                                ? "bg-emerald-500"
+                                : "bg-slate-950 group-hover:bg-orange-500"
+                            }`}
+                          >
+                            {lastAddedMenuItemId === item.id ? (
+                              <Check size={20} />
+                            ) : (
+                              <Plus size={20} />
+                            )}
                           </div>
                         </div>
-                      </motion.button>
+                      </DraggableMenuCard>
                     ))}
                   </motion.div>
                 </AnimatePresence>
@@ -2836,13 +3578,42 @@ export default function RestaurantCashierPOSPage() {
           </div>
 
           {/* Cart side */}
+          {mobileCartOpen && (
+            <button
+              type="button"
+              aria-label="Close cart"
+              onClick={() => setMobileCartOpen(false)}
+              className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm lg:landscape:hidden"
+            />
+          )}
           <aside
-            className={`flex min-h-[720px] flex-col rounded-[2rem] border shadow-sm ${
-              darkMode
-                ? "border-white/10 bg-white/5"
-                : "border-orange-100 bg-white/90"
-            }`}
+            className={`${
+              mobileCartOpen
+                ? "fixed inset-x-2 bottom-24 top-16 z-50 block"
+                : "hidden"
+            } min-h-0 lg:landscape:sticky lg:landscape:top-24 lg:landscape:z-20 lg:landscape:block lg:landscape:h-[calc(100vh-7rem)]`}
           >
+            <button
+              type="button"
+              onPointerDown={beginCartResize}
+              onDoubleClick={() => setCartWidth(DEFAULT_CART_WIDTH)}
+              className={`absolute -left-2 top-1/2 z-40 hidden h-24 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border shadow-lg xl:landscape:flex ${
+                isResizingCart
+                  ? "border-orange-400 bg-orange-500 text-white"
+                  : darkMode
+                    ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-orange-500 hover:text-white"
+                    : "border-orange-100 bg-white text-orange-500 hover:bg-orange-500 hover:text-white"
+              }`}
+              aria-label="Resize cart width"
+              title="Drag to resize cart · Double-click to reset"
+            >
+              <GripVertical size={14} />
+            </button>
+            <RestaurantCartDropSurface
+              dragging={Boolean(draggingMenuItemId)}
+              darkMode={darkMode}
+              addedFeedbackVisible={addedFeedbackVisible}
+            >
             <div className="border-b border-slate-200/20 p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -2867,16 +3638,52 @@ export default function RestaurantCashierPOSPage() {
                   </p>
                 </div>
 
-                <button
-                  onClick={clearOrder}
-                  className="rounded-2xl bg-red-500/10 p-3 text-red-500 transition hover:bg-red-500 hover:text-white"
-                >
-                  <Trash2 size={20} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`hidden items-center gap-1 rounded-xl p-1 xl:landscape:flex ${
+                      darkMode ? "bg-white/10" : "bg-orange-50"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setCartWidth((width) => Math.max(MIN_CART_WIDTH, width - 40))}
+                      disabled={cartWidth <= MIN_CART_WIDTH}
+                      className="grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30"
+                      aria-label="Make cart narrower"
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <GripVertical size={13} className="text-orange-500" />
+                    <button
+                      type="button"
+                      onClick={() => setCartWidth((width) => Math.min(MAX_CART_WIDTH, width + 40))}
+                      disabled={cartWidth >= MAX_CART_WIDTH}
+                      className="grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30"
+                      aria-label="Make cart wider"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileCartOpen(false)}
+                    className="rounded-2xl bg-slate-500/10 p-3 transition lg:landscape:hidden"
+                    aria-label="Close cart"
+                  >
+                    <X size={20} />
+                  </button>
+                  <button
+                    onClick={clearOrder}
+                    className="rounded-2xl bg-red-500/10 p-3 text-red-500 transition hover:bg-red-500 hover:text-white"
+                    aria-label="Clear order"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="flex-1 p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <AnimatePresence initial={false} mode="wait">
                 {cart.length === 0 ? (
                   <motion.div
@@ -2931,7 +3738,7 @@ export default function RestaurantCashierPOSPage() {
                               darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
-                            Total {cart.length} items · Page {safeCartPage} /{" "}
+                            Latest item first · Total {cart.length} items · Page {safeCartPage} /{" "}
                             {cartTotalPages}
                           </p>
                         </div>
@@ -3004,10 +3811,14 @@ export default function RestaurantCashierPOSPage() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.98 }}
                         transition={{ delay: index * 0.03 }}
-                        className={`rounded-[1.5rem] border p-3 shadow-sm ${
-                          darkMode
-                            ? "border-white/10 bg-slate-900/70"
-                            : "border-slate-100 bg-slate-50"
+                        className={`rounded-[1.5rem] border p-3 shadow-sm transition-colors ${
+                          isLastAddedItem(item)
+                            ? darkMode
+                              ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
+                              : "border-orange-400 bg-orange-50 ring-2 ring-orange-300/40"
+                            : darkMode
+                              ? "border-white/10 bg-slate-900/70"
+                              : "border-slate-100 bg-slate-50"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -3018,9 +3829,16 @@ export default function RestaurantCashierPOSPage() {
                               </div>
 
                               <div className="min-w-0">
-                                <h3 className="truncate font-black">
-                                  {item.name}
-                                </h3>
+                                <div className="flex items-center gap-1.5">
+                                  <h3 className="truncate font-black">
+                                    {item.name}
+                                  </h3>
+                                  {isLastAddedItem(item) && (
+                                    <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                      Latest
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="mt-0.5 text-xs font-bold text-orange-500">
                                   {formatMoney(item.price)} Ks each
                                 </p>
@@ -3222,18 +4040,7 @@ export default function RestaurantCashierPOSPage() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    const stockError = validateCartStock();
-
-                    if (stockError) {
-                      setPaymentError(stockError);
-                      setKitchenError(stockError);
-                      return;
-                    }
-
-                    setPaymentError("");
-                    setPaymentOpen(true);
-                  }}
+                  onClick={openPaymentDialog}
                   disabled={cart.length === 0}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -3242,15 +4049,316 @@ export default function RestaurantCashierPOSPage() {
                 </button>
               </div>
             </div>
+            </RestaurantCartDropSurface>
           </aside>
         </section>
       </div>
+
+      <AnimatePresence>
+        {draftRestoreMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.96 }}
+            className="fixed left-1/2 top-4 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-emerald-500/25"
+          >
+            <Check size={17} /> {draftRestoreMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Dashboard Exit Confirmation */}
+      <AnimatePresence>
+        {exitConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              if (!exitSaving) setExitConfirmOpen(false);
+            }}
+            className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/65 p-3 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.96 }}
+              onClick={(event) => event.stopPropagation()}
+              className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${
+                darkMode
+                  ? "border-white/10 bg-slate-950 text-white"
+                  : "border-orange-100 bg-white text-slate-950"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-500/15 text-amber-500">
+                  <ArrowLeft size={22} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExitConfirmOpen(false)}
+                  disabled={exitSaving}
+                  className={`grid h-10 w-10 place-items-center rounded-xl disabled:opacity-40 ${
+                    darkMode ? "bg-white/10" : "bg-slate-100"
+                  }`}
+                  aria-label="Stay in POS"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <h2 className="mt-4 text-xl font-black">Dashboard ကို သွားမလား?</h2>
+              <p className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"}`}>
+                Cart ထဲမှာ {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)} Ks ရှိနေပါတယ်။
+                မသိမ်းဘဲထွက်လျှင် လက်ရှိပြင်ဆင်ထားတဲ့ order ပျောက်သွားနိုင်ပါတယ်။
+              </p>
+
+              <div className={`mt-4 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/5" : "bg-orange-50"}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Order</span>
+                  <span className="text-orange-500">
+                    {orderType === "DINE_IN"
+                      ? selectedTable
+                        ? `Dine In · Table ${selectedTable.tableNo}`
+                        : "Dine In · No table"
+                      : orderType === "TAKEAWAY"
+                        ? "Takeaway"
+                        : "Delivery"}
+                  </span>
+                </div>
+              </div>
+
+              {exitError && (
+                <div className="mt-3 rounded-2xl bg-red-500/10 p-3 text-sm font-black text-red-500">
+                  {exitError}
+                </div>
+              )}
+
+              {orderType !== "DINE_IN" && (
+                <p className="mt-3 text-xs font-bold text-amber-600">
+                  Takeaway/Delivery cart ကို open order အဖြစ် မသိမ်းနိုင်သေးပါ။ Stay သို့မဟုတ် Discard ကိုရွေးပါ။
+                </p>
+              )}
+
+              {orderType === "DINE_IN" && !selectedTable && (
+                <p className="mt-3 text-xs font-bold text-amber-600">
+                  Save & Exit လုပ်ရန် table အရင်ရွေးရပါမယ်။
+                </p>
+              )}
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setExitConfirmOpen(false)}
+                  disabled={exitSaving}
+                  className={`rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-40 ${
+                    darkMode
+                      ? "bg-white/10 text-white hover:bg-white/15"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  Stay in POS
+                </button>
+
+                {orderType === "DINE_IN" && selectedTable && (
+                  <button
+                    type="button"
+                    onClick={saveOrderAndExit}
+                    disabled={exitSaving}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                  >
+                    {exitSaving ? <Loader2 size={17} className="animate-spin" /> : <Check size={17} />}
+                    {exitSaving ? "Saving..." : "Save & Exit"}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={discardOrderAndExit}
+                  disabled={exitSaving}
+                  className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm font-black text-red-500 transition hover:bg-red-500 hover:text-white disabled:opacity-40 sm:col-span-2"
+                >
+                  Discard & Exit
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Table Picker Dialog */}
+      <AnimatePresence>
+        {tableDialogOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              if (!openOrderLoading) setTableDialogOpen(false);
+            }}
+            className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.97 }}
+              onClick={(event) => event.stopPropagation()}
+              className={`flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl ${
+                darkMode
+                  ? "border-white/10 bg-slate-950 text-white"
+                  : "border-orange-100 bg-[#fffdf9] text-slate-950"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-slate-200/20 p-4 sm:p-5">
+                <div>
+                  <h2 className="flex items-center gap-2 text-xl font-black">
+                    <Armchair className="text-orange-500" /> Select Table
+                  </h2>
+                  <p className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    Table ကိုရွေးပြီးလျှင် Menu Items screen ကို ချက်ချင်းပြန်သွားပါမယ်။
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTableDialogOpen(false)}
+                  disabled={openOrderLoading}
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl disabled:opacity-40 ${
+                    darkMode ? "bg-white/10" : "bg-slate-100"
+                  }`}
+                  aria-label="Close table picker"
+                >
+                  <X size={19} />
+                </button>
+              </div>
+
+              <div className="border-b border-slate-200/20 p-3 sm:p-4">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}>
+                    <Search size={17} className="text-slate-400" />
+                    <input
+                      value={tableSearch}
+                      onChange={(event) => setTableSearch(event.target.value)}
+                      placeholder="Search table number, name or floor..."
+                      className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
+                    />
+                    {tableSearch && (
+                      <button type="button" onClick={() => setTableSearch("")} className="text-slate-400">
+                        <X size={15} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-1.5 overflow-x-auto">
+                    {["ALL", "FREE", "BUSY", "RESERVED"].map((statusKey) => (
+                      <button
+                        key={statusKey}
+                        type="button"
+                        onClick={() => setTableStatusFilter(statusKey)}
+                        className={`whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-black transition ${
+                          tableStatusFilter === statusKey
+                            ? "bg-orange-500 text-white"
+                            : darkMode
+                              ? "bg-white/10 text-slate-200"
+                              : "bg-white text-slate-700 ring-1 ring-slate-100"
+                        }`}
+                      >
+                        {statusKey === "ALL" ? "All Tables" : statusKey}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                {openOrderLoading || tablesLoading ? (
+                  <div className="grid min-h-[280px] place-items-center text-center">
+                    <div>
+                      <Loader2 className="mx-auto animate-spin text-orange-500" size={30} />
+                      <p className="mt-3 text-sm font-black">
+                        {openOrderLoading ? "Open order loading..." : "Restaurant tables loading..."}
+                      </p>
+                    </div>
+                  </div>
+                ) : tablesError ? (
+                  <div className="rounded-2xl bg-red-500/10 p-4 text-sm font-black text-red-500">
+                    {tablesError}
+                  </div>
+                ) : tables.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/70 p-6 text-center text-sm font-black text-slate-600">
+                    Table မရှိသေးပါ။ Restaurant Tables page မှာ table create လုပ်ပါ။
+                  </div>
+                ) : filteredTables.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-orange-200 p-6 text-center text-sm font-black text-slate-500">
+                    ဒီ search/filter နဲ့ကိုက်ညီတဲ့ table မရှိပါ။
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+                    {filteredTables.map((table) => {
+                      const active = selectedTableId === table.id;
+                      const statusKey = (table.status || "FREE").toUpperCase();
+
+                      return (
+                        <button
+                          key={table.id}
+                          type="button"
+                          onClick={() => {
+                            if (active) {
+                              setTableDialogOpen(false);
+                            } else {
+                              void handleSelectTable(table);
+                            }
+                          }}
+                          className={`rounded-2xl border p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${
+                            active
+                              ? "border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/25"
+                              : statusKey === "BUSY"
+                                ? darkMode
+                                  ? "border-red-400/30 bg-red-500/10 text-red-200"
+                                  : "border-red-100 bg-red-50 text-red-700"
+                                : statusKey === "RESERVED"
+                                  ? darkMode
+                                    ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
+                                    : "border-amber-100 bg-amber-50 text-amber-700"
+                                  : darkMode
+                                    ? "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                                    : "border-slate-100 bg-white text-slate-700 hover:border-orange-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <Armchair size={19} />
+                            <span className={`rounded-full px-2 py-1 text-[9px] font-black ${
+                              active
+                                ? "bg-white/20"
+                                : darkMode
+                                  ? "bg-white/10"
+                                  : "bg-slate-950/5"
+                            }`}>
+                              {active ? "SELECTED" : statusKey}
+                            </span>
+                          </div>
+                          <div className="mt-3 text-lg font-black">{table.tableNo}</div>
+                          <div className="mt-1 truncate text-xs font-bold opacity-75">
+                            {table.tableName || table.floorName || "Main floor"}
+                          </div>
+                          <div className="mt-1 text-xs font-bold opacity-75">
+                            {table.seats || 0} seats
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Payment Dialog */}
       <AnimatePresence>
         {paymentOpen && (
           <motion.div
-            className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -3263,7 +4371,7 @@ export default function RestaurantCashierPOSPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-xl rounded-[2rem] border p-5 shadow-2xl ${
+              className={`my-auto w-full max-w-xl rounded-[2rem] border p-4 shadow-2xl sm:p-6 ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
                   : "border-orange-100 bg-white text-slate-950"
@@ -3280,7 +4388,7 @@ export default function RestaurantCashierPOSPage() {
                       darkMode ? "text-slate-300" : "text-slate-500"
                     }`}
                   >
-                    Order total ကို confirm လုပ်ပြီး payment complete လုပ်ပါ။
+                    {cart.reduce((sum, item) => sum + item.qty, 0)} items · Staff: {activeStaff.staffName}
                   </p>
                 </div>
 
@@ -3297,7 +4405,54 @@ export default function RestaurantCashierPOSPage() {
                 </button>
               </div>
 
-              <div className="mt-5 grid grid-cols-3 gap-2">
+              <div
+                className={`mt-4 overflow-hidden rounded-3xl border ${
+                  darkMode
+                    ? "border-orange-400/20 bg-gradient-to-br from-orange-500/20 to-amber-400/5"
+                    : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50"
+                }`}
+              >
+                <div className="px-5 py-5 text-center sm:py-6">
+                  <p
+                    className={`text-xs font-black uppercase tracking-[0.18em] ${
+                      darkMode ? "text-orange-300" : "text-orange-600"
+                    }`}
+                  >
+                    ကျသင့်ငွေ
+                  </p>
+                  <p className="mt-1 text-4xl font-black tabular-nums text-orange-500 sm:text-5xl">
+                    {formatMoney(total)}
+                    <span className="ml-2 text-lg sm:text-xl">Ks</span>
+                  </p>
+                </div>
+
+                <div
+                  className={`grid grid-cols-4 border-t px-2 py-3 text-center text-[10px] font-bold sm:px-4 sm:text-xs ${
+                    darkMode
+                      ? "border-white/10 bg-black/10 text-slate-300"
+                      : "border-orange-100 bg-white/60 text-slate-600"
+                  }`}
+                >
+                  <div>
+                    <p className="uppercase text-slate-400">Subtotal</p>
+                    <p className="mt-1 tabular-nums">{formatMoney(subtotal)}</p>
+                  </div>
+                  <div className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}>
+                    <p className="uppercase text-slate-400">Service</p>
+                    <p className="mt-1 tabular-nums">{formatMoney(serviceCharge)}</p>
+                  </div>
+                  <div className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}>
+                    <p className="uppercase text-slate-400">Tax</p>
+                    <p className="mt-1 tabular-nums">{formatMoney(tax)}</p>
+                  </div>
+                  <div className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}>
+                    <p className="uppercase text-slate-400">Discount</p>
+                    <p className="mt-1 tabular-nums">-{formatMoney(discount)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
                 {[
                   {
                     key: "CASH" as PaymentMethod,
@@ -3339,47 +4494,118 @@ export default function RestaurantCashierPOSPage() {
               </div>
 
               <div
-                className={`mt-5 rounded-[1.5rem] p-4 ${
+                className={`mt-4 rounded-[1.5rem] p-4 ${
                   darkMode ? "bg-white/5" : "bg-slate-50"
                 }`}
               >
-                <div className="flex items-center justify-between text-sm font-bold">
-                  <span>Total Amount</span>
-                  <span className="text-2xl font-black text-orange-500">
-                    {formatMoney(total)} Ks
-                  </span>
-                </div>
-
                 {paymentMethod === "CASH" && (
                   <>
-                    <div className="mt-4">
-                      <label className="text-sm font-black">
-                        Cash Received
-                      </label>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="restaurant-cash-received" className="text-sm font-black">
+                          လက်ခံရရှိငွေ
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCashReceived(String(total));
+                            setPaymentError("");
+                          }}
+                          disabled={paymentSaving}
+                          className="text-xs font-black text-orange-500 hover:text-orange-600 disabled:opacity-50"
+                        >
+                          Exact amount
+                        </button>
+                      </div>
                       <input
+                        ref={cashInputRef}
+                        id="restaurant-cash-received"
                         value={cashReceived}
                         onChange={(e) => {
-                          setCashReceived(e.target.value);
+                          const value = e.target.value;
+                          setCashReceived(
+                            value === ""
+                              ? ""
+                              : String(Math.max(0, Number(value))),
+                          );
                           setPaymentError("");
                         }}
                         type="number"
-                        placeholder="Enter cash amount"
+                        inputMode="numeric"
+                        min="0"
+                        placeholder="0"
                         disabled={paymentSaving}
-                        className={`mt-2 w-full rounded-2xl px-4 py-4 text-xl font-black outline-none ${
+                        className={`mt-2 w-full rounded-2xl px-4 py-4 text-center text-3xl font-black tabular-nums outline-none transition focus:ring-2 focus:ring-orange-500 ${
                           darkMode
-                            ? "bg-slate-900 text-white"
-                            : "bg-white text-slate-950 ring-1 ring-slate-100"
+                            ? "bg-slate-900 text-white ring-1 ring-white/10"
+                            : "bg-white text-slate-950 ring-1 ring-slate-200"
                         }`}
                       />
                     </div>
 
-                    <div className="mt-4 flex items-center justify-between rounded-2xl bg-emerald-500/10 p-4 text-emerald-600">
-                      <span className="font-black">Change</span>
-                      <span className="text-2xl font-black">
-                        {formatMoney(change)} Ks
-                      </span>
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {quickCashAmounts.map((amount) => (
+                        <button
+                          type="button"
+                          key={amount}
+                          onClick={() => {
+                            setCashReceived(String(amount));
+                            setPaymentError("");
+                          }}
+                          disabled={paymentSaving}
+                          className={`rounded-xl px-2 py-2.5 text-xs font-black tabular-nums transition disabled:opacity-50 ${
+                            cashNumber === amount
+                              ? "bg-orange-500 text-white"
+                              : darkMode
+                                ? "bg-white/10 text-slate-200 hover:bg-white/15"
+                                : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-orange-50"
+                          }`}
+                        >
+                          {formatMoney(amount)} Ks
+                        </button>
+                      ))}
+                    </div>
+
+                    <div
+                      className={`mt-3 overflow-hidden rounded-2xl border transition-colors duration-200 ${
+                        cashIsEnough
+                          ? darkMode
+                            ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                            : "border-emerald-100 bg-emerald-50 text-emerald-600"
+                          : darkMode
+                            ? "border-red-400/20 bg-red-500/10 text-red-300"
+                            : "border-red-100 bg-red-50 text-red-600"
+                      }`}
+                    >
+                      <div
+                        className={`flex items-center justify-between border-b px-4 py-3 text-sm font-black ${
+                          darkMode ? "border-white/10" : "border-black/5"
+                        }`}
+                      >
+                        <span>ပေးထားငွေ</span>
+                        <span className="text-lg tabular-nums">
+                          {formatMoney(cashNumber)} Ks
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-4 py-4">
+                        <span className="font-black">Change</span>
+                        <span className="text-2xl font-black tabular-nums">
+                          {formatMoney(
+                            cashIsEnough ? change : remainingAmount,
+                          )} Ks
+                        </span>
+                      </div>
                     </div>
                   </>
+                )}
+
+                {paymentMethod !== "CASH" && (
+                  <div className="flex items-center justify-between text-sm font-black">
+                    <span>Pay Amount</span>
+                    <span className="text-2xl text-orange-500">
+                      {formatMoney(total)} Ks
+                    </span>
+                  </div>
                 )}
               </div>
 
@@ -3410,7 +4636,7 @@ export default function RestaurantCashierPOSPage() {
 
                 <button
                   onClick={completePayment}
-                  disabled={paymentSaving || cart.length === 0}
+                  disabled={paymentSaving || cart.length === 0 || !cashIsEnough}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {paymentSaving ? (
@@ -3418,7 +4644,11 @@ export default function RestaurantCashierPOSPage() {
                   ) : (
                     <Check size={18} />
                   )}
-                  {paymentSaving ? "Saving..." : "Complete Payment"}
+                  {paymentSaving
+                    ? "Saving..."
+                    : paymentMethod === "CASH" && !cashIsEnough
+                      ? `${formatMoney(remainingAmount)} Ks လိုသေးသည်`
+                      : `${formatMoney(total)} Ks Pay`}
                 </button>
               </div>
             </motion.div>
@@ -3460,7 +4690,7 @@ export default function RestaurantCashierPOSPage() {
                         darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      Receipt No: {paymentReceiptData.paymentNo}
+                      Receipt No: {paymentReceiptData.receiptNo}
                     </p>
                   </div>
                 </div>
@@ -3778,5 +5008,104 @@ export default function RestaurantCashierPOSPage() {
         )}
       </AnimatePresence>
     </main>
+    <RestaurantMobileCartBar
+      darkMode={darkMode}
+      dragging={Boolean(draggingMenuItemId)}
+      itemCount={cart.reduce((sum, item) => sum + item.qty, 0)}
+      total={total}
+      onViewCart={() => setMobileCartOpen(true)}
+      onKitchen={sendToKitchen}
+      onPayment={openPaymentDialog}
+      kitchenSaving={kitchenSaving}
+      addedFeedbackVisible={addedFeedbackVisible}
+    />
+
+    <AnimatePresence>
+      {flyingItem && (
+        <motion.div
+          key={flyingItem.token}
+          initial={{
+            left: flyingItem.from.x,
+            top: flyingItem.from.y,
+            scale: 1,
+            opacity: 1,
+          }}
+          animate={{
+            left: [
+              flyingItem.from.x,
+              (flyingItem.from.x + flyingItem.to.x) / 2,
+              flyingItem.to.x,
+            ],
+            top: [
+              flyingItem.from.y,
+              Math.min(flyingItem.from.y, flyingItem.to.y) - 75,
+              flyingItem.to.y,
+            ],
+            scale: [1, 0.78, 0.2],
+            rotate: [0, -7, 5],
+            opacity: [1, 1, 0.25],
+          }}
+          transition={{ duration: 0.72, times: [0, 0.55, 1], ease: "easeInOut" }}
+          onAnimationComplete={() => setFlyingItem(null)}
+          className={`pointer-events-none fixed z-[100] flex w-40 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border p-2 shadow-2xl ${
+            darkMode
+              ? "border-orange-400 bg-slate-900 text-white"
+              : "border-orange-200 bg-white text-slate-950"
+          }`}
+        >
+          <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-orange-100 text-xl">
+            {flyingItem.item.image ? (
+              <img
+                src={flyingItem.item.image}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              categories.find(
+                (category) => category.id === flyingItem.item.categoryId,
+              )?.icon || "🍽️"
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-black">{flyingItem.item.name}</p>
+            <p className="text-xs font-black text-emerald-500">+1 Added</p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    <DragOverlay>
+      {draggingMenuItem && (
+        <div
+          className={`flex w-[280px] items-center gap-3 rounded-2xl border p-3 shadow-2xl ${
+            darkMode
+              ? "border-orange-400 bg-slate-900 text-white"
+              : "border-orange-200 bg-white text-slate-950"
+          }`}
+        >
+          <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-orange-100 text-2xl">
+            {draggingMenuItem.image ? (
+              <img
+                src={draggingMenuItem.image}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              categories.find((cat) => cat.id === draggingMenuItem.categoryId)?.icon || "🍽️"
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black">{draggingMenuItem.name}</p>
+            <p className="mt-1 text-lg font-black text-orange-500">
+              {formatMoney(draggingMenuItem.price)} Ks
+            </p>
+          </div>
+          <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black text-white">
+            Dragging
+          </span>
+        </div>
+      )}
+    </DragOverlay>
+    </DragDropProvider>
   );
 }

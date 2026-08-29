@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -310,6 +310,32 @@ function isCompletedStatus(status: KitchenStatus) {
   return status === "DONE" || status === "CANCELLED";
 }
 
+function deriveTicketStatus(items: KitchenTicketItem[]): "NEW" | "COOKING" | "READY" {
+  if (items.length === 0) return "NEW";
+
+  const unfinishedStatuses = items
+    .map((item) => normalizeStatus(item.status))
+    .filter((status) => status !== "DONE" && status !== "CANCELLED");
+
+  if (
+    unfinishedStatuses.length > 0 &&
+    unfinishedStatuses.every((status) => status === "READY")
+  ) {
+    return "READY";
+  }
+
+  if (
+    items.some((item) => {
+      const status = normalizeStatus(item.status);
+      return status === "COOKING" || status === "READY" || status === "DONE";
+    })
+  ) {
+    return "COOKING";
+  }
+
+  return "NEW";
+}
+
 export default function RestaurantKitchenPage() {
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<KitchenStatus>("ALL");
@@ -318,6 +344,13 @@ export default function RestaurantKitchenPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [completedPage, setCompletedPage] = useState(1);
+  const [undoReadyItem, setUndoReadyItem] = useState<{
+    ticketId: number;
+    ticketNo: string;
+    itemId: number;
+    itemName: string;
+  } | null>(null);
+  const readyUndoTimerRef = useRef<number | null>(null);
 
   const filterButtons = [...activeStatuses, ...completedStatuses];
 
@@ -437,92 +470,134 @@ export default function RestaurantKitchenPage() {
     }
   }
 
-  async function updateTicketStatus(ticketId: number, status: KitchenStatus) {
-    setUpdatingId(`ticket-${ticketId}`);
+  async function updateItemStatus(
+    ticket: KitchenTicket,
+    item: KitchenTicketItem,
+    nextStatus: "COOKING" | "READY"
+  ) {
+    setUpdatingId(`item-${item.id}`);
     setError("");
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/restaurant/kitchen/tickets/${ticketId}/status`,
+      const itemResponse = await fetch(
+        `${API_BASE}/api/restaurant/kitchen/items/${item.id}/status`,
         {
           method: "PATCH",
           headers: authHeaders(),
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({ status: nextStatus }),
         }
       );
 
-      const authOrFeatureError = await getAuthOrFeatureError(res);
-      if (authOrFeatureError) throw new Error(authOrFeatureError);
+      const itemAuthOrFeatureError = await getAuthOrFeatureError(itemResponse);
+      if (itemAuthOrFeatureError) throw new Error(itemAuthOrFeatureError);
 
-      if (!res.ok) {
+      if (!itemResponse.ok) {
         throw new Error(
-          await getApiErrorMessage(res, "Ticket status update မလုပ်နိုင်ပါ။")
+          await getApiErrorMessage(
+            itemResponse,
+            `${item.itemName} status update မလုပ်နိုင်ပါ။`
+          )
         );
       }
 
-      const updated = await res.json().catch(() => null);
+      const returnedItemBody = await itemResponse.json().catch(() => null);
+      const returnedItem =
+        returnedItemBody && typeof returnedItemBody === "object"
+          ? (returnedItemBody as KitchenTicketItem)
+          : null;
+      const nextItems = (ticket.items || []).map((currentItem) =>
+        currentItem.id === item.id
+          ? { ...currentItem, ...(returnedItem || {}), status: nextStatus }
+          : currentItem
+      );
+      const nextTicketStatus = deriveTicketStatus(nextItems);
 
-      setTickets((prev) =>
-        prev.map((ticket) =>
-          ticket.id === ticketId
-            ? updated && typeof updated === "object"
-              ? (updated as KitchenTicket)
-              : { ...ticket, status }
-            : ticket
+      let returnedTicket: KitchenTicket | null = null;
+      if (normalizeStatus(ticket.status) !== nextTicketStatus) {
+        const ticketResponse = await fetch(
+          `${API_BASE}/api/restaurant/kitchen/tickets/${ticket.id}/status`,
+          {
+            method: "PATCH",
+            headers: authHeaders(),
+            body: JSON.stringify({ status: nextTicketStatus }),
+          }
+        );
+
+        const ticketAuthOrFeatureError =
+          await getAuthOrFeatureError(ticketResponse);
+        if (ticketAuthOrFeatureError) throw new Error(ticketAuthOrFeatureError);
+
+        if (!ticketResponse.ok) {
+          throw new Error(
+            await getApiErrorMessage(
+              ticketResponse,
+              "Ticket status update မလုပ်နိုင်ပါ။"
+            )
+          );
+        }
+
+        const returnedTicketBody = await ticketResponse.json().catch(() => null);
+        returnedTicket =
+          returnedTicketBody && typeof returnedTicketBody === "object"
+            ? (returnedTicketBody as KitchenTicket)
+            : null;
+      }
+
+      setTickets((current) =>
+        current.map((currentTicket) =>
+          currentTicket.id === ticket.id
+            ? {
+                ...currentTicket,
+                ...(returnedTicket || {}),
+                status: nextTicketStatus,
+                items: nextItems,
+              }
+            : currentTicket
         )
       );
+
+      if (nextStatus === "READY") {
+        if (readyUndoTimerRef.current !== null) {
+          window.clearTimeout(readyUndoTimerRef.current);
+        }
+
+        setUndoReadyItem({
+          ticketId: ticket.id,
+          ticketNo: ticket.ticketNo || `KT-${ticket.id}`,
+          itemId: item.id,
+          itemName: item.itemName,
+        });
+        readyUndoTimerRef.current = window.setTimeout(() => {
+          setUndoReadyItem(null);
+          readyUndoTimerRef.current = null;
+        }, 8000);
+      } else if (undoReadyItem?.itemId === item.id) {
+        setUndoReadyItem(null);
+        if (readyUndoTimerRef.current !== null) {
+          window.clearTimeout(readyUndoTimerRef.current);
+          readyUndoTimerRef.current = null;
+        }
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ticket update error");
+      setError(err instanceof Error ? err.message : "Item update error");
+      await fetchTickets();
     } finally {
       setUpdatingId(null);
     }
   }
 
-  async function updateItemStatus(itemId: number, status: KitchenStatus) {
-    setUpdatingId(`item-${itemId}`);
-    setError("");
+  function undoReadyItemStatus() {
+    if (!undoReadyItem) return;
 
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/restaurant/kitchen/items/${itemId}/status`,
-        {
-          method: "PATCH",
-          headers: authHeaders(),
-          body: JSON.stringify({ status }),
-        }
-      );
+    const ticket = tickets.find(
+      (candidate) => candidate.id === undoReadyItem.ticketId
+    );
+    const item = ticket?.items?.find(
+      (candidate) => candidate.id === undoReadyItem.itemId
+    );
 
-      const authOrFeatureError = await getAuthOrFeatureError(res);
-      if (authOrFeatureError) throw new Error(authOrFeatureError);
-
-      if (!res.ok) {
-        throw new Error(
-          await getApiErrorMessage(res, "Item status update မလုပ်နိုင်ပါ။")
-        );
-      }
-
-      const updated = await res.json().catch(() => null);
-      const updatedItem =
-        updated && typeof updated === "object"
-          ? (updated as KitchenTicketItem)
-          : null;
-
-      setTickets((prev) =>
-        prev.map((ticket) => ({
-          ...ticket,
-          items: ticket.items?.map((item) =>
-            item.id === itemId
-              ? updatedItem
-                ? updatedItem
-                : { ...item, status }
-              : item
-          ),
-        }))
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Item update error");
-    } finally {
-      setUpdatingId(null);
+    if (ticket && item) {
+      void updateItemStatus(ticket, item, "COOKING");
     }
   }
 
@@ -541,9 +616,17 @@ export default function RestaurantKitchenPage() {
 
     const interval = window.setInterval(() => {
       fetchTickets();
-    }, 15000);
+    }, 5000);
 
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (readyUndoTimerRef.current !== null) {
+        window.clearTimeout(readyUndoTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -559,6 +642,39 @@ export default function RestaurantKitchenPage() {
   return (
     <main className="min-h-screen bg-slate-50 p-4 text-slate-950 sm:p-6 lg:p-8">
       <BusinessTypeGuard allow="RESTAURANT" />
+
+      <AnimatePresence>
+        {undoReadyItem && (
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.96 }}
+            className="fixed bottom-5 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-950 p-3 text-white shadow-2xl"
+          >
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500">
+              <PackageCheck size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black">
+                {undoReadyItem.itemName} · READY
+              </p>
+              <p className="text-xs font-semibold text-slate-300">
+                {undoReadyItem.ticketNo} မှ Serving ဆီပို့ထားပါတယ်။
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={undoReadyItemStatus}
+              disabled={updatingId === `item-${undoReadyItem.itemId}`}
+              className="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-950 transition hover:bg-orange-50 disabled:opacity-50"
+            >
+              {updatingId === `item-${undoReadyItem.itemId}`
+                ? "ပြန်ယူနေသည်..."
+                : "UNDO · ပြန်ယူမယ်"}
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="mx-auto flex max-w-7xl flex-col gap-4">
         {/* Top toolbar */}
@@ -995,64 +1111,69 @@ export default function RestaurantKitchenPage() {
                               </span>
                             </div>
 
-                            <div className="mt-3 grid grid-cols-3 gap-2">
-                              {(
-                                ["COOKING", "READY", "DONE"] as KitchenStatus[]
-                              ).map((nextStatus) => (
-                                <button
-                                  key={nextStatus}
-                                  onClick={() =>
-                                    updateItemStatus(item.id, nextStatus)
-                                  }
-                                  disabled={updatingId === `item-${item.id}`}
-                                  className={`rounded-xl px-3 py-2 text-xs font-black transition disabled:opacity-60 ${
-                                    itemStatus === nextStatus
-                                      ? "bg-orange-500 text-white"
-                                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                                  }`}
-                                >
-                                  {updatingId === `item-${item.id}` ? (
-                                    <Loader2
-                                      size={14}
-                                      className="mx-auto animate-spin"
-                                    />
-                                  ) : (
-                                    nextStatus
-                                  )}
-                                </button>
-                              ))}
+                            <div className="mt-3 grid grid-cols-2 gap-2">
+                              {(["COOKING", "READY"] as const).map(
+                                (nextStatus) => {
+                                  const isUpdating =
+                                    updatingId === `item-${item.id}`;
+                                  const isCurrent = itemStatus === nextStatus;
+                                  const canUpdate =
+                                    (nextStatus === "COOKING" &&
+                                      (itemStatus === "NEW" ||
+                                        itemStatus === "READY")) ||
+                                    (nextStatus === "READY" &&
+                                      itemStatus === "COOKING");
+
+                                  return (
+                                    <button
+                                      key={nextStatus}
+                                      type="button"
+                                      onClick={() =>
+                                        void updateItemStatus(
+                                          ticket,
+                                          item,
+                                          nextStatus
+                                        )
+                                      }
+                                      disabled={updatingId !== null || !canUpdate}
+                                      className={`rounded-xl px-3 py-2.5 text-xs font-black transition ${
+                                        isCurrent
+                                          ? nextStatus === "READY"
+                                            ? "bg-emerald-500 text-white"
+                                            : "bg-orange-500 text-white"
+                                          : canUpdate
+                                            ? nextStatus === "READY"
+                                              ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                                              : "bg-orange-500 text-white hover:bg-orange-600"
+                                            : "cursor-not-allowed bg-slate-100 text-slate-400"
+                                      }`}
+                                    >
+                                      {isUpdating && canUpdate ? (
+                                        <Loader2
+                                          size={15}
+                                          className="mx-auto animate-spin"
+                                        />
+                                      ) : (
+                                        <span className="inline-flex items-center justify-center gap-1.5">
+                                          {nextStatus === "COOKING" ? (
+                                            <Flame size={14} />
+                                          ) : (
+                                            <PackageCheck size={14} />
+                                          )}
+                                          {nextStatus === "COOKING" &&
+                                          itemStatus === "READY"
+                                            ? "BACK TO COOKING"
+                                            : nextStatus}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                }
+                              )}
                             </div>
                           </div>
                         );
                       })}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 border-t border-slate-200/70 bg-white/80 p-4">
-                      {(["COOKING", "READY", "DONE"] as KitchenStatus[]).map(
-                        (nextStatus) => (
-                          <button
-                            key={nextStatus}
-                            onClick={() =>
-                              updateTicketStatus(ticket.id, nextStatus)
-                            }
-                            disabled={updatingId === `ticket-${ticket.id}`}
-                            className={`rounded-2xl px-3 py-3 text-xs font-black transition disabled:opacity-60 ${
-                              status === nextStatus
-                                ? "bg-slate-950 text-white"
-                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                            }`}
-                          >
-                            {updatingId === `ticket-${ticket.id}` ? (
-                              <Loader2
-                                size={15}
-                                className="mx-auto animate-spin"
-                              />
-                            ) : (
-                              nextStatus
-                            )}
-                          </button>
-                        )
-                      )}
                     </div>
                   </motion.article>
                 );

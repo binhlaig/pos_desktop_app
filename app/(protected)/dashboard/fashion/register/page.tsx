@@ -1,16 +1,28 @@
-"use client";
+
+"use client"
+// UPDATED: Staff-friendly payment dialog with amount due, received cash,
+// remaining balance, and change calculation.
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  DragDropProvider,
+  DragOverlay,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/react";
 import { BusinessTypeGuard } from "@/components/dashboard/business-type-guard";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
 import { fetchStaffById } from "@/lib/staff-validation";
 import {
+  ArrowLeft,
   BadgePercent,
   Check,
   ChevronLeft,
   ChevronRight,
   CreditCard,
+  GripVertical,
   IdCard,
   Loader2,
   Minus,
@@ -55,6 +67,15 @@ type CartItem = FashionProduct & {
   cartId: string;
   qty: number;
   discountPercent?: number;
+};
+
+type FashionCartDraft = {
+  version: 1;
+  savedAt: number;
+  staffId: string;
+  discount: number;
+  taxPercent: number;
+  items: CartItem[];
 };
 
 type ActiveStaff = {
@@ -102,6 +123,37 @@ const MISSING_TOKEN_MESSAGE = "Login token မရှိပါ။ အရင်ဆ
 const PRODUCTS_PER_PAGE = 8;
 const CART_ITEMS_PER_PAGE = 4;
 const DEFAULT_TAX_PERCENT = 0;
+const CART_DROP_ID = "fashion-cart-drop-zone";
+const MOBILE_CART_DROP_ID = "fashion-mobile-cart-drop-zone";
+const CART_WIDTH_STORAGE_KEY = "fashion_pos_cart_width";
+const DEFAULT_CART_WIDTH = 430;
+const MIN_CART_WIDTH = 340;
+const MAX_CART_WIDTH = 680;
+const CART_DRAFT_VERSION = 1;
+const CART_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;
+const CART_DRAFT_KEY_PREFIX = "fashion_pos_cart_draft_v1";
+
+function getShopDraftScope(token?: string | null) {
+  try {
+    const rawToken = token?.replace(/^Bearer\s+/i, "").trim();
+    const payloadPart = rawToken?.split(".")[1];
+    if (!payloadPart) return "current-shop";
+
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const payload = JSON.parse(globalThis.atob(padded)) as Record<string, unknown>;
+
+    return String(
+      payload.shopId || payload.shop_id || payload.shopCode || payload.shop_code || "current-shop",
+    );
+  } catch {
+    return "current-shop";
+  }
+}
+
+function getFashionCartDraftKey(staffId: string) {
+  return `${CART_DRAFT_KEY_PREFIX}:${getShopDraftScope(getAccessToken())}:${staffId}`;
+}
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -150,6 +202,18 @@ function pickString(record: Record<string, unknown>, keys: string[]) {
   }
 
   return "";
+}
+
+function getNestedRecord(
+  record: Record<string, unknown>,
+  keys: string[],
+): Record<string, unknown> {
+  for (const key of keys) {
+    const nested = asRecord(record[key]);
+    if (Object.keys(nested).length > 0) return nested;
+  }
+
+  return {};
 }
 
 function pickNumber(record: Record<string, unknown>, keys: string[]) {
@@ -330,6 +394,189 @@ function mapProductToFashionProduct(product: BackendProduct): FashionProduct {
 function createCartId() {
   return (
     globalThis.crypto?.randomUUID?.() || String(Date.now() + Math.random())
+  );
+}
+
+function DraggableProductCard({
+  productId,
+  disabled,
+  onClick,
+  className,
+  children,
+}: {
+  productId: string;
+  disabled: boolean;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const { ref, isDragging } = useDraggable({
+    id: `fashion-product:${productId}`,
+    disabled,
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${className} touch-none select-none cursor-grab active:cursor-grabbing ${
+        isDragging ? "scale-[0.98] opacity-35" : ""
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CartDropSurface({
+  dragging,
+  darkMode,
+  addedFeedbackVisible,
+  children,
+}: {
+  dragging: boolean;
+  darkMode: boolean;
+  addedFeedbackVisible: boolean;
+  children: React.ReactNode;
+}) {
+  const { ref, isDropTarget } = useDroppable({ id: CART_DROP_ID });
+
+  return (
+    <div
+      ref={ref}
+      data-fashion-cart-target="true"
+      className={`relative flex min-h-[520px] flex-col overflow-hidden rounded-[1.5rem] border shadow-sm transition sm:rounded-[2rem] lg:landscape:h-full ${
+        isDropTarget
+          ? darkMode
+            ? "border-emerald-400 bg-emerald-500/10 ring-4 ring-emerald-400/25"
+            : "border-emerald-400 bg-emerald-50 ring-4 ring-emerald-300/35"
+          : dragging
+            ? darkMode
+              ? "border-orange-400 bg-orange-500/10 ring-4 ring-orange-400/20"
+              : "border-orange-400 bg-orange-50 ring-4 ring-orange-300/30"
+          : darkMode
+            ? "border-white/10 bg-white/5"
+            : "border-orange-100 bg-white/92"
+      }`}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-30 rounded-2xl bg-orange-500 px-4 py-2 text-center text-xs font-black text-white shadow-lg">
+          {isDropTarget ? "Release to add item" : "Drop here to add item"}
+        </div>
+      )}
+      <AnimatePresence>
+        {addedFeedbackVisible && !dragging && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.94 }}
+            className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg shadow-emerald-500/30"
+          >
+            <Check size={16} /> Added to Cart
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {children}
+    </div>
+  );
+}
+
+function MobileCartBar({
+  darkMode,
+  dragging,
+  itemCount,
+  total,
+  onViewCart,
+  onPayment,
+  addedFeedbackVisible,
+}: {
+  darkMode: boolean;
+  dragging: boolean;
+  itemCount: number;
+  total: number;
+  onViewCart: () => void;
+  onPayment: () => void;
+  addedFeedbackVisible: boolean;
+}) {
+  const { ref, isDropTarget } = useDroppable({ id: MOBILE_CART_DROP_ID });
+  const hasItems = itemCount > 0;
+
+  return (
+    <div
+      ref={ref}
+      data-fashion-cart-target="true"
+      className={`fixed inset-x-2 bottom-2 z-50 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl transition-colors lg:landscape:hidden ${
+        isDropTarget
+          ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
+          : dragging
+            ? "border-orange-400 bg-orange-500 text-white ring-4 ring-orange-400/20"
+            : addedFeedbackVisible
+              ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
+            : darkMode
+              ? "border-white/10 bg-slate-900/95 text-white"
+              : "border-orange-100 bg-white/95 text-slate-950"
+      }`}
+      style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
+    >
+      {dragging ? (
+        <div className="flex min-h-14 items-center justify-center gap-2 px-3 text-sm font-black">
+          <ShoppingBag size={20} />
+          {isDropTarget ? "Release to add item" : "Drag product here"}
+        </div>
+      ) : (
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+          <button
+            type="button"
+            onClick={onViewCart}
+            disabled={!hasItems}
+            className="relative grid h-12 w-12 place-items-center rounded-xl bg-orange-500 text-white disabled:opacity-50"
+            aria-label="Open cart"
+          >
+            <ShoppingBag size={21} />
+            <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-slate-950 px-1 text-[10px] font-black text-white ring-2 ring-white">
+              {itemCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onViewCart}
+            disabled={!hasItems}
+            className="min-w-0 text-left disabled:opacity-60"
+          >
+            <p className="truncate text-[11px] font-black uppercase tracking-wide text-slate-400">
+              {hasItems ? "Cart Total" : "Cart is empty"}
+            </p>
+            <p className="truncate text-lg font-black tabular-nums text-orange-500">
+              {formatMoney(total)} Ks
+            </p>
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onViewCart}
+              disabled={!hasItems}
+              className={`rounded-xl px-3 py-3 text-xs font-black disabled:opacity-40 ${
+                darkMode ? "bg-white/10 text-white" : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              View
+            </button>
+            <button
+              type="button"
+              onClick={onPayment}
+              disabled={!hasItems}
+              className="rounded-xl bg-orange-500 px-3 py-3 text-xs font-black text-white shadow-lg shadow-orange-500/25 disabled:opacity-40 sm:px-4"
+            >
+              Pay
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -521,6 +768,7 @@ function buildReceiptHtml(receipt: PaymentReceiptData) {
 }
 
 export default function FashionRegisterPage() {
+  const router = useRouter();
   const [darkMode, setDarkMode] = useState(false);
 
   const [activeStaff, setActiveStaff] = useState<ActiveStaff | null>(null);
@@ -540,15 +788,33 @@ export default function FashionRegisterPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartPage, setCartPage] = useState(1);
   const [cartDialogOpen, setCartDialogOpen] = useState(false);
+  const [lastAddedProductKey, setLastAddedProductKey] = useState("");
+  const [addedFeedbackVisible, setAddedFeedbackVisible] = useState(false);
+  const [flyingProduct, setFlyingProduct] = useState<{
+    token: number;
+    product: FashionProduct;
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+  } | null>(null);
+  const addedFeedbackTimerRef = useRef<number | null>(null);
+  const [draggingProductId, setDraggingProductId] = useState("");
+  const [cartWidth, setCartWidth] = useState(DEFAULT_CART_WIDTH);
+  const [isResizingCart, setIsResizingCart] = useState(false);
+  const cartResizeStartRef = useRef({ pointerX: 0, width: DEFAULT_CART_WIDTH });
+  const suppressProductClickRef = useRef(false);
 
   const [discount, setDiscount] = useState(0);
   const [taxPercent, setTaxPercent] = useState(DEFAULT_TAX_PERCENT);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [restoredDraftKey, setRestoredDraftKey] = useState("");
+  const [draftRestoreMessage, setDraftRestoreMessage] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [cashReceived, setCashReceived] = useState("");
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const cashInputRef = useRef<HTMLInputElement | null>(null);
 
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<PaymentReceiptData | null>(
@@ -599,6 +865,11 @@ export default function FashionRegisterPage() {
     return filteredProducts.slice(start, start + PRODUCTS_PER_PAGE);
   }, [filteredProducts, safeProductPage]);
 
+  const draggingProduct = useMemo(
+    () => products.find((product) => product.id === draggingProductId) || null,
+    [products, draggingProductId],
+  );
+
   const cartTotalPages = Math.max(
     1,
     Math.ceil(cart.length / CART_ITEMS_PER_PAGE),
@@ -620,6 +891,23 @@ export default function FashionRegisterPage() {
   const total = Math.max(subtotal + tax - discount, 0);
   const cashNumber = Number(cashReceived || 0);
   const change = Math.max(cashNumber - total, 0);
+  const remainingAmount = Math.max(total - cashNumber, 0);
+  const cashIsEnough = paymentMethod !== "CASH" || cashNumber >= total;
+
+  const quickCashAmounts = useMemo(() => {
+    if (total <= 0) return [];
+
+    return Array.from(
+      new Set([
+        total,
+        Math.ceil(total / 1000) * 1000,
+        Math.ceil(total / 5000) * 5000,
+        Math.ceil(total / 10000) * 10000,
+      ]),
+    )
+      .filter((amount) => amount >= total)
+      .slice(0, 4);
+  }, [total]);
 
   async function verifyStaff(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -733,12 +1021,168 @@ export default function FashionRegisterPage() {
   }, [activeStaff]);
 
   useEffect(() => {
+    if (!activeStaff) {
+      setRestoredDraftKey("");
+      return;
+    }
+
+    const draftKey = getFashionCartDraftKey(activeStaff.staffId);
+    const storedDraft = localStorage.getItem(draftKey);
+
+    if (storedDraft) {
+      try {
+        const draft = JSON.parse(storedDraft) as Partial<FashionCartDraft>;
+        const isFresh =
+          draft.version === CART_DRAFT_VERSION &&
+          typeof draft.savedAt === "number" &&
+          Date.now() - draft.savedAt <= CART_DRAFT_TTL_MS;
+        const validItems = Array.isArray(draft.items)
+          ? draft.items.filter(
+              (item): item is CartItem =>
+                Boolean(
+                  item &&
+                    typeof item.id === "string" &&
+                    typeof item.cartId === "string" &&
+                    typeof item.name === "string" &&
+                    Number.isFinite(item.price) &&
+                    Number.isFinite(item.qty) &&
+                    item.qty > 0,
+                ),
+            )
+          : [];
+
+        if (isFresh && validItems.length > 0) {
+          setCart(validItems);
+          setCartPage(1);
+          setDiscount(Math.max(0, Number(draft.discount || 0)));
+          setTaxPercent(Math.max(0, Number(draft.taxPercent || 0)));
+          setDraftRestoreMessage(
+            `Previous cart restored · ${validItems.reduce((sum, item) => sum + item.qty, 0)} items`,
+          );
+        } else {
+          localStorage.removeItem(draftKey);
+        }
+      } catch {
+        localStorage.removeItem(draftKey);
+      }
+    }
+
+    setRestoredDraftKey(draftKey);
+  }, [activeStaff]);
+
+  useEffect(() => {
+    if (!draftRestoreMessage) return;
+
+    const timer = window.setTimeout(() => setDraftRestoreMessage(""), 3200);
+    return () => window.clearTimeout(timer);
+  }, [draftRestoreMessage]);
+
+  useEffect(() => {
+    if (!activeStaff) return;
+
+    const draftKey = getFashionCartDraftKey(activeStaff.staffId);
+    if (restoredDraftKey !== draftKey) return;
+
+    if (cart.length === 0) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+
+    const draft: FashionCartDraft = {
+      version: CART_DRAFT_VERSION,
+      savedAt: Date.now(),
+      staffId: activeStaff.staffId,
+      discount,
+      taxPercent,
+      items: cart,
+    };
+
+    localStorage.setItem(draftKey, JSON.stringify(draft));
+  }, [activeStaff, cart, discount, taxPercent, restoredDraftKey]);
+
+  useEffect(() => {
     setProductPage(1);
   }, [selectedCategory, search]);
 
   useEffect(() => {
     setCartPage((current) => Math.min(current, cartTotalPages));
   }, [cart.length, cartTotalPages]);
+
+  useEffect(() => {
+    if (!lastAddedProductKey) return;
+
+    const timer = window.setTimeout(() => {
+      setLastAddedProductKey("");
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [lastAddedProductKey]);
+
+  useEffect(() => {
+    return () => {
+      if (addedFeedbackTimerRef.current !== null) {
+        window.clearTimeout(addedFeedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const savedWidth = Number(localStorage.getItem(CART_WIDTH_STORAGE_KEY));
+
+    if (Number.isFinite(savedWidth) && savedWidth > 0) {
+      setCartWidth(
+        Math.min(MAX_CART_WIDTH, Math.max(MIN_CART_WIDTH, savedWidth)),
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(CART_WIDTH_STORAGE_KEY, String(cartWidth));
+  }, [cartWidth]);
+
+  useEffect(() => {
+    if (!isResizingCart) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const delta = cartResizeStartRef.current.pointerX - event.clientX;
+      const viewportMax = Math.max(
+        MIN_CART_WIDTH,
+        Math.min(MAX_CART_WIDTH, window.innerWidth * 0.55),
+      );
+
+      setCartWidth(
+        Math.min(
+          viewportMax,
+          Math.max(MIN_CART_WIDTH, cartResizeStartRef.current.width + delta),
+        ),
+      );
+    };
+
+    const finishResize = () => setIsResizingCart(false);
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishResize, { once: true });
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishResize);
+    };
+  }, [isResizingCart]);
+
+  useEffect(() => {
+    if (!paymentOpen || paymentMethod !== "CASH") return;
+
+    const timer = window.setTimeout(() => {
+      cashInputRef.current?.focus();
+      cashInputRef.current?.select();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [paymentOpen, paymentMethod]);
 
   function validateStock(product: FashionProduct, nextQty: number) {
     if (product.stock !== null && nextQty > product.stock) {
@@ -751,49 +1195,185 @@ export default function FashionRegisterPage() {
   function addToCart(product: FashionProduct) {
     if (!product.available || product.stock === 0) {
       setPaymentError(`${product.name} stock မရှိပါ။`);
-      return;
+      return false;
     }
 
+    const productKey = product.variantId || product.id;
+    const currentItem = cart.find(
+      (item) => (item.variantId || item.id) === productKey,
+    );
+    const stockError = validateStock(product, (currentItem?.qty || 0) + 1);
+
+    if (stockError) {
+      setPaymentError(stockError);
+      return false;
+    }
+
+    const newCartId = createCartId();
+
+    setPaymentError("");
+    setLastAddedProductKey(productKey);
+    setCartPage(1);
+
     setCart((prev) => {
-      const key = product.variantId || product.id;
       const foundIndex = prev.findIndex(
-        (item) => (item.variantId || item.id) === key,
+        (item) => (item.variantId || item.id) === productKey,
       );
       const found = foundIndex >= 0 ? prev[foundIndex] : null;
 
       if (found) {
         const nextQty = found.qty + 1;
-        const stockError = validateStock(product, nextQty);
+        const latestStockError = validateStock(product, nextQty);
 
-        if (stockError) {
-          setPaymentError(stockError);
+        if (latestStockError) {
+          setPaymentError(latestStockError);
           return prev;
         }
 
-        setPaymentError("");
-        setCartPage(Math.floor(foundIndex / CART_ITEMS_PER_PAGE) + 1);
+        const updatedItem = { ...found, qty: nextQty };
 
-        return prev.map((item) =>
-          item.cartId === found.cartId ? { ...item, qty: nextQty } : item,
-        );
+        return [
+          updatedItem,
+          ...prev.filter((item) => item.cartId !== found.cartId),
+        ];
       }
 
-      const nextCart = [
-        ...prev,
+      return [
         {
           ...product,
-          cartId: createCartId(),
+          cartId: newCartId,
           qty: 1,
         },
+        ...prev,
       ];
-
-      setPaymentError("");
-      setCartPage(
-        Math.max(1, Math.ceil(nextCart.length / CART_ITEMS_PER_PAGE)),
-      );
-
-      return nextCart;
     });
+    return true;
+  }
+
+  function showCartAddedFeedback() {
+    setAddedFeedbackVisible(true);
+
+    if (addedFeedbackTimerRef.current !== null) {
+      window.clearTimeout(addedFeedbackTimerRef.current);
+    }
+
+    addedFeedbackTimerRef.current = window.setTimeout(() => {
+      setAddedFeedbackVisible(false);
+      addedFeedbackTimerRef.current = null;
+    }, 900);
+  }
+
+  function findCartAnimationTarget() {
+    const targets = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-fashion-cart-target]"),
+    );
+    const visibleTarget = targets.find((target) => {
+      const rect = target.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    const rect = visibleTarget?.getBoundingClientRect();
+
+    return rect
+      ? {
+          x: rect.left + rect.width / 2,
+          y: rect.top + Math.min(90, rect.height / 2),
+        }
+      : { x: window.innerWidth - 44, y: window.innerHeight - 44 };
+  }
+
+  function animateProductToCart(
+    product: FashionProduct,
+    sourceElement: HTMLButtonElement,
+  ) {
+    const sourceRect = sourceElement.getBoundingClientRect();
+
+    setFlyingProduct({
+      token: Date.now() + Math.random(),
+      product,
+      from: {
+        x: sourceRect.left + sourceRect.width / 2,
+        y: sourceRect.top + sourceRect.height / 2,
+      },
+      to: findCartAnimationTarget(),
+    });
+  }
+
+  function getDndItemId(value: unknown) {
+    const record = asRecord(value);
+    const id = record.id;
+
+    return typeof id === "string" || typeof id === "number" ? String(id) : "";
+  }
+
+  function getDndOperation(event: unknown) {
+    const eventRecord = asRecord(event);
+    const operation = asRecord(eventRecord.operation);
+
+    return {
+      canceled: eventRecord.canceled === true,
+      sourceId:
+        getDndItemId(operation.source) || getDndItemId(eventRecord.active),
+      targetId:
+        getDndItemId(operation.target) || getDndItemId(eventRecord.over),
+    };
+  }
+
+  function handleProductDragStart(event: unknown) {
+    const { sourceId } = getDndOperation(event);
+
+    if (sourceId.startsWith("fashion-product:")) {
+      suppressProductClickRef.current = true;
+      setDraggingProductId(sourceId.replace("fashion-product:", ""));
+    }
+  }
+
+  function handleProductDragEnd(event: unknown) {
+    const { canceled, sourceId, targetId } = getDndOperation(event);
+    setDraggingProductId("");
+
+    window.setTimeout(() => {
+      suppressProductClickRef.current = false;
+    }, 120);
+
+    if (
+      canceled ||
+      (targetId !== CART_DROP_ID && targetId !== MOBILE_CART_DROP_ID)
+    ) {
+      return;
+    }
+
+    const productId = sourceId.replace("fashion-product:", "");
+    const product = products.find((item) => item.id === productId);
+
+    if (product && addToCart(product)) showCartAddedFeedback();
+  }
+
+  function handleProductClick(
+    product: FashionProduct,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) {
+    if (suppressProductClickRef.current) return;
+
+    if (addToCart(product)) {
+      animateProductToCart(product, event.currentTarget);
+      showCartAddedFeedback();
+    }
+  }
+
+  function beginCartResize(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    cartResizeStartRef.current = {
+      pointerX: event.clientX,
+      width: cartWidth,
+    };
+    setIsResizingCart(true);
+  }
+
+  function isLastAddedItem(item: CartItem) {
+    return Boolean(
+      lastAddedProductKey &&
+        (item.variantId || item.id) === lastAddedProductKey,
+    );
   }
 
   function updateQty(cartId: string, action: "plus" | "minus") {
@@ -824,10 +1404,34 @@ export default function FashionRegisterPage() {
   function clearCart() {
     setCart([]);
     setCartPage(1);
+    setLastAddedProductKey("");
     setDiscount(0);
     setCashReceived("");
     setPaymentOpen(false);
     setPaymentError("");
+  }
+
+  function handleGoToDashboard() {
+    if (cart.length === 0) {
+      router.push("/dashboard");
+      return;
+    }
+
+    setExitConfirmOpen(true);
+  }
+
+  function continueToPaymentFromExit() {
+    setExitConfirmOpen(false);
+    setPaymentError("");
+    setPaymentOpen(true);
+  }
+
+  function discardCartAndExit() {
+    if (activeStaff) {
+      localStorage.removeItem(getFashionCartDraftKey(activeStaff.staffId));
+    }
+    clearCart();
+    router.push("/dashboard");
   }
 
   async function completePayment() {
@@ -904,8 +1508,25 @@ export default function FashionRegisterPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json().catch(() => null);
-      const record = asRecord(data);
+      const responseText = await res.text().catch(() => "");
+      let data: unknown = null;
+
+      if (responseText.trim()) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = responseText;
+        }
+      }
+
+      const rootRecord = asRecord(data);
+      const nestedRecord = getNestedRecord(rootRecord, [
+        "data",
+        "receipt",
+        "result",
+      ]);
+      const receiptRecord =
+        Object.keys(nestedRecord).length > 0 ? nestedRecord : rootRecord;
 
       if (res.status === 401 || res.status === 403) {
         throw new Error(MISSING_TOKEN_MESSAGE);
@@ -913,17 +1534,40 @@ export default function FashionRegisterPage() {
 
       if (!res.ok) {
         throw new Error(
-          pickString(record, ["message", "error"]) || "Payment save failed.",
+          pickString(receiptRecord, ["message", "error", "detail"]) ||
+            pickString(rootRecord, ["message", "error", "detail"]) ||
+            (typeof data === "string" ? data : "") ||
+            "Payment နှင့် receipt သိမ်းမရပါ။ ထပ်မနှိပ်ခင် server ကိုစစ်ပါ။",
         );
       }
 
       const receiptNo =
-        pickString(record, ["receiptNo", "receipt_no", "paymentNo"]) ||
-        `FAS-${Date.now()}`;
+        pickString(receiptRecord, [
+          "receiptNo",
+          "receipt_no",
+          "receiptNumber",
+          "paymentNo",
+        ]) ||
+        pickString(rootRecord, [
+          "receiptNo",
+          "receipt_no",
+          "receiptNumber",
+          "paymentNo",
+        ]);
+
+      if (!receiptNo) {
+        throw new Error(
+          "Payment API က success ပြန်ပေမဲ့ receipt number မပါပါ။ Receipt History မှာစစ်ပြီးမှ ထပ်မံ payment လုပ်ပါ။",
+        );
+      }
+
+      const persistedAt =
+        pickString(receiptRecord, ["createdAt", "created_at", "paidAt"]) ||
+        pickString(rootRecord, ["createdAt", "created_at", "paidAt"]);
 
       setReceiptData({
         receiptNo,
-        paidAt: new Date().toISOString(),
+        paidAt: persistedAt || new Date().toISOString(),
         cashierName: activeStaff.staffName,
         cashierStaffId: activeStaff.staffId,
         paymentMethod,
@@ -1125,14 +1769,20 @@ export default function FashionRegisterPage() {
   }
 
   return (
-    <main
-      className={`min-h-screen ${
-        darkMode ? "bg-slate-950 text-slate-50" : "bg-[#f8f3ea] text-slate-950"
-      }`}
+    <DragDropProvider
+      onDragStart={handleProductDragStart}
+      onDragEnd={handleProductDragEnd}
     >
-      <BusinessTypeGuard allow="FASHION" />
+      <main
+        className={`min-h-screen ${
+          darkMode
+            ? "bg-slate-950 text-slate-50"
+            : "bg-[#f8f3ea] text-slate-950"
+        } ${isResizingCart ? "cursor-col-resize" : ""}`}
+      >
+        <BusinessTypeGuard allow="FASHION" />
 
-      <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 p-2 sm:p-3 lg:gap-4 lg:p-5">
+      <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 p-2 pb-24 sm:p-3 sm:pb-24 lg:landscape:gap-4 lg:landscape:p-5">
         <header
           className={`sticky top-0 z-30 -mx-2 -mt-2 border-b px-2 py-2.5 backdrop-blur-xl sm:-mx-3 sm:-mt-3 sm:px-3 lg:-mx-5 lg:-mt-5 lg:px-5 ${
             darkMode
@@ -1143,6 +1793,20 @@ export default function FashionRegisterPage() {
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
               <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                <button
+                  type="button"
+                  onClick={handleGoToDashboard}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 transition sm:px-3 sm:py-1.5 sm:text-sm ${
+                    darkMode
+                      ? "bg-white/10 text-white ring-white/10 hover:bg-white/15"
+                      : "bg-white text-slate-900 ring-orange-100 hover:bg-orange-50"
+                  }`}
+                  aria-label="Go to dashboard"
+                >
+                  <ArrowLeft size={17} className="text-orange-500" />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </button>
+
                 <div
                   className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm ${
                     darkMode
@@ -1310,7 +1974,12 @@ export default function FashionRegisterPage() {
           </div>
         </header>
 
-        <section className="grid flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_430px]">
+        <section
+          className="grid flex-1 gap-3 lg:landscape:grid-cols-[minmax(0,1fr)_380px] xl:landscape:grid-cols-[minmax(0,1fr)_var(--cart-width)]"
+          style={
+            { "--cart-width": `${cartWidth}px` } as React.CSSProperties
+          }
+        >
           <div className="flex min-w-0 flex-col gap-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -1322,8 +1991,8 @@ export default function FashionRegisterPage() {
                     darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
-                  Product ကိုနှိပ်လိုက်တာနဲ့ cart ထဲကို တန်းထည့်ပါမယ်။ Size /
-                  Color / Barcode ဖြင့်ရှာနိုင်ပါတယ်။
+                  Product ကိုနှိပ်ပြီး Add နိုင်သလို card ကို Cart ထဲ drag & drop
+                  လုပ်နိုင်ပါတယ်။ Size / Color / Barcode ဖြင့်ရှာနိုင်ပါတယ်။
                 </p>
               </div>
 
@@ -1359,12 +2028,17 @@ export default function FashionRegisterPage() {
             ) : (
               <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 2xl:grid-cols-3">
                 {paginatedProducts.map((product) => (
-                  <button
+                  <DraggableProductCard
                     key={product.id}
-                    onClick={() => addToCart(product)}
+                    productId={product.id}
                     disabled={!product.available || product.stock === 0}
-                    className={`group flex min-h-[110px] overflow-hidden rounded-[1.25rem] border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[128px] sm:rounded-[1.45rem] ${
-                      darkMode
+                    onClick={(event) => handleProductClick(product, event)}
+                    className={`group flex h-full min-h-[110px] w-full overflow-hidden rounded-[1.25rem] border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[128px] sm:rounded-[1.45rem] ${
+                      (product.variantId || product.id) === lastAddedProductKey
+                        ? darkMode
+                          ? "border-emerald-400 bg-emerald-500/15 ring-2 ring-emerald-400/30"
+                          : "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300/40"
+                        : darkMode
                         ? "border-white/10 bg-slate-900 hover:bg-slate-800"
                         : "border-orange-100 bg-white hover:border-orange-200 hover:bg-orange-50"
                     }`}
@@ -1452,24 +2126,50 @@ export default function FashionRegisterPage() {
                         <span className="text-sm font-black text-orange-500 sm:text-lg">
                           {formatMoney(product.price)} Ks
                         </span>
-                        <span className="rounded-xl bg-orange-500 px-2.5 py-1.5 text-[10px] font-black text-white shadow-sm shadow-orange-500/20 sm:rounded-2xl sm:px-3 sm:text-[11px]">
-                          Add
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[10px] font-black text-white shadow-sm sm:rounded-2xl sm:px-3 sm:text-[11px] ${
+                            (product.variantId || product.id) === lastAddedProductKey
+                              ? "bg-emerald-500 shadow-emerald-500/20"
+                              : "bg-orange-500 shadow-orange-500/20"
+                          }`}
+                        >
+                          {(product.variantId || product.id) === lastAddedProductKey ? (
+                            <><Check size={13} /> Added</>
+                          ) : (
+                            "Add"
+                          )}
                         </span>
                       </div>
                     </div>
-                  </button>
+                  </DraggableProductCard>
                 ))}
               </div>
             )}
           </div>
 
-          <div
-            className={`flex min-h-[520px] flex-col overflow-hidden rounded-[1.5rem] border shadow-sm sm:rounded-[2rem] xl:sticky xl:top-[118px] xl:h-[calc(100vh-132px)] ${
-              darkMode
-                ? "border-white/10 bg-white/5"
-                : "border-orange-100 bg-white/92"
-            }`}
-          >
+          <div className="relative hidden min-w-0 lg:landscape:sticky lg:landscape:top-[118px] lg:landscape:block lg:landscape:h-[calc(100vh-132px)]">
+            <button
+              type="button"
+              onPointerDown={beginCartResize}
+              onDoubleClick={() => setCartWidth(DEFAULT_CART_WIDTH)}
+              className={`absolute -left-2 top-1/2 z-40 hidden h-24 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border shadow-lg xl:landscape:flex ${
+                isResizingCart
+                  ? "border-orange-400 bg-orange-500 text-white"
+                  : darkMode
+                    ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-orange-500 hover:text-white"
+                    : "border-orange-100 bg-white text-orange-500 hover:bg-orange-500 hover:text-white"
+              }`}
+              aria-label="Resize cart width"
+              title="Drag to resize cart · Double-click to reset"
+            >
+              <GripVertical size={14} />
+            </button>
+
+            <CartDropSurface
+              dragging={Boolean(draggingProductId)}
+              darkMode={darkMode}
+              addedFeedbackVisible={addedFeedbackVisible}
+            >
             <div
               className={`flex items-center justify-between gap-2 border-b p-2.5 sm:gap-3 sm:p-3 ${
                 darkMode ? "border-white/10" : "border-orange-100"
@@ -1487,10 +2187,50 @@ export default function FashionRegisterPage() {
                         darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      {cart.length} items selected
+                      {cart.length} items · Drag left edge to resize
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div
+                className={`hidden items-center gap-1 rounded-xl p-1 xl:landscape:flex ${
+                  darkMode ? "bg-white/10" : "bg-orange-50"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCartWidth((width) =>
+                      Math.max(MIN_CART_WIDTH, width - 40),
+                    )
+                  }
+                  disabled={cartWidth <= MIN_CART_WIDTH}
+                  className={`grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30 ${
+                    darkMode ? "hover:bg-white/10" : "hover:bg-white"
+                  }`}
+                  aria-label="Make cart narrower"
+                  title="Narrower cart"
+                >
+                  <Minus size={13} />
+                </button>
+                <GripVertical size={13} className="text-orange-500" />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCartWidth((width) =>
+                      Math.min(MAX_CART_WIDTH, width + 40),
+                    )
+                  }
+                  disabled={cartWidth >= MAX_CART_WIDTH}
+                  className={`grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30 ${
+                    darkMode ? "hover:bg-white/10" : "hover:bg-white"
+                  }`}
+                  aria-label="Make cart wider"
+                  title="Wider cart"
+                >
+                  <Plus size={13} />
+                </button>
               </div>
 
               <div className="text-right">
@@ -1520,8 +2260,8 @@ export default function FashionRegisterPage() {
                       Product ကိုရွေးပြီး cart ထဲထည့်ပါ။
                     </p>
                     <p className="mt-1 text-xs font-bold opacity-75">
-                      တစ်မျက်နှာမှာ ၄ ခုသာပြပြီး ၅ ခုမြောက်ထည့်လျှင် နောက်ဆုံး
-                      page ကို အလိုအလျောက်ပြပေးပါမယ်။
+                      နောက်ဆုံးရွေးထားတဲ့ item ကို Cart အပေါ်ဆုံးမှာ
+                      အလိုအလျောက်ပြပေးပါမယ်။
                     </p>
                   </div>
                 </div>
@@ -1531,9 +2271,13 @@ export default function FashionRegisterPage() {
                     <div
                       key={item.cartId}
                       className={`group rounded-[1rem] border p-1.5 transition hover:-translate-y-0.5 sm:rounded-[1.15rem] sm:p-2 ${
-                        darkMode
-                          ? "border-white/10 bg-slate-900/90 hover:bg-slate-900"
-                          : "border-orange-100 bg-white hover:border-orange-200 hover:bg-orange-50/50"
+                        isLastAddedItem(item)
+                          ? darkMode
+                            ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
+                            : "border-orange-400 bg-orange-50 ring-2 ring-orange-300/40"
+                          : darkMode
+                            ? "border-white/10 bg-slate-900/90 hover:bg-slate-900"
+                            : "border-orange-100 bg-white hover:border-orange-200 hover:bg-orange-50/50"
                       }`}
                     >
                       <div className="flex items-center gap-2 sm:gap-2.5">
@@ -1560,9 +2304,16 @@ export default function FashionRegisterPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <h3 className="line-clamp-1 text-sm font-black leading-tight">
-                                {item.name}
-                              </h3>
+                              <div className="flex items-center gap-1.5">
+                                <h3 className="line-clamp-1 text-sm font-black leading-tight">
+                                  {item.name}
+                                </h3>
+                                {isLastAddedItem(item) && (
+                                  <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                    Latest
+                                  </span>
+                                )}
+                              </div>
                               <p
                                 className={`mt-0.5 line-clamp-1 text-[11px] font-bold ${
                                   darkMode ? "text-slate-400" : "text-slate-500"
@@ -1759,10 +2510,112 @@ export default function FashionRegisterPage() {
                 </button>
               </div>
             </div>
+            </CartDropSurface>
           </div>
         </section>
       </div>
 
+      <AnimatePresence>
+        {draftRestoreMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.96 }}
+            className="fixed left-1/2 top-4 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-emerald-500/25"
+          >
+            <Check size={17} /> {draftRestoreMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Dashboard Exit Confirmation */}
+      <AnimatePresence>
+        {exitConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setExitConfirmOpen(false)}
+            className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/65 p-3 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.96 }}
+              onClick={(event) => event.stopPropagation()}
+              className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${
+                darkMode
+                  ? "border-white/10 bg-slate-950 text-white"
+                  : "border-orange-100 bg-white text-slate-950"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-500/15 text-amber-500">
+                  <ArrowLeft size={22} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExitConfirmOpen(false)}
+                  className={`grid h-10 w-10 place-items-center rounded-xl ${
+                    darkMode ? "bg-white/10" : "bg-slate-100"
+                  }`}
+                  aria-label="Stay in POS"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <h2 className="mt-4 text-xl font-black">Dashboard ကို သွားမလား?</h2>
+              <p className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"}`}>
+                Cart ထဲမှာ {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)} Ks ရှိနေပါတယ်။
+                Payment မပြီးသေးဘဲထွက်လျှင် လက်ရှိ cart ပျောက်သွားနိုင်ပါတယ်။
+              </p>
+
+              <div className={`mt-4 rounded-2xl p-3 ${darkMode ? "bg-white/5" : "bg-orange-50"}`}>
+                <div className="flex items-center justify-between text-sm font-black">
+                  <span>Subtotal</span>
+                  <span>{formatMoney(subtotal)} Ks</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-base font-black">
+                  <span>Total</span>
+                  <span className="text-orange-500">{formatMoney(total)} Ks</span>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setExitConfirmOpen(false)}
+                  className={`rounded-2xl px-4 py-3 text-sm font-black ${
+                    darkMode
+                      ? "bg-white/10 text-white hover:bg-white/15"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  Stay in POS
+                </button>
+
+                <button
+                  type="button"
+                  onClick={continueToPaymentFromExit}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20"
+                >
+                  <Wallet size={17} />
+                  Continue to Payment
+                </button>
+
+                <button
+                  type="button"
+                  onClick={discardCartAndExit}
+                  className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm font-black text-red-500 transition hover:bg-red-500 hover:text-white sm:col-span-2"
+                >
+                  Discard & Exit
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {cartDialogOpen && (
@@ -1801,7 +2654,7 @@ export default function FashionRegisterPage() {
                         darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      တစ်မျက်နှာမှာ ၄ ခုသာပြပြီး pagination ဖြင့်ကြည့်နိုင်ပါတယ်
+                      နောက်ဆုံးရွေးထားတဲ့ item ကို အပေါ်ဆုံးမှာပြပြီး pagination ဖြင့်ကြည့်နိုင်ပါတယ်
                     </p>
                   </div>
                 </div>
@@ -1842,9 +2695,13 @@ export default function FashionRegisterPage() {
                       <div
                         key={item.cartId}
                         className={`rounded-[1.15rem] border p-2 transition ${
-                          darkMode
-                            ? "border-white/10 bg-slate-900"
-                            : "border-orange-100 bg-orange-50/40"
+                          isLastAddedItem(item)
+                            ? darkMode
+                              ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
+                              : "border-orange-400 bg-orange-50 ring-2 ring-orange-300/40"
+                            : darkMode
+                              ? "border-white/10 bg-slate-900"
+                              : "border-orange-100 bg-orange-50/40"
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
@@ -1868,9 +2725,16 @@ export default function FashionRegisterPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <h3 className="line-clamp-1 text-sm font-black leading-tight">
-                                  {item.name}
-                                </h3>
+                                <div className="flex items-center gap-1.5">
+                                  <h3 className="line-clamp-1 text-sm font-black leading-tight">
+                                    {item.name}
+                                  </h3>
+                                  {isLastAddedItem(item) && (
+                                    <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                      Latest
+                                    </span>
+                                  )}
+                                </div>
                                 <p
                                   className={`mt-0.5 line-clamp-1 text-[11px] font-bold ${
                                     darkMode ? "text-slate-400" : "text-slate-500"
@@ -2017,18 +2881,20 @@ export default function FashionRegisterPage() {
       <AnimatePresence>
         {paymentOpen && (
           <motion.div
-            className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/65 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm sm:p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setPaymentOpen(false)}
+            onClick={() => {
+              if (!paymentSaving) setPaymentOpen(false);
+            }}
           >
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
               onClick={(event) => event.stopPropagation()}
-              className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl ${
+              className={`my-auto w-full max-w-lg rounded-[2rem] border p-4 shadow-2xl sm:p-6 ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
                   : "border-orange-100 bg-white text-slate-950"
@@ -2036,13 +2902,13 @@ export default function FashionRegisterPage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-black">Payment</h2>
+                  <h2 className="text-xl font-black sm:text-2xl">Payment</h2>
                   <p
-                    className={`text-sm font-bold ${
+                    className={`mt-0.5 text-xs font-bold sm:text-sm ${
                       darkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
-                    Total: {formatMoney(total)} Ks
+                    {cart.reduce((sum, item) => sum + item.qty, 0)} items · Staff: {activeStaff.staffName}
                   </p>
                 </div>
 
@@ -2057,7 +2923,50 @@ export default function FashionRegisterPage() {
                 </button>
               </div>
 
-              <div className="mt-5 grid grid-cols-3 gap-2">
+              <div
+                className={`mt-4 overflow-hidden rounded-3xl border ${
+                  darkMode
+                    ? "border-orange-400/20 bg-gradient-to-br from-orange-500/20 to-amber-400/5"
+                    : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50"
+                }`}
+              >
+                <div className="px-5 py-5 text-center sm:py-6">
+                  <p
+                    className={`text-xs font-black uppercase tracking-[0.18em] ${
+                      darkMode ? "text-orange-300" : "text-orange-600"
+                    }`}
+                  >
+                    ကျသင့်ငွေ
+                  </p>
+                  <p className="mt-1 text-4xl font-black tabular-nums text-orange-500 sm:text-5xl">
+                    {formatMoney(total)}
+                    <span className="ml-2 text-lg sm:text-xl">Ks</span>
+                  </p>
+                </div>
+
+                <div
+                  className={`grid grid-cols-3 border-t px-4 py-3 text-center text-xs font-bold ${
+                    darkMode
+                      ? "border-white/10 bg-black/10 text-slate-300"
+                      : "border-orange-100 bg-white/60 text-slate-600"
+                  }`}
+                >
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Subtotal</p>
+                    <p className="mt-1 tabular-nums">{formatMoney(subtotal)} Ks</p>
+                  </div>
+                  <div className={`border-x ${darkMode ? "border-white/10" : "border-orange-100"}`}>
+                    <p className="text-[10px] uppercase text-slate-400">Discount</p>
+                    <p className="mt-1 tabular-nums">-{formatMoney(discount)} Ks</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400">Tax</p>
+                    <p className="mt-1 tabular-nums">{formatMoney(tax)} Ks</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
                 {[
                   {
                     key: "CASH" as PaymentMethod,
@@ -2080,7 +2989,11 @@ export default function FashionRegisterPage() {
                   return (
                     <button
                       key={method.key}
-                      onClick={() => setPaymentMethod(method.key)}
+                      onClick={() => {
+                        setPaymentMethod(method.key);
+                        setPaymentError("");
+                      }}
+                      disabled={paymentSaving}
                       className={`rounded-2xl p-3 text-sm font-black transition ${
                         paymentMethod === method.key
                           ? "bg-orange-500 text-white"
@@ -2097,29 +3010,94 @@ export default function FashionRegisterPage() {
               </div>
 
               {paymentMethod === "CASH" && (
-                <div className="mt-5">
-                  <label className="text-sm font-black">Cash Received</label>
+                <div className="mt-4">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="fashion-cash-received" className="text-sm font-black">
+                      လက်ခံရရှိငွေ
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCashReceived(String(total));
+                        setPaymentError("");
+                      }}
+                      disabled={paymentSaving}
+                      className="text-xs font-black text-orange-500 hover:text-orange-600 disabled:opacity-50"
+                    >
+                      Exact amount
+                    </button>
+                  </div>
                   <input
+                    ref={cashInputRef}
+                    id="fashion-cash-received"
                     value={cashReceived}
                     onChange={(event) => {
-                      setCashReceived(event.target.value);
+                      const value = event.target.value;
+                      setCashReceived(value === "" ? "" : String(Math.max(0, Number(value))));
                       setPaymentError("");
                     }}
                     type="number"
-                    placeholder="Enter cash amount"
+                    inputMode="numeric"
+                    min="0"
+                    placeholder="0"
                     disabled={paymentSaving}
-                    className={`mt-2 w-full rounded-2xl px-4 py-4 text-xl font-black outline-none ${
+                    className={`mt-2 w-full rounded-2xl px-4 py-4 text-center text-3xl font-black tabular-nums outline-none transition focus:ring-2 focus:ring-orange-500 ${
                       darkMode
-                        ? "bg-slate-900 text-white"
-                        : "bg-white text-slate-950 ring-1 ring-slate-100"
+                        ? "bg-slate-900 text-white ring-1 ring-white/10"
+                        : "bg-white text-slate-950 ring-1 ring-slate-200"
                     }`}
                   />
 
-                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-emerald-500/10 p-4 text-emerald-600">
-                    <span className="font-black">Change</span>
-                    <span className="text-2xl font-black">
-                      {formatMoney(change)} Ks
-                    </span>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {quickCashAmounts.map((amount) => (
+                      <button
+                        type="button"
+                        key={amount}
+                        onClick={() => {
+                          setCashReceived(String(amount));
+                          setPaymentError("");
+                        }}
+                        disabled={paymentSaving}
+                        className={`rounded-xl px-2 py-2.5 text-xs font-black tabular-nums transition disabled:opacity-50 ${
+                          cashNumber === amount
+                            ? "bg-orange-500 text-white"
+                            : darkMode
+                              ? "bg-white/10 text-slate-200 hover:bg-white/15"
+                              : "bg-slate-100 text-slate-700 hover:bg-orange-50"
+                        }`}
+                      >
+                        {formatMoney(amount)} Ks
+                      </button>
+                    ))}
+                  </div>
+
+                  <div
+                    className={`mt-3 overflow-hidden rounded-2xl border transition-colors duration-200 ${
+                      cashIsEnough
+                        ? darkMode
+                          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                          : "border-emerald-100 bg-emerald-50 text-emerald-600"
+                        : darkMode
+                          ? "border-red-400/20 bg-red-500/10 text-red-300"
+                          : "border-red-100 bg-red-50 text-red-600"
+                    }`}
+                  >
+                    <div
+                      className={`flex items-center justify-between px-4 py-3 text-sm font-black ${
+                        darkMode ? "border-white/10" : "border-black/5"
+                      } border-b`}
+                    >
+                      <span>ပေးထားငွေ</span>
+                      <span className="text-lg tabular-nums">
+                        {formatMoney(cashNumber)} Ks
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-4">
+                      <span className="font-black">Change</span>
+                      <span className="text-2xl font-black tabular-nums">
+                        {formatMoney(cashIsEnough ? change : remainingAmount)} Ks
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2151,7 +3129,7 @@ export default function FashionRegisterPage() {
 
                 <button
                   onClick={completePayment}
-                  disabled={paymentSaving || cart.length === 0}
+                  disabled={paymentSaving || cart.length === 0 || !cashIsEnough}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {paymentSaving ? (
@@ -2159,7 +3137,11 @@ export default function FashionRegisterPage() {
                   ) : (
                     <Check size={18} />
                   )}
-                  {paymentSaving ? "Saving..." : "Complete Payment"}
+                  {paymentSaving
+                    ? "Saving..."
+                    : paymentMethod === "CASH" && !cashIsEnough
+                      ? `${formatMoney(remainingAmount)} Ks လိုသေးသည်`
+                      : `${formatMoney(total)} Ks Pay`}
                 </button>
               </div>
             </motion.div>
@@ -2308,7 +3290,119 @@ export default function FashionRegisterPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </main>
+      </main>
+
+      <MobileCartBar
+        darkMode={darkMode}
+        dragging={Boolean(draggingProductId)}
+        itemCount={cart.reduce((sum, item) => sum + item.qty, 0)}
+        total={total}
+        onViewCart={() => setCartDialogOpen(true)}
+        onPayment={() => {
+          setPaymentError("");
+          setPaymentOpen(true);
+        }}
+        addedFeedbackVisible={addedFeedbackVisible}
+      />
+
+      <AnimatePresence>
+        {flyingProduct && (
+          <motion.div
+            key={flyingProduct.token}
+            initial={{
+              left: flyingProduct.from.x,
+              top: flyingProduct.from.y,
+              scale: 1,
+              opacity: 1,
+            }}
+            animate={{
+              left: [
+                flyingProduct.from.x,
+                (flyingProduct.from.x + flyingProduct.to.x) / 2,
+                flyingProduct.to.x,
+              ],
+              top: [
+                flyingProduct.from.y,
+                Math.min(flyingProduct.from.y, flyingProduct.to.y) - 75,
+                flyingProduct.to.y,
+              ],
+              scale: [1, 0.78, 0.2],
+              rotate: [0, -7, 5],
+              opacity: [1, 1, 0.25],
+            }}
+            transition={{ duration: 0.72, times: [0, 0.55, 1], ease: "easeInOut" }}
+            onAnimationComplete={() => setFlyingProduct(null)}
+            className={`pointer-events-none fixed z-[100] flex w-40 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border p-2 shadow-2xl ${
+              darkMode
+                ? "border-orange-400 bg-slate-900 text-white"
+                : "border-orange-200 bg-white text-slate-950"
+            }`}
+          >
+            <div
+              className={`grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl ${
+                darkMode ? "bg-white/10" : "bg-orange-50"
+              }`}
+            >
+              {flyingProduct.product.image ? (
+                <img
+                  src={flyingProduct.product.image}
+                  alt=""
+                  className="h-full w-full object-contain p-1"
+                />
+              ) : (
+                <ShoppingBag size={22} className="text-orange-500" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-black">
+                {flyingProduct.product.name}
+              </p>
+              <p className="text-xs font-black text-emerald-500">+1 Added</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <DragOverlay>
+        {draggingProduct && (
+          <div
+            className={`flex w-[280px] items-center gap-3 rounded-2xl border p-3 shadow-2xl ${
+              darkMode
+                ? "border-orange-400 bg-slate-900 text-white"
+                : "border-orange-200 bg-white text-slate-950"
+            }`}
+          >
+            <div
+              className={`grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl ${
+                darkMode ? "bg-white/10" : "bg-orange-50"
+              }`}
+            >
+              {draggingProduct.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={draggingProduct.image}
+                  alt=""
+                  className="h-full w-full object-contain p-1"
+                />
+              ) : (
+                <ShoppingBag size={24} className="text-orange-500" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black">
+                {draggingProduct.name}
+              </p>
+              <p className="mt-1 text-lg font-black text-orange-500">
+                {formatMoney(draggingProduct.price)} Ks
+              </p>
+            </div>
+            <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black text-white">
+              Dragging
+            </span>
+          </div>
+        )}
+      </DragOverlay>
+    </DragDropProvider>
   );
 }
 

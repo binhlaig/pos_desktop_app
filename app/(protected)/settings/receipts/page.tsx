@@ -100,9 +100,6 @@ type ShopPrintInfo = {
   ads: ShopPrintAd[];
 };
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
-
 const SHOP_PRINT_INFO_STORAGE_KEY = "receipt_shop_print_info";
 
 const DEFAULT_SHOP_PRINT_INFO: ShopPrintInfo = {
@@ -191,19 +188,26 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", "&#039;");
 }
 
-function normalizeShopPrintInfo(data: any): ShopPrintInfo {
-  const payload =
-    data?.data && typeof data.data === "object"
-      ? data.data
-      : data?.setting && typeof data.setting === "object"
-      ? data.setting
-      : data?.receiptSetting && typeof data.receiptSetting === "object"
-      ? data.receiptSetting
-      : data?.receipt_setting && typeof data.receipt_setting === "object"
-      ? data.receipt_setting
-      : data;
+type JsonRecord = Record<string, unknown>;
 
-  const shop = payload?.shop && typeof payload.shop === "object" ? payload.shop : {};
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeShopPrintInfo(data: unknown): ShopPrintInfo {
+  const root = isRecord(data) ? data : {};
+  const payload =
+    isRecord(root.data)
+      ? root.data
+      : isRecord(root.setting)
+      ? root.setting
+      : isRecord(root.receiptSetting)
+      ? root.receiptSetting
+      : isRecord(root.receipt_setting)
+      ? root.receipt_setting
+      : root;
+
+  const shop = isRecord(payload.shop) ? payload.shop : {};
 
   return {
     shopName:
@@ -249,12 +253,13 @@ function normalizeShopPrintInfo(data: any): ShopPrintInfo {
 
     ads: Array.isArray(payload?.ads)
       ? payload.ads
-          .filter((ad: any) => ad?.active !== false && clean(ad?.message))
-          .map((ad: any) => ({
-            id: ad?.id ?? null,
-            title: clean(ad?.title),
-            message: clean(ad?.message),
-            active: ad?.active !== false,
+          .filter(isRecord)
+          .filter((ad) => ad.active !== false && clean(ad.message))
+          .map((ad) => ({
+            id: Number(ad.id) || null,
+            title: clean(ad.title),
+            message: clean(ad.message),
+            active: ad.active !== false,
           }))
       : [],
   };
@@ -272,21 +277,51 @@ function getStoredShopPrintInfo() {
   }
 }
 
-function normalizeReceipts(data: any): ReceiptRow[] {
-  const rows = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.receipts)
-    ? data.receipts
-    : Array.isArray(data?.data)
-    ? data.data
-    : [];
+function extractReceiptRows(data: unknown): unknown[] {
+  const root = isRecord(data) ? data : {};
+  const rootData = isRecord(root.data) ? root.data : {};
+  const rootReceipts = isRecord(root.receipts) ? root.receipts : {};
 
-  return rows.map((r: any) => {
-    const shop = r.shop && typeof r.shop === "object" ? r.shop : {};
+  const candidates = [
+    data,
+    root.content,
+    root.receipts,
+    root.data,
+    rootData.content,
+    rootData.receipts,
+    rootReceipts.content,
+  ];
+
+  return candidates.find(Array.isArray) ?? [];
+}
+
+function apiErrorMessage(data: unknown, fallback: string) {
+  if (typeof data === "string") return clean(data) || fallback;
+  if (!isRecord(data)) return fallback;
+
+  const details = Array.isArray(data.details)
+    ? data.details.join(", ")
+    : data.details;
+
+  return firstText(data.message, data.error, details, fallback);
+}
+
+async function readResponseBody(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  return contentType.toLowerCase().includes("json")
+    ? response.json().catch(() => null)
+    : response.text().catch(() => "");
+}
+
+function normalizeReceipts(data: unknown): ReceiptRow[] {
+  const rows = extractReceiptRows(data);
+
+  return rows.filter(isRecord).map((r) => {
+    const shop = isRecord(r.shop) ? r.shop : {};
     const receiptSetting =
-      r.receiptSetting && typeof r.receiptSetting === "object"
+      isRecord(r.receiptSetting)
         ? r.receiptSetting
-        : r.receipt_setting && typeof r.receipt_setting === "object"
+        : isRecord(r.receipt_setting)
         ? r.receipt_setting
         : {};
 
@@ -294,11 +329,11 @@ function normalizeReceipts(data: any): ReceiptRow[] {
       id: Number(r.id),
       receiptNo: String(r.receiptNo || r.receipt_no || ""),
 
-      staffId: r.staffId || r.staff_id || "",
-      staffName: r.staffName || r.staff_name || "",
-      staffRole: r.staffRole || r.staff_role || "",
+      staffId: firstText(r.staffId, r.staff_id),
+      staffName: firstText(r.staffName, r.staff_name),
+      staffRole: firstText(r.staffRole, r.staff_role),
 
-      paymentMethod: r.paymentMethod || r.payment_method || "cash",
+      paymentMethod: firstText(r.paymentMethod, r.payment_method) || "cash",
       subtotal: Number(r.subtotal || 0),
       taxAmount: Number(r.taxAmount ?? r.tax_amount ?? 0),
       discountPercent: Number(r.discountPercent ?? r.discount_percent ?? 0),
@@ -306,7 +341,7 @@ function normalizeReceipts(data: any): ReceiptRow[] {
       cashGiven: Number(r.cashGiven ?? r.cash_given ?? 0),
       changeAmount: Number(r.changeAmount ?? r.change_amount ?? 0),
 
-      shopId: r.shopId ?? r.shop_id ?? shop.id ?? null,
+      shopId: Number(r.shopId ?? r.shop_id ?? shop.id) || null,
       shopCode: firstText(r.shopCode, r.shop_code, shop.code, shop.shopCode),
       shopName: firstText(
         r.shopName,
@@ -347,22 +382,26 @@ function normalizeReceipts(data: any): ReceiptRow[] {
         receiptSetting.second_phone
       ),
 
-      createdByUserId: r.createdByUserId ?? r.created_by_user_id ?? null,
-      createdByUsername: r.createdByUsername ?? r.created_by_username ?? "",
-      createdByName: r.createdByName ?? r.created_by_name ?? "",
-      createdByRole: r.createdByRole ?? r.created_by_role ?? "",
+      createdByUserId:
+        Number(r.createdByUserId ?? r.created_by_user_id) || null,
+      createdByUsername: firstText(
+        r.createdByUsername,
+        r.created_by_username
+      ),
+      createdByName: firstText(r.createdByName, r.created_by_name),
+      createdByRole: firstText(r.createdByRole, r.created_by_role),
 
-      status: r.status || "COMPLETED",
-      createdAt: r.createdAt || r.created_at || "",
+      status: firstText(r.status) || "COMPLETED",
+      createdAt: firstText(r.createdAt, r.created_at),
 
       items: Array.isArray(r.items)
-        ? r.items.map((item: any) => ({
+        ? r.items.filter(isRecord).map((item) => ({
             id: Number(item.id),
-            productId: item.productId ?? item.product_id ?? "",
-            barcode: item.barcode ?? "",
-            sku: item.sku ?? "",
-            productName: item.productName ?? item.product_name ?? "",
-            qty: Number(item.qty || 0),
+            productId: firstText(item.productId, item.product_id),
+            barcode: firstText(item.barcode),
+            sku: firstText(item.sku),
+            productName: firstText(item.productName, item.product_name),
+            qty: Number(item.qty ?? item.quantity ?? 0),
             price: Number(item.price || 0),
             discountPercent: Number(
               item.discountPercent ?? item.discount_percent ?? 0
@@ -439,6 +478,8 @@ export default function ReceiptsPage() {
   useEffect(() => {
     void loadReceipts();
     void loadShopPrintInfo();
+    // These loaders intentionally run once when this page mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -458,6 +499,11 @@ export default function ReceiptsPage() {
       setLoading(true);
       setError("");
 
+      const token = getAccessToken();
+      if (!token) {
+        throw new Error("Login session not found. Please login again.");
+      }
+
       const res = await fetch("/api/pos/receipts", {
         method: "GET",
         headers: {
@@ -467,10 +513,12 @@ export default function ReceiptsPage() {
         cache: "no-store",
       });
 
-      const data = await res.json().catch(() => null);
+      const data = await readResponseBody(res);
 
       if (!res.ok) {
-        throw new Error(data?.message || "Receipts load failed.");
+        throw new Error(
+          apiErrorMessage(data, `Receipts load failed (${res.status}).`)
+        );
       }
 
       setReceipts(normalizeReceipts(data));
@@ -488,10 +536,7 @@ export default function ReceiptsPage() {
   }
 
   async function fetchShopPrintInfo() {
-    const urls = [
-      `${API_BASE}/api/receipt-settings/my-shop`,
-      "/api/receipt-settings/my-shop",
-    ];
+    const urls = ["/api/receipt-settings/my-shop"];
 
     for (const url of urls) {
       try {
@@ -518,9 +563,7 @@ export default function ReceiptsPage() {
         );
 
         return normalized;
-      } catch (error) {
-        console.error("Receipt setting API error:", url, error);
-      }
+      } catch {}
     }
 
     return getStoredShopPrintInfo();
@@ -899,7 +942,7 @@ export default function ReceiptsPage() {
           <div className="flex flex-wrap gap-3">
             <Button
               variant="outline"
-              onClick={() => router.push("/dashboard/register")}
+              onClick={() => router.push("/dashboard")}
               className="h-11 rounded-xl border-sky-300/25 bg-sky-500/10 text-sky-600 hover:bg-sky-500/15 dark:text-sky-300"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
