@@ -2,6 +2,7 @@ import {
   Armchair,
   ChefHat,
   ClipboardList,
+  HandPlatter,
   LayoutDashboard,
   Package,
   ReceiptText,
@@ -121,6 +122,12 @@ const restaurantSidebarItems: SidebarItem[] = [
     icon: ClipboardList,
     featureKeys: ["restaurantOrdersEnabled", "allowRestaurant"],
   },
+{
+ label: "Services",
+  href: "/dashboard/restaurant/serving",
+  businessPageType: "RESTAURANT",
+  icon: HandPlatter ,
+},
 ];
 
 const commonSidebarItems: SidebarItem[] = [

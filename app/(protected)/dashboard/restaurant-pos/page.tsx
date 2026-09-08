@@ -1,5 +1,4 @@
-
-"use client"
+"use client";
 // UPDATED: Fashion-POS-style payment assistance and latest cart item priority.
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -244,16 +243,14 @@ function buildPaymentReceiptHtml(
         <tr>
           <td>
             <div class="item-name">${escapeHtml(item.itemName)}</div>
-            ${
-              item.modifiers?.length
-                ? `<div class="muted small">${escapeHtml(item.modifiers.join(", "))}</div>`
-                : ""
-            }
-            ${
-              item.kitchenNote
-                ? `<div class="muted small">Note: ${escapeHtml(item.kitchenNote)}</div>`
-                : ""
-            }
+            ${item.modifiers?.length
+          ? `<div class="muted small">${escapeHtml(item.modifiers.join(", "))}</div>`
+          : ""
+        }
+            ${item.kitchenNote
+          ? `<div class="muted small">Note: ${escapeHtml(item.kitchenNote)}</div>`
+          : ""
+        }
           </td>
           <td class="center">${escapeHtml(item.quantity)}</td>
           <td class="right">${formatMoney(item.unitPrice)}</td>
@@ -372,11 +369,10 @@ function buildPaymentReceiptHtml(
           <div class="line"><span>Order No</span><strong>${escapeHtml(receipt.orderNo)}</strong></div>
           <div class="line"><span>Date</span><strong>${escapeHtml(formatReceiptDate(receipt.paidAt))}</strong></div>
           <div class="line"><span>Order Type</span><strong>${escapeHtml(receipt.orderType)}</strong></div>
-          ${
-            receipt.orderType === "DINE_IN"
-              ? `<div class="line"><span>Table</span><strong>${escapeHtml(receipt.tableNo || "-")}</strong></div>`
-              : ""
-          }
+          ${receipt.orderType === "DINE_IN"
+      ? `<div class="line"><span>Table</span><strong>${escapeHtml(receipt.tableNo || "-")}</strong></div>`
+      : ""
+    }
           <div class="line"><span>Cashier</span><strong>${escapeHtml(receipt.cashierName)}</strong></div>
 
           <div class="divider"></div>
@@ -400,14 +396,13 @@ function buildPaymentReceiptHtml(
             <div class="line"><span>Discount</span><strong>${formatMoney(receipt.discount)} Ks</strong></div>
             <div class="line grand"><span>Total</span><strong>${formatMoney(receipt.total)} Ks</strong></div>
             <div class="line"><span>Payment</span><strong>${escapeHtml(receipt.paymentMethod)}</strong></div>
-            ${
-              receipt.paymentMethod === "CASH"
-                ? `
+            ${receipt.paymentMethod === "CASH"
+      ? `
                   <div class="line"><span>Cash Received</span><strong>${formatMoney(receipt.cashReceived)} Ks</strong></div>
                   <div class="line"><span>Change</span><strong>${formatMoney(receipt.changeAmount)} Ks</strong></div>
                 `
-                : ""
-            }
+      : ""
+    }
           </div>
 
           <div class="footer">
@@ -469,10 +464,17 @@ function getShopDraftScope(token?: string | null) {
 
     const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const payload = JSON.parse(globalThis.atob(padded)) as Record<string, unknown>;
+    const payload = JSON.parse(globalThis.atob(padded)) as Record<
+      string,
+      unknown
+    >;
 
     return String(
-      payload.shopId || payload.shop_id || payload.shopCode || payload.shop_code || "current-shop",
+      payload.shopId ||
+      payload.shop_id ||
+      payload.shopCode ||
+      payload.shop_code ||
+      "current-shop",
     );
   } catch {
     return "current-shop";
@@ -1099,9 +1101,8 @@ function DraggableMenuCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`${className} touch-none select-none cursor-grab active:cursor-grabbing ${
-        isDragging ? "scale-[0.98] opacity-35" : ""
-      }`}
+      className={`${className} touch-none select-none cursor-grab active:cursor-grabbing ${isDragging ? "scale-[0.98] opacity-35" : ""
+        }`}
     >
       {children}
     </button>
@@ -1125,8 +1126,7 @@ function RestaurantCartDropSurface({
     <div
       ref={ref}
       data-restaurant-cart-target="true"
-      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] border shadow-sm transition ${
-        isDropTarget
+      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] border shadow-sm transition ${isDropTarget
           ? darkMode
             ? "border-emerald-400 bg-emerald-500/10 ring-4 ring-emerald-400/25"
             : "border-emerald-400 bg-emerald-50 ring-4 ring-emerald-300/35"
@@ -1137,7 +1137,7 @@ function RestaurantCartDropSurface({
             : darkMode
               ? "border-white/10 bg-slate-950/95"
               : "border-orange-100 bg-white/95"
-      }`}
+        }`}
     >
       {dragging && (
         <div className="pointer-events-none absolute inset-x-3 top-3 z-30 rounded-2xl bg-orange-500 px-4 py-2 text-center text-xs font-black text-white shadow-lg">
@@ -1193,17 +1193,16 @@ function RestaurantMobileCartBar({
     <div
       ref={ref}
       data-restaurant-cart-target="true"
-      className={`fixed inset-x-2 bottom-2 z-50 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl transition-colors lg:landscape:hidden ${
-        isDropTarget
+      className={`fixed inset-x-2 bottom-2 z-50 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl transition-colors lg:landscape:hidden ${isDropTarget
           ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
           : dragging
             ? "border-orange-400 bg-orange-500 text-white ring-4 ring-orange-400/20"
             : addedFeedbackVisible
               ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
-            : darkMode
-              ? "border-white/10 bg-slate-900/95 text-white"
-              : "border-orange-100 bg-white/95 text-slate-950"
-      }`}
+              : darkMode
+                ? "border-white/10 bg-slate-900/95 text-white"
+                : "border-orange-100 bg-white/95 text-slate-950"
+        }`}
       style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
     >
       {dragging ? (
@@ -1221,7 +1220,9 @@ function RestaurantMobileCartBar({
             <span className="block truncate text-xs font-black text-orange-500">
               {itemCount} items · {formatMoney(total)} Ks
             </span>
-            <span className="block text-[11px] font-bold opacity-70">View cart</span>
+            <span className="block text-[11px] font-bold opacity-70">
+              View cart
+            </span>
           </button>
           <button
             type="button"
@@ -1239,7 +1240,11 @@ function RestaurantMobileCartBar({
                 : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
             }
           >
-            {kitchenSaving ? <Loader2 size={18} className="animate-spin" /> : <ChefHat size={18} />}
+            {kitchenSaving ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <ChefHat size={18} />
+            )}
           </button>
           <button
             type="button"
@@ -1293,6 +1298,8 @@ export default function RestaurantCashierPOSPage() {
   const [menuError, setMenuError] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [search, setSearch] = useState("");
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [headerControlsOpen, setHeaderControlsOpen] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartPage, setCartPage] = useState(1);
   const [lastAddedMenuItemId, setLastAddedMenuItemId] = useState("");
@@ -1503,8 +1510,7 @@ export default function RestaurantCashierPOSPage() {
   const pendingKitchenItemCount = useMemo(
     () =>
       cart.reduce(
-        (sum, item) =>
-          sum + Math.max(item.qty - item.kitchenSentQty, 0),
+        (sum, item) => sum + Math.max(item.qty - item.kitchenSentQty, 0),
         0,
       ),
     [cart],
@@ -2045,26 +2051,25 @@ export default function RestaurantCashierPOSPage() {
           typeof draft.savedAt === "number" &&
           Date.now() - draft.savedAt <= CART_DRAFT_TTL_MS;
         const validItems = Array.isArray(draft.items)
-          ? draft.items.filter(
-              (item): item is CartItem =>
-                Boolean(
-                  item &&
-                    typeof item.id === "string" &&
-                    typeof item.menuItemId === "string" &&
-                    typeof item.name === "string" &&
-                    Number.isFinite(item.price) &&
-                    Number.isFinite(item.qty) &&
-                    item.qty > 0 &&
-                    Array.isArray(item.modifiers),
-                ),
-            )
+          ? draft.items.filter((item): item is CartItem =>
+            Boolean(
+              item &&
+              typeof item.id === "string" &&
+              typeof item.menuItemId === "string" &&
+              typeof item.name === "string" &&
+              Number.isFinite(item.price) &&
+              Number.isFinite(item.qty) &&
+              item.qty > 0 &&
+              Array.isArray(item.modifiers),
+            ),
+          )
           : [];
 
         if (isFresh && validItems.length > 0) {
           const restoredOrderType =
             draft.orderType === "DINE_IN" ||
-            draft.orderType === "TAKEAWAY" ||
-            draft.orderType === "DELIVERY"
+              draft.orderType === "TAKEAWAY" ||
+              draft.orderType === "DELIVERY"
               ? draft.orderType
               : "DINE_IN";
 
@@ -2297,9 +2302,7 @@ export default function RestaurantCashierPOSPage() {
       return false;
     }
 
-    const currentItem = cart.find((cartItem) =>
-      isSameMenuItem(cartItem, item),
-    );
+    const currentItem = cart.find((cartItem) => isSameMenuItem(cartItem, item));
 
     if (
       currentItem &&
@@ -2394,16 +2397,13 @@ export default function RestaurantCashierPOSPage() {
 
     return rect
       ? {
-          x: rect.left + rect.width / 2,
-          y: rect.top + Math.min(90, rect.height / 2),
-        }
+        x: rect.left + rect.width / 2,
+        y: rect.top + Math.min(90, rect.height / 2),
+      }
       : { x: window.innerWidth - 44, y: window.innerHeight - 44 };
   }
 
-  function animateItemToCart(
-    item: MenuItem,
-    sourceElement: HTMLButtonElement,
-  ) {
+  function animateItemToCart(item: MenuItem, sourceElement: HTMLButtonElement) {
     const sourceRect = sourceElement.getBoundingClientRect();
 
     setFlyingItem({
@@ -2619,9 +2619,9 @@ export default function RestaurantCashierPOSPage() {
       orderType: orderType || "DINE_IN",
       ...(orderType === "DINE_IN" && selectedTable
         ? {
-            tableId: selectedTable.id,
-            tableNo: selectedTable.tableNo,
-          }
+          tableId: selectedTable.id,
+          tableNo: selectedTable.tableNo,
+        }
         : {}),
       staffId: activeStaff.staffId,
       staffName: activeStaff.staffName,
@@ -2760,9 +2760,9 @@ export default function RestaurantCashierPOSPage() {
       orderType: orderType || "DINE_IN",
       ...(orderType === "DINE_IN" && selectedTable
         ? {
-            tableId: selectedTable.id,
-            tableNo: selectedTable.tableNo,
-          }
+          tableId: selectedTable.id,
+          tableNo: selectedTable.tableNo,
+        }
         : {}),
       staffId: activeStaff.staffId,
       staffName: activeStaff.staffName,
@@ -2911,20 +2911,18 @@ export default function RestaurantCashierPOSPage() {
         if (!receiptResponse.ok) {
           throw new Error(
             pickString(receiptRecord, ["message", "error", "details"]) ||
-              `Receipt save failed (${receiptResponse.status}).`,
+            `Receipt save failed (${receiptResponse.status}).`,
           );
         }
 
         receiptNo =
-          pickString(receiptRecord, [
-            "receiptNo",
-            "receipt_no",
-            "paymentNo",
-          ]) || paymentNo;
+          pickString(receiptRecord, ["receiptNo", "receipt_no", "paymentNo"]) ||
+          paymentNo;
       } catch (receiptError) {
-        receiptSaveWarning = `Payment ${paymentNo} သိမ်းပြီးပါပြီ၊ Receipt ကို database ထဲမသိမ်းနိုင်ပါ။ Payment ကို ထပ်မနှိပ်ပါနှင့်။ ${
-          receiptError instanceof Error ? receiptError.message : "Receipt save error"
-        }`;
+        receiptSaveWarning = `Payment ${paymentNo} သိမ်းပြီးပါပြီ၊ Receipt ကို database ထဲမသိမ်းနိုင်ပါ။ Payment ကို ထပ်မနှိပ်ပါနှင့်။ ${receiptError instanceof Error
+            ? receiptError.message
+            : "Receipt save error"
+          }`;
       }
 
       setPaymentReceiptData({
@@ -2940,9 +2938,7 @@ export default function RestaurantCashierPOSPage() {
       setPaymentOpen(false);
       setMenuItems((prev) =>
         prev.map((menuItem) => {
-          const cartItem = cart.find((item) =>
-            isSameMenuItem(item, menuItem),
-          );
+          const cartItem = cart.find((item) => isSameMenuItem(item, menuItem));
 
           if (!cartItem || menuItem.stock === null) return menuItem;
 
@@ -3006,21 +3002,19 @@ export default function RestaurantCashierPOSPage() {
   if (!activeStaff) {
     return (
       <main
-        className={`min-h-screen ${
-          darkMode
+        className={`min-h-screen ${darkMode
             ? "bg-slate-950 text-slate-50"
             : "bg-[#f8f3ea] text-slate-950"
-        }`}
+          }`}
       >
         <BusinessTypeGuard allow="RESTAURANT" />
 
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col p-4 lg:p-6">
           <section
-            className={`rounded-[2rem] border p-4 shadow-sm ${
-              darkMode
+            className={`rounded-[2rem] border p-4 shadow-sm ${darkMode
                 ? "border-white/10 bg-white/5"
                 : "border-orange-100 bg-white/80"
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -3032,9 +3026,8 @@ export default function RestaurantCashierPOSPage() {
                     Restaurant Cashier POS
                   </h1>
                   <p
-                    className={`mt-1 text-sm font-semibold ${
-                      darkMode ? "text-slate-300" : "text-slate-500"
-                    }`}
+                    className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-300" : "text-slate-500"
+                      }`}
                   >
                     Staff ID ဖြင့်ဝင်ပြီးမှ POS ကိုအသုံးပြုနိုင်ပါသည်။
                   </p>
@@ -3043,11 +3036,10 @@ export default function RestaurantCashierPOSPage() {
 
               <button
                 onClick={() => setDarkMode((v) => !v)}
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                  darkMode
+                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition ${darkMode
                     ? "bg-white/10 text-white hover:bg-white/15"
                     : "bg-slate-900 text-white hover:bg-slate-800"
-                }`}
+                  }`}
               >
                 {darkMode ? <Sun size={18} /> : <Moon size={18} />}
                 {darkMode ? "Day Mode" : "Night Mode"}
@@ -3060,11 +3052,10 @@ export default function RestaurantCashierPOSPage() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               onSubmit={verifyStaff}
-              className={`w-full max-w-xl rounded-[2rem] border p-6 shadow-sm ${
-                darkMode
+              className={`w-full max-w-xl rounded-[2rem] border p-6 shadow-sm ${darkMode
                   ? "border-white/10 bg-white/5"
                   : "border-orange-100 bg-white/90"
-              }`}
+                }`}
             >
               <div className="flex items-start gap-4">
                 <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-orange-500/10 text-orange-500">
@@ -3073,9 +3064,8 @@ export default function RestaurantCashierPOSPage() {
                 <div>
                   <h2 className="text-2xl font-black">Staff ID လိုအပ်ပါတယ်</h2>
                   <p
-                    className={`mt-1 text-sm font-semibold ${
-                      darkMode ? "text-slate-300" : "text-slate-500"
-                    }`}
+                    className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-300" : "text-slate-500"
+                      }`}
                   >
                     Staff ID ကို scan လုပ်ပါ သို့မဟုတ် ရိုက်ထည့်ပါ။
                   </p>
@@ -3085,11 +3075,10 @@ export default function RestaurantCashierPOSPage() {
               <div className="mt-6">
                 <label className="text-sm font-black">Staff ID</label>
                 <div
-                  className={`mt-2 flex items-center gap-3 rounded-2xl px-4 py-3 ${
-                    darkMode
+                  className={`mt-2 flex items-center gap-3 rounded-2xl px-4 py-3 ${darkMode
                       ? "bg-slate-900 ring-1 ring-white/10"
                       : "bg-slate-50 ring-1 ring-orange-100"
-                  }`}
+                    }`}
                 >
                   <Search size={18} className="text-slate-400" />
                   <input
@@ -3108,11 +3097,10 @@ export default function RestaurantCashierPOSPage() {
 
               {staffError && (
                 <div
-                  className={`mt-4 rounded-2xl border p-4 text-sm font-black ${
-                    darkMode
+                  className={`mt-4 rounded-2xl border p-4 text-sm font-black ${darkMode
                       ? "border-red-400/30 bg-red-500/10 text-red-200"
                       : "border-red-100 bg-red-50 text-red-600"
-                  }`}
+                    }`}
                 >
                   {staffError}
                 </div>
@@ -3142,2170 +3130,2466 @@ export default function RestaurantCashierPOSPage() {
       onDragStart={handleMenuDragStart}
       onDragEnd={handleMenuDragEnd}
     >
-    <main
-      className={`min-h-screen ${
-        darkMode ? "bg-slate-950 text-slate-50" : "bg-[#f8f3ea] text-slate-950"
-      } ${isResizingCart ? "cursor-col-resize" : ""}`}
-    >
-      <BusinessTypeGuard allow="RESTAURANT" />
+      <main
+        className={`min-h-screen ${darkMode
+            ? "bg-slate-950 text-slate-50"
+            : "bg-[#f8f3ea] text-slate-950"
+          } ${isResizingCart ? "cursor-col-resize" : ""}`}
+      >
+        <BusinessTypeGuard allow="RESTAURANT" />
 
-      <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 p-2 pb-24 sm:p-3 sm:pb-24 lg:landscape:gap-4 lg:landscape:p-5">
-        {/* Compact top toolbar - no large Restaurant Cashier POS card */}
-        <div
-          className={`sticky top-0 z-30 -mx-4 -mt-4 px-4 py-3 backdrop-blur-xl lg:-mx-6 lg:-mt-6 lg:px-6 ${
-            darkMode
-              ? "bg-slate-950/88"
-              : "bg-[#f8f3ea]/88"
-          }`}
-        >
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleGoToDashboard}
-                className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition ring-1 ${
-                  darkMode
-                    ? "bg-white/10 text-white ring-white/10 hover:bg-white/15"
-                    : "bg-white text-slate-900 ring-orange-100 hover:bg-orange-50"
+        <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 p-2 pb-24 sm:p-3 sm:pb-24 lg:landscape:gap-4 lg:landscape:p-5">
+          {/* Compact header: detailed controls live in one dialog. */}
+          <div
+            className={`sticky top-0 z-30 -mx-2 -mt-2 px-2 py-2 backdrop-blur-xl sm:-mx-3 sm:-mt-3 sm:px-3 lg:landscape:-mx-5 lg:landscape:-mt-5 lg:landscape:px-5 ${darkMode ? "bg-slate-950/88" : "bg-[#f8f3ea]/88"
+              }`}
+          >
+            <div
+              className={`flex h-14 items-center justify-between gap-2 rounded-2xl border px-2.5 shadow-sm ${darkMode
+                  ? "border-white/10 bg-white/5"
+                  : "border-orange-100 bg-white/90"
                 }`}
-                aria-label="Go to dashboard"
-              >
-                <ArrowLeft size={17} className="text-orange-500" />
-                <span className="hidden sm:inline">Dashboard</span>
-              </button>
-
-              <div
-                className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black ring-1 ${
-                  darkMode
-                    ? "bg-white/10 text-white ring-white/10"
-                    : "bg-white text-slate-900 ring-orange-100"
-                }`}
-              >
-                <IdCard size={17} className="text-orange-500" />
-                <span className="max-w-[150px] truncate">
-                  {activeStaff.staffName}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] ${
-                    darkMode
-                      ? "bg-slate-900 text-slate-300"
-                      : "bg-orange-50 text-orange-600"
-                  }`}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleGoToDashboard}
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition ${darkMode
+                      ? "bg-white/10 text-white hover:bg-white/15"
+                      : "bg-orange-50 text-slate-900 hover:bg-orange-100"
+                    }`}
+                  aria-label="Go to dashboard"
                 >
-                  {activeStaff.staffId}
-                </span>
+                  <ArrowLeft size={17} className="text-orange-500" />
+                </button>
+
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black">Restaurant POS</p>
+                  <p
+                    className={`truncate text-[10px] font-bold ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                  >
+                    {orderType === "DINE_IN" && selectedTable
+                      ? `Dine In · Table ${selectedTable.tableNo}`
+                      : orderType === "DINE_IN"
+                        ? "Dine In · No table"
+                        : orderType === "TAKEAWAY"
+                          ? "Takeaway"
+                          : "Delivery"}
+                  </p>
+                </div>
               </div>
 
-              <div
-                className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black ring-1 ${
-                  darkMode
-                    ? "bg-white/10 text-white ring-white/10"
-                    : "bg-white text-slate-900 ring-orange-100"
-                }`}
-              >
-                <Receipt size={17} className="text-orange-500" />
-                <span>
-                  {cartLineCount} မျိုး · Qty {cartTotalQuantity}
-                </span>
-                <span className="text-orange-500">{formatMoney(total)} Ks</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <div
+                  className={`hidden items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs font-black sm:inline-flex ${darkMode
+                      ? "bg-white/10 text-white"
+                      : "bg-orange-50 text-slate-900"
+                    }`}
+                >
+                  <Receipt size={15} className="text-orange-500" />
+                  <span>{cartTotalQuantity} items</span>
+                  <span className="text-orange-500">
+                    {formatMoney(total)} Ks
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setHeaderControlsOpen(true)}
+                  className={`relative inline-flex h-9 items-center gap-2 rounded-xl px-3 text-xs font-black transition ${darkMode
+                      ? "bg-white/10 text-white hover:bg-white/15"
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                    }`}
+                  aria-haspopup="dialog"
+                  aria-label="Open POS controls"
+                >
+                  <MoreHorizontal size={18} />
+                  <span className="hidden sm:inline">Controls</span>
+                  {cartTotalQuantity > 0 && (
+                    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-orange-500 px-1 text-[10px] text-white">
+                      {cartTotalQuantity}
+                    </span>
+                  )}
+                </button>
               </div>
-
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setDarkMode((v) => !v)}
-                className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition ${
-                  darkMode
-                    ? "bg-white/10 text-white hover:bg-white/15"
-                    : "bg-slate-900 text-white hover:bg-slate-800"
-                }`}
-              >
-                {darkMode ? <Sun size={17} /> : <Moon size={17} />}
-                {darkMode ? "Day" : "Night"}
-              </button>
-
-              <button
-                onClick={sendToKitchen}
-                disabled={!hasPendingKitchenItems || kitchenSaving}
-                title={
-                  hasPendingKitchenItems
-                    ? "Kitchen ကိုပို့ရန်"
-                    : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
-                }
-                className="inline-flex items-center gap-2 rounded-2xl bg-amber-500 px-3 py-2 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {kitchenSaving ? (
-                  <Loader2 size={17} className="animate-spin" />
-                ) : (
-                  <ChefHat size={17} />
-                )}
-                Kitchen
-              </button>
-
-              <button
-                onClick={openPaymentDialog}
-                disabled={cart.length === 0}
-                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-3 py-2 text-sm font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Wallet size={17} />
-                Payment
-              </button>
-
-              <button
-                onClick={requestClearOrder}
-                disabled={cart.length === 0}
-                className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  darkMode
-                    ? "bg-white/10 text-white hover:bg-white/15"
-                    : "bg-white text-slate-900 ring-1 ring-orange-100 hover:bg-orange-50"
-                }`}
-              >
-                <Trash2 size={17} />
-                Clear
-              </button>
             </div>
           </div>
-        </div>
 
-        <section
-          className="grid flex-1 gap-4 lg:landscape:grid-cols-[minmax(0,1fr)_380px] xl:landscape:grid-cols-[minmax(0,1fr)_var(--restaurant-cart-width)]"
-          style={
-            { "--restaurant-cart-width": `${cartWidth}px` } as React.CSSProperties
-          }
-        >
-          {/* Left side */}
-          <div className="flex min-h-0 flex-col gap-4">
-            {/* Compact order controls + menu tools */}
-            <div
-              className={`relative mb-2 shrink-0 rounded-[1.5rem] border p-3 shadow-sm ${
-                darkMode
-                  ? "border-white/10 bg-slate-950"
-                  : "border-orange-100 bg-[#fffdf9]"
-              }`}
-            >
-              <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-                <div className="grid shrink-0 grid-cols-3 gap-1.5">
-                  {[
-                    { key: "DINE_IN" as OrderType, label: "Dine In", icon: <Utensils size={16} /> },
-                    { key: "TAKEAWAY" as OrderType, label: "Takeaway", icon: <ShoppingBag size={16} /> },
-                    { key: "DELIVERY" as OrderType, label: "Delivery", icon: <Package size={16} /> },
-                  ].map((type) => (
+          <section
+            className="grid flex-1 gap-4 lg:landscape:grid-cols-[minmax(0,1fr)_380px] xl:landscape:grid-cols-[minmax(0,1fr)_var(--restaurant-cart-width)]"
+            style={
+              {
+                "--restaurant-cart-width": `${cartWidth}px`,
+              } as React.CSSProperties
+            }
+          >
+            {/* Left side */}
+            <div className="flex min-h-0 flex-col gap-4">
+              {/* iPad toolbar: actions stay compact; search/table open as dialogs */}
+              <div className="relative mb-1 shrink-0">
+               
+
+                <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+                  {categories.map((category) => (
                     <button
-                      key={type.key}
+                      key={category.id}
                       type="button"
-                      onClick={() => {
-                        setOrderType(type.key);
-                        if (type.key === "DINE_IN" && !selectedTable) {
-                          setTableDialogOpen(true);
-                        }
-                      }}
-                      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black transition ${
-                        orderType === type.key
-                          ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-black transition ${selectedCategory === category.id
+                          ? "bg-slate-950 text-white shadow-md"
                           : darkMode
                             ? "bg-white/10 text-slate-200 hover:bg-white/15"
-                            : "bg-orange-50 text-slate-700 hover:bg-orange-100"
-                      }`}
+                            : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-orange-50"
+                        }`}
                     >
-                      {type.icon}
-                      {type.label}
+                      <span className="mr-1.5">{category.icon}</span>
+                      {category.name}
                     </button>
                   ))}
                 </div>
 
-                {orderType === "DINE_IN" && (
-                  <button
-                    type="button"
-                    onClick={() => setTableDialogOpen(true)}
-                    className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${
-                      selectedTable
-                        ? darkMode
-                          ? "border-emerald-400/30 bg-emerald-500/10"
-                          : "border-emerald-100 bg-emerald-50"
-                        : darkMode
-                          ? "border-amber-400/30 bg-amber-500/10"
-                          : "border-amber-200 bg-amber-50"
-                    }`}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      {openOrderLoading ? (
-                        <Loader2 size={17} className="shrink-0 animate-spin text-orange-500" />
-                      ) : (
-                        <Armchair size={17} className="shrink-0 text-orange-500" />
-                      )}
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-black">
-                          {selectedTable
-                            ? `Table ${selectedTable.tableNo} · ${selectedTable.seats || 0} seats`
-                            : "Table မရွေးရသေးပါ"}
-                        </span>
-                        <span className="block truncate text-[10px] font-bold opacity-65">
-                          {selectedTable
-                            ? `${selectedTable.floorName || "Main floor"} · ${selectedTable.status || "FREE"}`
-                            : "Dine In order အတွက် table ရွေးပါ"}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="shrink-0 rounded-lg bg-orange-500 px-2.5 py-1.5 text-[10px] font-black text-white">
-                      {selectedTable ? "Change" : "Select"}
-                    </span>
-                  </button>
-                )}
-
-                <div
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 ${
-                    darkMode ? "bg-white/10" : "bg-slate-100"
-                  }`}
-                >
-                  <Search size={17} className="shrink-0 text-slate-400" />
-                  <input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search food, drink or barcode..."
-                    className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
-                  />
-                  {search && (
-                    <button type="button" onClick={() => setSearch("")} className="text-slate-400">
-                      <X size={16} />
-                    </button>
+                {(openOrderError ||
+                  (orderType === "DINE_IN" && !selectedTable)) && (
+                    <div
+                      className={`mt-2 rounded-xl px-3 py-2 text-xs font-black ${openOrderError
+                          ? "bg-red-500/10 text-red-500"
+                          : "bg-amber-500/10 text-amber-600"
+                        }`}
+                    >
+                      {openOrderError ||
+                        "Menu ရွေးနိုင်ပါတယ်။ Kitchen မပို့မီ table ရွေးပေးပါ။"}
+                    </div>
                   )}
-                </div>
               </div>
 
-              <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => setSelectedCategory(category.id)}
-                    className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-black transition ${
-                      selectedCategory === category.id
-                        ? "bg-slate-950 text-white shadow-md"
-                        : darkMode
-                          ? "bg-white/10 text-slate-200 hover:bg-white/15"
-                          : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-orange-50"
-                    }`}
-                  >
-                    <span className="mr-1.5">{category.icon}</span>
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-
-              {(openOrderError || (orderType === "DINE_IN" && !selectedTable)) && (
+              {/* Menu grid */}
+              {menuLoading ? (
                 <div
-                  className={`mt-2 rounded-xl px-3 py-2 text-xs font-black ${
-                    openOrderError
-                      ? "bg-red-500/10 text-red-500"
-                      : "bg-amber-500/10 text-amber-600"
-                  }`}
+                  className={`rounded-[1.75rem] border p-6 text-sm font-black ${darkMode
+                      ? "border-white/10 bg-white/5 text-slate-200"
+                      : "border-orange-100 bg-white/80 text-slate-600"
+                    }`}
                 >
-                  {openOrderError || "Menu ရွေးနိုင်ပါတယ်။ Kitchen မပို့မီ table ရွေးပေးပါ။"}
+                  Loading menu items...
+                </div>
+              ) : menuError ? (
+                <div
+                  className={`rounded-[1.75rem] border p-6 text-sm font-black ${darkMode
+                      ? "border-red-400/30 bg-red-500/10 text-red-200"
+                      : "border-red-100 bg-red-50 text-red-600"
+                    }`}
+                >
+                  {menuError}
+                </div>
+              ) : menuItems.length === 0 ? (
+                <div
+                  className={`rounded-[1.75rem] border border-dashed p-6 text-sm font-black ${darkMode
+                      ? "border-white/10 bg-white/5 text-slate-300"
+                      : "border-orange-200 bg-orange-50/70 text-slate-600"
+                    }`}
+                >
+                  No menu products found. Please add products first.
+                </div>
+              ) : filteredMenu.length === 0 ? (
+                <div
+                  className={`rounded-[1.75rem] border border-dashed p-6 text-sm font-black ${darkMode
+                      ? "border-white/10 bg-white/5 text-slate-300"
+                      : "border-orange-200 bg-orange-50/70 text-slate-600"
+                    }`}
+                >
+                  No menu products match your search.
+                </div>
+              ) : (
+                <div
+                  className={`rounded-[2rem] border p-4 shadow-sm ${darkMode
+                      ? "border-white/10 bg-white/5"
+                      : "border-orange-100 bg-white/80"
+                    }`}
+                >
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-lg font-black">
+                        <Utensils className="text-orange-500" size={20} />
+                        Menu Items
+                      </h2>
+                      <p
+                        className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-300" : "text-slate-500"
+                          }`}
+                      >
+                        Showing {menuPageStart}-{menuPageEnd} of{" "}
+                        {filteredMenu.length}
+                        {search.trim() ? " search results" : " menu items"} ·
+                        Page {safeMenuPage} / {menuTotalPages}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          setMenuPage((page) => Math.max(1, page - 1))
+                        }
+                        disabled={safeMenuPage === 1}
+                        className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${darkMode
+                            ? "bg-white/10 text-white hover:bg-white/15"
+                            : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-50"
+                          }`}
+                      >
+                        <ChevronLeft size={18} />
+                        Prev
+                      </button>
+
+                      <div
+                        className={`rounded-2xl px-4 py-3 text-sm font-black ${darkMode
+                            ? "bg-slate-900 text-slate-200"
+                            : "bg-orange-50 text-orange-700"
+                          }`}
+                      >
+                        {safeMenuPage}/{menuTotalPages}
+                      </div>
+
+                      <button
+                        onClick={() =>
+                          setMenuPage((page) =>
+                            Math.min(menuTotalPages, page + 1),
+                          )
+                        }
+                        disabled={safeMenuPage === menuTotalPages}
+                        className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${darkMode
+                            ? "bg-white/10 text-white hover:bg-white/15"
+                            : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-50"
+                          }`}
+                      >
+                        Next
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {menuTotalPages > 1 && (
+                    <div className="mb-4 flex gap-1.5">
+                      {Array.from({ length: menuTotalPages }).map(
+                        (_, index) => {
+                          const page = index + 1;
+                          const active = page === safeMenuPage;
+
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => setMenuPage(page)}
+                              className={`h-2 flex-1 rounded-full transition ${active
+                                  ? "bg-orange-500"
+                                  : darkMode
+                                    ? "bg-white/10 hover:bg-white/20"
+                                    : "bg-orange-200 hover:bg-orange-300"
+                                }`}
+                              aria-label={`Go to menu page ${page}`}
+                            />
+                          );
+                        },
+                      )}
+                    </div>
+                  )}
+
+                  <AnimatePresence initial={false} mode="wait">
+                    <motion.div
+                      key={`menu-page-${safeMenuPage}-${selectedCategory}-${search}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.18 }}
+                      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+                    >
+                      {paginatedMenu.map((item) => (
+                        <DraggableMenuCard
+                          key={item.id}
+                          menuItemId={item.id}
+                          onClick={(event) => handleMenuClick(item, event)}
+                          disabled={!item.available}
+                          className={`group rounded-[1.75rem] border p-4 text-left shadow-sm transition ${lastAddedMenuItemId === item.id
+                              ? darkMode
+                                ? "border-emerald-400 bg-emerald-500/15 ring-2 ring-emerald-400/30"
+                                : "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300/40"
+                              : darkMode
+                                ? "border-white/10 bg-slate-900/60 hover:bg-white/10"
+                                : "border-orange-100 bg-white hover:border-orange-200 hover:shadow-md"
+                            } disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-orange-100 text-3xl shadow-inner">
+                              {item.image ? (
+                                <img
+                                  src={item.image}
+                                  alt={item.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                categories.find(
+                                  (cat) => cat.id === item.categoryId,
+                                )?.icon || "🍽️"
+                              )}
+                            </div>
+
+                            <div className="flex flex-col items-end gap-2">
+                              {item.popular && (
+                                <span className="rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black text-white">
+                                  Popular
+                                </span>
+                              )}
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-black ${item.available
+                                    ? "bg-emerald-500/10 text-emerald-600"
+                                    : "bg-red-500/10 text-red-600"
+                                  }`}
+                              >
+                                {item.stock === null
+                                  ? item.available
+                                    ? "Available"
+                                    : "Sold out"
+                                  : item.stock > 0
+                                    ? `Stock ${item.stock}`
+                                    : "Sold out"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 min-h-[56px]">
+                            <h3 className="line-clamp-2 text-base font-black">
+                              {item.name}
+                            </h3>
+                            <p
+                              className={`mt-1 line-clamp-1 text-sm font-semibold ${darkMode ? "text-slate-300" : "text-slate-500"
+                                }`}
+                            >
+                              {item.nameMm ||
+                                item.barcode ||
+                                item.sku ||
+                                "Ready to add"}
+                            </p>
+                          </div>
+
+                          <div className="mt-4 flex items-end justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xl font-black text-orange-500">
+                                {formatMoney(item.price)} Ks
+                              </p>
+                              <p
+                                className={`mt-1 flex items-center gap-1 truncate text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-400"
+                                  }`}
+                              >
+                                <Clock3 size={13} />
+                                {item.categoryId}
+                              </p>
+                            </div>
+
+                            <div
+                              className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-white transition ${lastAddedMenuItemId === item.id
+                                  ? "bg-emerald-500"
+                                  : "bg-slate-950 group-hover:bg-orange-500"
+                                }`}
+                            >
+                              {lastAddedMenuItemId === item.id ? (
+                                <Check size={20} />
+                              ) : (
+                                <Plus size={20} />
+                              )}
+                            </div>
+                          </div>
+                        </DraggableMenuCard>
+                      ))}
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               )}
             </div>
 
-            {/* Menu grid */}
-            {menuLoading ? (
-              <div
-                className={`rounded-[1.75rem] border p-6 text-sm font-black ${
-                  darkMode
-                    ? "border-white/10 bg-white/5 text-slate-200"
-                    : "border-orange-100 bg-white/80 text-slate-600"
-                }`}
+            {/* Cart side */}
+            {mobileCartOpen && (
+              <button
+                type="button"
+                aria-label="Close cart"
+                onClick={() => setMobileCartOpen(false)}
+                className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm lg:landscape:hidden"
+              />
+            )}
+            <aside
+              className={`${mobileCartOpen
+                  ? "fixed inset-x-2 bottom-24 top-16 z-50 block"
+                  : "hidden"
+                } min-h-0 lg:landscape:fixed lg:landscape:bottom-3 lg:landscape:right-3 lg:landscape:top-[76px] lg:landscape:z-40 lg:landscape:block lg:landscape:w-[380px] xl:landscape:w-[var(--restaurant-cart-width)]`}
+            >
+              <button
+                type="button"
+                onPointerDown={beginCartResize}
+                onDoubleClick={() => setCartWidth(DEFAULT_CART_WIDTH)}
+                className={`absolute -left-2 top-1/2 z-40 hidden h-24 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border shadow-lg xl:landscape:flex ${isResizingCart
+                    ? "border-orange-400 bg-orange-500 text-white"
+                    : darkMode
+                      ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-orange-500 hover:text-white"
+                      : "border-orange-100 bg-white text-orange-500 hover:bg-orange-500 hover:text-white"
+                  }`}
+                aria-label="Resize cart width"
+                title="Drag to resize cart · Double-click to reset"
               >
-                Loading menu items...
-              </div>
-            ) : menuError ? (
-              <div
-                className={`rounded-[1.75rem] border p-6 text-sm font-black ${
-                  darkMode
-                    ? "border-red-400/30 bg-red-500/10 text-red-200"
-                    : "border-red-100 bg-red-50 text-red-600"
-                }`}
+                <GripVertical size={14} />
+              </button>
+              <RestaurantCartDropSurface
+                dragging={Boolean(draggingMenuItemId)}
+                darkMode={darkMode}
+                addedFeedbackVisible={addedFeedbackVisible}
               >
-                {menuError}
-              </div>
-            ) : menuItems.length === 0 ? (
-              <div
-                className={`rounded-[1.75rem] border border-dashed p-6 text-sm font-black ${
-                  darkMode
-                    ? "border-white/10 bg-white/5 text-slate-300"
-                    : "border-orange-200 bg-orange-50/70 text-slate-600"
-                }`}
-              >
-                No menu products found. Please add products first.
-              </div>
-            ) : filteredMenu.length === 0 ? (
-              <div
-                className={`rounded-[1.75rem] border border-dashed p-6 text-sm font-black ${
-                  darkMode
-                    ? "border-white/10 bg-white/5 text-slate-300"
-                    : "border-orange-200 bg-orange-50/70 text-slate-600"
-                }`}
-              >
-                No menu products match your search.
-              </div>
-            ) : (
-              <div
-                className={`rounded-[2rem] border p-4 shadow-sm ${
-                  darkMode
-                    ? "border-white/10 bg-white/5"
-                    : "border-orange-100 bg-white/80"
-                }`}
-              >
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="flex items-center gap-2 text-lg font-black">
-                      <Utensils className="text-orange-500" size={20} />
-                      Menu Items
-                    </h2>
-                    <p
-                      className={`mt-1 text-sm font-semibold ${
-                        darkMode ? "text-slate-300" : "text-slate-500"
-                      }`}
-                    >
-                      Showing {menuPageStart}-{menuPageEnd} of{" "}
-                      {filteredMenu.length}
-                      {search.trim() ? " search results" : " menu items"} · Page{" "}
-                      {safeMenuPage} / {menuTotalPages}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        setMenuPage((page) => Math.max(1, page - 1))
-                      }
-                      disabled={safeMenuPage === 1}
-                      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                        darkMode
-                          ? "bg-white/10 text-white hover:bg-white/15"
-                          : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-50"
-                      }`}
-                    >
-                      <ChevronLeft size={18} />
-                      Prev
-                    </button>
-
-                    <div
-                      className={`rounded-2xl px-4 py-3 text-sm font-black ${
-                        darkMode
-                          ? "bg-slate-900 text-slate-200"
-                          : "bg-orange-50 text-orange-700"
-                      }`}
-                    >
-                      {safeMenuPage}/{menuTotalPages}
+                <div className="shrink-0 border-b border-slate-200/20 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-lg font-black">
+                        <Receipt size={19} className="text-orange-500" />
+                        Current Order
+                      </h2>
+                      <p
+                        className={`mt-0.5 text-xs font-semibold ${darkMode ? "text-slate-300" : "text-slate-500"
+                          }`}
+                      >
+                        {orderType === "DINE_IN"
+                          ? selectedTable
+                            ? `${selectedTable.tableNo} · ${selectedTable.seats || 0
+                            } seats`
+                            : "No table selected"
+                          : orderType === "TAKEAWAY"
+                            ? "Takeaway order"
+                            : "Delivery order"}
+                      </p>
                     </div>
 
-                    <button
-                      onClick={() =>
-                        setMenuPage((page) =>
-                          Math.min(menuTotalPages, page + 1),
-                        )
-                      }
-                      disabled={safeMenuPage === menuTotalPages}
-                      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                        darkMode
-                          ? "bg-white/10 text-white hover:bg-white/15"
-                          : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-50"
-                      }`}
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`hidden items-center gap-1 rounded-xl p-1 xl:landscape:flex ${darkMode ? "bg-white/10" : "bg-orange-50"
+                          }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCartWidth((width) =>
+                              Math.max(MIN_CART_WIDTH, width - 40),
+                            )
+                          }
+                          disabled={cartWidth <= MIN_CART_WIDTH}
+                          className="grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30"
+                          aria-label="Make cart narrower"
+                        >
+                          <Minus size={13} />
+                        </button>
+                        <GripVertical size={13} className="text-orange-500" />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCartWidth((width) =>
+                              Math.min(MAX_CART_WIDTH, width + 40),
+                            )
+                          }
+                          disabled={cartWidth >= MAX_CART_WIDTH}
+                          className="grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30"
+                          aria-label="Make cart wider"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setMobileCartOpen(false)}
+                        className="rounded-xl bg-slate-500/10 p-2.5 transition lg:landscape:hidden"
+                        aria-label="Close cart"
+                      >
+                        <X size={20} />
+                      </button>
+                      <button
+                        onClick={requestClearOrder}
+                        disabled={cart.length === 0}
+                        className="rounded-xl bg-red-500/10 p-2.5 text-red-500 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label="Cart ရှင်းရန်"
+                        title="Cart ရှင်းရန်"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2.5">
+                  <AnimatePresence initial={false} mode="wait">
+                    {cart.length === 0 ? (
+                      <motion.div
+                        key="empty"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`grid h-full min-h-[360px] place-items-center rounded-[1.75rem] border border-dashed p-8 text-center ${darkMode
+                            ? "border-white/10 bg-white/5"
+                            : "border-orange-200 bg-orange-50/60"
+                          }`}
+                      >
+                        <div>
+                          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-500 text-white shadow-lg shadow-orange-500/25">
+                            <Coffee size={36} />
+                          </div>
+                          <h3 className="mt-4 text-lg font-black">
+                            Menu item ရွေးပါ
+                          </h3>
+                          <p
+                            className={`mt-2 text-sm font-semibold ${darkMode ? "text-slate-300" : "text-slate-500"
+                              }`}
+                          >
+                            စားသောက်ဆိုင် order အတွက် ဘယ်ဘက်က menu ကိုနှိပ်ပါ။
+                          </p>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key={`cart-page-${safeCartPage}`}
+                        initial={{ opacity: 0, x: 18 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -18 }}
+                        transition={{ duration: 0.18 }}
+                        className="space-y-2"
+                      >
+                        <div
+                          className={`rounded-2xl border px-3 py-2 ${darkMode
+                              ? "border-white/10 bg-slate-900/70"
+                              : "border-orange-100 bg-orange-50/70"
+                            }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-black">
+                                Menu {cartPageStart}-{cartPageEnd} /{" "}
+                                {cartLineCount} မျိုး
+                              </p>
+                              <p
+                                className={`mt-0.5 max-w-[230px] truncate text-[10px] font-bold ${darkMode ? "text-slate-400" : "text-slate-500"
+                                  }`}
+                              >
+                                အသစ်ဆုံးကိုအရင်ပြ · စုစုပေါင်း Qty{" "}
+                                {cartTotalQuantity} ခု · စာမျက်နှာ{" "}
+                                {safeCartPage}/{cartTotalPages}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => goToCartPage(safeCartPage - 1)}
+                                disabled={!canGoToPreviousCartPage}
+                                title={
+                                  canGoToPreviousCartPage
+                                    ? "Previous cart page"
+                                    : "ပထမစာမျက်နှာဖြစ်သည်"
+                                }
+                                className={`grid h-8 w-8 place-items-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${darkMode
+                                    ? "bg-white/10 text-white hover:bg-white/15"
+                                    : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-100"
+                                  }`}
+                              >
+                                <ChevronLeft size={18} />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => goToCartPage(safeCartPage + 1)}
+                                disabled={!canGoToNextCartPage}
+                                title={
+                                  canGoToNextCartPage
+                                    ? "Next cart page"
+                                    : `Next စာမျက်နှာအတွက် Menu ${CART_ITEMS_PER_PAGE + 1} မျိုးနှင့်အထက် လိုအပ်သည်`
+                                }
+                                className={`grid h-8 w-8 place-items-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${darkMode
+                                    ? "bg-white/10 text-white hover:bg-white/15"
+                                    : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-100"
+                                  }`}
+                              >
+                                <ChevronRight size={18} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {cartTotalPages > 1 && (
+                            <div className="mt-2 flex gap-1.5">
+                              {Array.from({ length: cartTotalPages }).map(
+                                (_, index) => {
+                                  const page = index + 1;
+                                  const active = page === safeCartPage;
+
+                                  return (
+                                    <button
+                                      key={page}
+                                      type="button"
+                                      onClick={() => goToCartPage(page)}
+                                      className={`h-2 flex-1 rounded-full transition ${active
+                                          ? "bg-orange-500"
+                                          : darkMode
+                                            ? "bg-white/10 hover:bg-white/20"
+                                            : "bg-orange-200 hover:bg-orange-300"
+                                        }`}
+                                      aria-label={`Go to cart page ${page}`}
+                                    />
+                                  );
+                                },
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {paginatedCart.map((item, index) => (
+                          <motion.div
+                            key={item.id}
+                            layout
+                            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                            transition={{ delay: index * 0.03 }}
+                            className={`rounded-2xl border p-2.5 shadow-sm transition-colors ${isLastAddedItem(item)
+                                ? darkMode
+                                  ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
+                                  : "border-orange-400 bg-orange-50 ring-2 ring-orange-300/40"
+                                : darkMode
+                                  ? "border-white/10 bg-slate-900/70"
+                                  : "border-slate-100 bg-slate-50"
+                              }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-orange-500/10 text-orange-500">
+                                    <Utensils size={17} />
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <h3 className="truncate font-black">
+                                        {item.name}
+                                      </h3>
+                                      {isLastAddedItem(item) && (
+                                        <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                          Latest
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="mt-0.5 text-xs font-bold text-orange-500">
+                                      {formatMoney(item.price)} Ks each
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => removeItem(item.id)}
+                                className="rounded-xl bg-red-500/10 p-2 text-red-500 transition hover:bg-red-500 hover:text-white"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <div
+                                className={`inline-flex items-center gap-2 rounded-2xl p-1 shadow-sm ring-1 ${darkMode
+                                    ? "bg-white/10 ring-white/10"
+                                    : "bg-white ring-slate-100"
+                                  }`}
+                              >
+                                <button
+                                  onClick={() => updateQty(item.id, "minus")}
+                                  className={`grid h-8 w-8 place-items-center rounded-xl ${darkMode
+                                      ? "bg-slate-800 text-white"
+                                      : "bg-slate-100 text-slate-900"
+                                    }`}
+                                >
+                                  <Minus size={16} />
+                                </button>
+
+                                <span
+                                  className={`w-9 text-center text-sm font-black ${darkMode ? "text-white" : "text-slate-900"
+                                    }`}
+                                >
+                                  {item.qty}
+                                </span>
+
+                                <button
+                                  onClick={() => updateQty(item.id, "plus")}
+                                  className="grid h-8 w-8 place-items-center rounded-xl bg-orange-500 text-white"
+                                >
+                                  <Plus size={16} />
+                                </button>
+                              </div>
+
+                              <div className="text-right">
+                                <p className="text-xs font-bold text-slate-400">
+                                  Line total
+                                </p>
+                                <p className="text-base font-black">
+                                  {formatMoney(item.price * item.qty)} Ks
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+                              {modifiers.map((modifier) => {
+                                const active =
+                                  item.modifiers.includes(modifier);
+
+                                return (
+                                  <button
+                                    key={modifier}
+                                    onClick={() =>
+                                      toggleModifier(item.id, modifier)
+                                    }
+                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black transition ${active
+                                        ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20"
+                                        : darkMode
+                                          ? "bg-white/10 text-slate-300 hover:bg-white/15"
+                                          : "bg-white text-slate-500 ring-1 ring-slate-100 hover:bg-orange-50"
+                                      }`}
+                                  >
+                                    {modifier}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <input
+                              value={item.note || ""}
+                              onChange={(e) =>
+                                updateNote(item.id, e.target.value)
+                              }
+                              placeholder="Kitchen note..."
+                              className={`mt-2 w-full rounded-xl px-3 py-1.5 text-xs font-semibold outline-none ring-1 ${darkMode
+                                  ? "bg-white/10 text-white ring-white/10 placeholder:text-slate-400"
+                                  : "bg-white text-slate-900 ring-slate-100 placeholder:text-slate-400"
+                                }`}
+                            />
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="shrink-0 border-t border-slate-200/20 px-3 pb-3 pt-2.5">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-bold">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={
+                          darkMode ? "text-slate-400" : "text-slate-500"
+                        }
+                      >
+                        Subtotal
+                      </span>
+                      <span className="truncate">
+                        {formatMoney(subtotal)} Ks
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={
+                          darkMode ? "text-slate-400" : "text-slate-500"
+                        }
+                      >
+                        Tax {formatRatePercent(taxRatePercent)}%
+                      </span>
+                      <span className="truncate">{formatMoney(tax)} Ks</span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setServiceChargeEnabled((v) => !v)}
+                        className={`inline-flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-0.5 ${serviceChargeEnabled
+                            ? "bg-orange-500/10 text-orange-500"
+                            : darkMode
+                              ? "bg-white/10 text-slate-300"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
+                      >
+                        <MoreHorizontal size={12} />
+                        <span className="truncate">
+                          Service {formatRatePercent(serviceChargeRatePercent)}%
+                        </span>
+                      </button>
+                      <span className="truncate">
+                        {formatMoney(serviceCharge)} Ks
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <label
+                        className={`inline-flex min-w-0 items-center gap-1 ${darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                      >
+                        <BadgePercent size={13} />
+                        <span className="truncate">Discount</span>
+                      </label>
+                      <input
+                        value={discount || ""}
+                        onChange={(e) =>
+                          setDiscount(Number(e.target.value || 0))
+                        }
+                        type="number"
+                        className={`h-7 w-20 rounded-lg px-2 text-right text-xs font-black outline-none ${darkMode
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 text-slate-900"
+                          }`}
+                        placeholder="0"
+                      />
+                    </div>
+
+                    <div
+                      className={`col-span-2 mt-0.5 flex items-center justify-between rounded-xl px-3 py-2 ${darkMode ? "bg-orange-500/15" : "bg-orange-50"
+                        }`}
                     >
-                      Next
+                      <span className="text-xs font-black">Total</span>
+                      <span className="text-xl font-black text-orange-500">
+                        {formatMoney(total)} Ks
+                      </span>
+                    </div>
+                  </div>
+
+                  {(kitchenError || kitchenDisabledMessage) && (
+                    <div
+                      title={kitchenError || kitchenDisabledMessage}
+                      className={`mt-2 flex min-h-8 items-center rounded-xl border px-2.5 py-1.5 text-[11px] font-bold ${kitchenError
+                          ? darkMode
+                            ? "border-red-400/30 bg-red-500/10 text-red-200"
+                            : "border-red-100 bg-red-50 text-red-600"
+                          : darkMode
+                            ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
+                            : "border-amber-200 bg-amber-50 text-amber-700"
+                        }`}
+                    >
+                      <span
+                        className={kitchenError ? "line-clamp-2" : "truncate"}
+                      >
+                        {kitchenError || kitchenDisabledMessage}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={sendToKitchen}
+                      disabled={!hasPendingKitchenItems || kitchenSaving}
+                      title={
+                        hasPendingKitchenItems
+                          ? "Kitchen ကိုပို့ရန်"
+                          : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
+                      }
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {kitchenSaving ? (
+                        <Loader2 className="animate-spin" size={18} />
+                      ) : (
+                        <ChefHat size={18} />
+                      )}
+                      {kitchenSaving ? "Sending..." : "Kitchen"}
+                    </button>
+
+                    <button
+                      onClick={openPaymentDialog}
+                      disabled={cart.length === 0}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 text-xs font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Payment
                       <ChevronRight size={18} />
                     </button>
                   </div>
                 </div>
+              </RestaurantCartDropSurface>
+            </aside>
+          </section>
+        </div>
 
-                {menuTotalPages > 1 && (
-                  <div className="mb-4 flex gap-1.5">
-                    {Array.from({ length: menuTotalPages }).map((_, index) => {
-                      const page = index + 1;
-                      const active = page === safeMenuPage;
-
-                      return (
-                        <button
-                          key={page}
-                          onClick={() => setMenuPage(page)}
-                          className={`h-2 flex-1 rounded-full transition ${
-                            active
-                              ? "bg-orange-500"
-                              : darkMode
-                                ? "bg-white/10 hover:bg-white/20"
-                                : "bg-orange-200 hover:bg-orange-300"
-                          }`}
-                          aria-label={`Go to menu page ${page}`}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-
-                <AnimatePresence initial={false} mode="wait">
-                  <motion.div
-                    key={`menu-page-${safeMenuPage}-${selectedCategory}-${search}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.18 }}
-                    className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
-                  >
-                    {paginatedMenu.map((item) => (
-                      <DraggableMenuCard
-                        key={item.id}
-                        menuItemId={item.id}
-                        onClick={(event) => handleMenuClick(item, event)}
-                        disabled={!item.available}
-                        className={`group rounded-[1.75rem] border p-4 text-left shadow-sm transition ${
-                          lastAddedMenuItemId === item.id
-                            ? darkMode
-                              ? "border-emerald-400 bg-emerald-500/15 ring-2 ring-emerald-400/30"
-                              : "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300/40"
-                            : darkMode
-                            ? "border-white/10 bg-slate-900/60 hover:bg-white/10"
-                            : "border-orange-100 bg-white hover:border-orange-200 hover:shadow-md"
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-orange-100 text-3xl shadow-inner">
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              categories.find(
-                                (cat) => cat.id === item.categoryId,
-                              )?.icon || "🍽️"
-                            )}
-                          </div>
-
-                          <div className="flex flex-col items-end gap-2">
-                            {item.popular && (
-                              <span className="rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-black text-white">
-                                Popular
-                              </span>
-                            )}
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
-                                item.available
-                                  ? "bg-emerald-500/10 text-emerald-600"
-                                  : "bg-red-500/10 text-red-600"
-                              }`}
-                            >
-                              {item.stock === null
-                                ? item.available
-                                  ? "Available"
-                                  : "Sold out"
-                                : item.stock > 0
-                                  ? `Stock ${item.stock}`
-                                  : "Sold out"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 min-h-[56px]">
-                          <h3 className="line-clamp-2 text-base font-black">
-                            {item.name}
-                          </h3>
-                          <p
-                            className={`mt-1 line-clamp-1 text-sm font-semibold ${
-                              darkMode ? "text-slate-300" : "text-slate-500"
-                            }`}
-                          >
-                            {item.nameMm ||
-                              item.barcode ||
-                              item.sku ||
-                              "Ready to add"}
-                          </p>
-                        </div>
-
-                        <div className="mt-4 flex items-end justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-xl font-black text-orange-500">
-                              {formatMoney(item.price)} Ks
-                            </p>
-                            <p
-                              className={`mt-1 flex items-center gap-1 truncate text-xs font-bold ${
-                                darkMode ? "text-slate-400" : "text-slate-400"
-                              }`}
-                            >
-                              <Clock3 size={13} />
-                              {item.categoryId}
-                            </p>
-                          </div>
-
-                          <div
-                            className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-white transition ${
-                              lastAddedMenuItemId === item.id
-                                ? "bg-emerald-500"
-                                : "bg-slate-950 group-hover:bg-orange-500"
-                            }`}
-                          >
-                            {lastAddedMenuItemId === item.id ? (
-                              <Check size={20} />
-                            ) : (
-                              <Plus size={20} />
-                            )}
-                          </div>
-                        </div>
-                      </DraggableMenuCard>
-                    ))}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            )}
-          </div>
-
-          {/* Cart side */}
-          {mobileCartOpen && (
-            <button
-              type="button"
-              aria-label="Close cart"
-              onClick={() => setMobileCartOpen(false)}
-              className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm lg:landscape:hidden"
-            />
+        <AnimatePresence>
+          {draftRestoreMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.96 }}
+              className="fixed left-1/2 top-4 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-emerald-500/25"
+            >
+              <Check size={17} /> {draftRestoreMessage}
+            </motion.div>
           )}
-          <aside
-            className={`${
-              mobileCartOpen
-                ? "fixed inset-x-2 bottom-24 top-16 z-50 block"
-                : "hidden"
-            } min-h-0 lg:landscape:sticky lg:landscape:top-24 lg:landscape:z-20 lg:landscape:block lg:landscape:h-[calc(100vh-7rem)]`}
-          >
-            <button
-              type="button"
-              onPointerDown={beginCartResize}
-              onDoubleClick={() => setCartWidth(DEFAULT_CART_WIDTH)}
-              className={`absolute -left-2 top-1/2 z-40 hidden h-24 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border shadow-lg xl:landscape:flex ${
-                isResizingCart
-                  ? "border-orange-400 bg-orange-500 text-white"
-                  : darkMode
-                    ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-orange-500 hover:text-white"
-                    : "border-orange-100 bg-white text-orange-500 hover:bg-orange-500 hover:text-white"
-              }`}
-              aria-label="Resize cart width"
-              title="Drag to resize cart · Double-click to reset"
-            >
-              <GripVertical size={14} />
-            </button>
-            <RestaurantCartDropSurface
-              dragging={Boolean(draggingMenuItemId)}
-              darkMode={darkMode}
-              addedFeedbackVisible={addedFeedbackVisible}
-            >
-            <div className="shrink-0 border-b border-slate-200/20 p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="flex items-center gap-2 text-lg font-black">
-                    <Receipt size={19} className="text-orange-500" />
-                    Current Order
-                  </h2>
-                  <p
-                    className={`mt-0.5 text-xs font-semibold ${
-                      darkMode ? "text-slate-300" : "text-slate-500"
-                    }`}
-                  >
-                    {orderType === "DINE_IN"
-                      ? selectedTable
-                        ? `${selectedTable.tableNo} · ${
-                            selectedTable.seats || 0
-                          } seats`
-                        : "No table selected"
-                      : orderType === "TAKEAWAY"
-                        ? "Takeaway order"
-                        : "Delivery order"}
-                  </p>
-                </div>
+        </AnimatePresence>
 
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`hidden items-center gap-1 rounded-xl p-1 xl:landscape:flex ${
-                      darkMode ? "bg-white/10" : "bg-orange-50"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setCartWidth((width) => Math.max(MIN_CART_WIDTH, width - 40))}
-                      disabled={cartWidth <= MIN_CART_WIDTH}
-                      className="grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30"
-                      aria-label="Make cart narrower"
-                    >
-                      <Minus size={13} />
-                    </button>
-                    <GripVertical size={13} className="text-orange-500" />
-                    <button
-                      type="button"
-                      onClick={() => setCartWidth((width) => Math.min(MAX_CART_WIDTH, width + 40))}
-                      disabled={cartWidth >= MAX_CART_WIDTH}
-                      className="grid h-7 w-7 place-items-center rounded-lg disabled:opacity-30"
-                      aria-label="Make cart wider"
-                    >
-                      <Plus size={13} />
-                    </button>
+        {/* Dashboard Exit Confirmation */}
+        <AnimatePresence>
+          {exitConfirmOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!exitSaving) setExitConfirmOpen(false);
+              }}
+              className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/65 p-3 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.96 }}
+                onClick={(event) => event.stopPropagation()}
+                className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-orange-100 bg-white text-slate-950"
+                  }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-500/15 text-amber-500">
+                    <ArrowLeft size={22} />
                   </div>
                   <button
                     type="button"
-                    onClick={() => setMobileCartOpen(false)}
-                    className="rounded-xl bg-slate-500/10 p-2.5 transition lg:landscape:hidden"
-                    aria-label="Close cart"
-                  >
-                    <X size={20} />
-                  </button>
-                  <button
-                    onClick={requestClearOrder}
-                    disabled={cart.length === 0}
-                    className="rounded-xl bg-red-500/10 p-2.5 text-red-500 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Cart ရှင်းရန်"
-                    title="Cart ရှင်းရန်"
-                  >
-                    <Trash2 size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2.5">
-              <AnimatePresence initial={false} mode="wait">
-                {cart.length === 0 ? (
-                  <motion.div
-                    key="empty"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`grid h-full min-h-[360px] place-items-center rounded-[1.75rem] border border-dashed p-8 text-center ${
-                      darkMode
-                        ? "border-white/10 bg-white/5"
-                        : "border-orange-200 bg-orange-50/60"
-                    }`}
-                  >
-                    <div>
-                      <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-                        <Coffee size={36} />
-                      </div>
-                      <h3 className="mt-4 text-lg font-black">
-                        Menu item ရွေးပါ
-                      </h3>
-                      <p
-                        className={`mt-2 text-sm font-semibold ${
-                          darkMode ? "text-slate-300" : "text-slate-500"
-                        }`}
-                      >
-                        စားသောက်ဆိုင် order အတွက် ဘယ်ဘက်က menu ကိုနှိပ်ပါ။
-                      </p>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key={`cart-page-${safeCartPage}`}
-                    initial={{ opacity: 0, x: 18 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -18 }}
-                    transition={{ duration: 0.18 }}
-                    className="space-y-2"
-                  >
-                    <div
-                      className={`rounded-2xl border px-3 py-2 ${
-                        darkMode
-                          ? "border-white/10 bg-slate-900/70"
-                          : "border-orange-100 bg-orange-50/70"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-black">
-                            Menu {cartPageStart}-{cartPageEnd} / {cartLineCount} မျိုး
-                          </p>
-                          <p
-                            className={`mt-0.5 max-w-[230px] truncate text-[10px] font-bold ${
-                              darkMode ? "text-slate-400" : "text-slate-500"
-                            }`}
-                          >
-                            အသစ်ဆုံးကိုအရင်ပြ · စုစုပေါင်း Qty {cartTotalQuantity} ခု · စာမျက်နှာ {safeCartPage}/{cartTotalPages}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => goToCartPage(safeCartPage - 1)}
-                            disabled={!canGoToPreviousCartPage}
-                            title={
-                              canGoToPreviousCartPage
-                                ? "Previous cart page"
-                                : "ပထမစာမျက်နှာဖြစ်သည်"
-                            }
-                            className={`grid h-8 w-8 place-items-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                              darkMode
-                                ? "bg-white/10 text-white hover:bg-white/15"
-                                : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-100"
-                            }`}
-                          >
-                            <ChevronLeft size={18} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => goToCartPage(safeCartPage + 1)}
-                            disabled={!canGoToNextCartPage}
-                            title={
-                              canGoToNextCartPage
-                                ? "Next cart page"
-                                : `Next စာမျက်နှာအတွက် Menu ${CART_ITEMS_PER_PAGE + 1} မျိုးနှင့်အထက် လိုအပ်သည်`
-                            }
-                            className={`grid h-8 w-8 place-items-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                              darkMode
-                                ? "bg-white/10 text-white hover:bg-white/15"
-                                : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-100"
-                            }`}
-                          >
-                            <ChevronRight size={18} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {cartTotalPages > 1 && (
-                        <div className="mt-2 flex gap-1.5">
-                          {Array.from({ length: cartTotalPages }).map(
-                            (_, index) => {
-                              const page = index + 1;
-                              const active = page === safeCartPage;
-
-                              return (
-                                <button
-                                  key={page}
-                                  type="button"
-                                  onClick={() => goToCartPage(page)}
-                                  className={`h-2 flex-1 rounded-full transition ${
-                                    active
-                                      ? "bg-orange-500"
-                                      : darkMode
-                                        ? "bg-white/10 hover:bg-white/20"
-                                        : "bg-orange-200 hover:bg-orange-300"
-                                  }`}
-                                  aria-label={`Go to cart page ${page}`}
-                                />
-                              );
-                            },
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {paginatedCart.map((item, index) => (
-                      <motion.div
-                        key={item.id}
-                        layout
-                        initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                        transition={{ delay: index * 0.03 }}
-                        className={`rounded-2xl border p-2.5 shadow-sm transition-colors ${
-                          isLastAddedItem(item)
-                            ? darkMode
-                              ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
-                              : "border-orange-400 bg-orange-50 ring-2 ring-orange-300/40"
-                            : darkMode
-                              ? "border-white/10 bg-slate-900/70"
-                              : "border-slate-100 bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-orange-500/10 text-orange-500">
-                                <Utensils size={17} />
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <h3 className="truncate font-black">
-                                    {item.name}
-                                  </h3>
-                                  {isLastAddedItem(item) && (
-                                    <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
-                                      Latest
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="mt-0.5 text-xs font-bold text-orange-500">
-                                  {formatMoney(item.price)} Ks each
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={() => removeItem(item.id)}
-                            className="rounded-xl bg-red-500/10 p-2 text-red-500 transition hover:bg-red-500 hover:text-white"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <div
-                            className={`inline-flex items-center gap-2 rounded-2xl p-1 shadow-sm ring-1 ${
-                              darkMode
-                                ? "bg-white/10 ring-white/10"
-                                : "bg-white ring-slate-100"
-                            }`}
-                          >
-                            <button
-                              onClick={() => updateQty(item.id, "minus")}
-                              className={`grid h-8 w-8 place-items-center rounded-xl ${
-                                darkMode
-                                  ? "bg-slate-800 text-white"
-                                  : "bg-slate-100 text-slate-900"
-                              }`}
-                            >
-                              <Minus size={16} />
-                            </button>
-
-                            <span
-                              className={`w-9 text-center text-sm font-black ${
-                                darkMode ? "text-white" : "text-slate-900"
-                              }`}
-                            >
-                              {item.qty}
-                            </span>
-
-                            <button
-                              onClick={() => updateQty(item.id, "plus")}
-                              className="grid h-8 w-8 place-items-center rounded-xl bg-orange-500 text-white"
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </div>
-
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-slate-400">
-                              Line total
-                            </p>
-                            <p className="text-base font-black">
-                              {formatMoney(item.price * item.qty)} Ks
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
-                          {modifiers.map((modifier) => {
-                            const active = item.modifiers.includes(modifier);
-
-                            return (
-                              <button
-                                key={modifier}
-                                onClick={() =>
-                                  toggleModifier(item.id, modifier)
-                                }
-                                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black transition ${
-                                  active
-                                    ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20"
-                                    : darkMode
-                                      ? "bg-white/10 text-slate-300 hover:bg-white/15"
-                                      : "bg-white text-slate-500 ring-1 ring-slate-100 hover:bg-orange-50"
-                                }`}
-                              >
-                                {modifier}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <input
-                          value={item.note || ""}
-                          onChange={(e) => updateNote(item.id, e.target.value)}
-                          placeholder="Kitchen note..."
-                          className={`mt-2 w-full rounded-xl px-3 py-1.5 text-xs font-semibold outline-none ring-1 ${
-                            darkMode
-                              ? "bg-white/10 text-white ring-white/10 placeholder:text-slate-400"
-                              : "bg-white text-slate-900 ring-slate-100 placeholder:text-slate-400"
-                          }`}
-                        />
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="shrink-0 border-t border-slate-200/20 px-3 pb-3 pt-2.5">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-bold">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={darkMode ? "text-slate-400" : "text-slate-500"}>
-                    Subtotal
-                  </span>
-                  <span className="truncate">{formatMoney(subtotal)} Ks</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <span className={darkMode ? "text-slate-400" : "text-slate-500"}>
-                    Tax {formatRatePercent(taxRatePercent)}%
-                  </span>
-                  <span className="truncate">{formatMoney(tax)} Ks</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setServiceChargeEnabled((v) => !v)}
-                    className={`inline-flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-0.5 ${
-                      serviceChargeEnabled
-                        ? "bg-orange-500/10 text-orange-500"
-                        : darkMode
-                          ? "bg-white/10 text-slate-300"
-                          : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    <MoreHorizontal size={12} />
-                    <span className="truncate">
-                      Service {formatRatePercent(serviceChargeRatePercent)}%
-                    </span>
-                  </button>
-                  <span className="truncate">{formatMoney(serviceCharge)} Ks</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <label
-                    className={`inline-flex min-w-0 items-center gap-1 ${
-                      darkMode ? "text-slate-400" : "text-slate-500"
-                    }`}
-                  >
-                    <BadgePercent size={13} />
-                    <span className="truncate">Discount</span>
-                  </label>
-                  <input
-                    value={discount || ""}
-                    onChange={(e) => setDiscount(Number(e.target.value || 0))}
-                    type="number"
-                    className={`h-7 w-20 rounded-lg px-2 text-right text-xs font-black outline-none ${
-                      darkMode
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-900"
-                    }`}
-                    placeholder="0"
-                  />
-                </div>
-
-                <div
-                  className={`col-span-2 mt-0.5 flex items-center justify-between rounded-xl px-3 py-2 ${
-                    darkMode ? "bg-orange-500/15" : "bg-orange-50"
-                  }`}
-                >
-                  <span className="text-xs font-black">Total</span>
-                  <span className="text-xl font-black text-orange-500">
-                    {formatMoney(total)} Ks
-                  </span>
-                </div>
-              </div>
-
-              {(kitchenError || kitchenDisabledMessage) && (
-                <div
-                  title={kitchenError || kitchenDisabledMessage}
-                  className={`mt-2 flex min-h-8 items-center rounded-xl border px-2.5 py-1.5 text-[11px] font-bold ${
-                    kitchenError
-                      ? darkMode
-                        ? "border-red-400/30 bg-red-500/10 text-red-200"
-                        : "border-red-100 bg-red-50 text-red-600"
-                      : darkMode
-                        ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
-                        : "border-amber-200 bg-amber-50 text-amber-700"
-                  }`}
-                >
-                  <span className={kitchenError ? "line-clamp-2" : "truncate"}>
-                    {kitchenError || kitchenDisabledMessage}
-                  </span>
-                </div>
-              )}
-
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <button
-                  onClick={sendToKitchen}
-                  disabled={!hasPendingKitchenItems || kitchenSaving}
-                  title={
-                    hasPendingKitchenItems
-                      ? "Kitchen ကိုပို့ရန်"
-                      : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
-                  }
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {kitchenSaving ? (
-                    <Loader2 className="animate-spin" size={18} />
-                  ) : (
-                    <ChefHat size={18} />
-                  )}
-                  {kitchenSaving ? "Sending..." : "Kitchen"}
-                </button>
-
-                <button
-                  onClick={openPaymentDialog}
-                  disabled={cart.length === 0}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 text-xs font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Payment
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-            </div>
-            </RestaurantCartDropSurface>
-          </aside>
-        </section>
-      </div>
-
-      <AnimatePresence>
-        {draftRestoreMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -12, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.96 }}
-            className="fixed left-1/2 top-4 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-emerald-500/25"
-          >
-            <Check size={17} /> {draftRestoreMessage}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Dashboard Exit Confirmation */}
-      <AnimatePresence>
-        {exitConfirmOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => {
-              if (!exitSaving) setExitConfirmOpen(false);
-            }}
-            className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/65 p-3 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              onClick={(event) => event.stopPropagation()}
-              className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${
-                darkMode
-                  ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-500/15 text-amber-500">
-                  <ArrowLeft size={22} />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setExitConfirmOpen(false)}
-                  disabled={exitSaving}
-                  className={`grid h-10 w-10 place-items-center rounded-xl disabled:opacity-40 ${
-                    darkMode ? "bg-white/10" : "bg-slate-100"
-                  }`}
-                  aria-label="Stay in POS"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <h2 className="mt-4 text-xl font-black">Dashboard ကို သွားမလား?</h2>
-              <p className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"}`}>
-                Cart ထဲမှာ {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)} Ks ရှိနေပါတယ်။
-                မသိမ်းဘဲထွက်လျှင် လက်ရှိပြင်ဆင်ထားတဲ့ order ပျောက်သွားနိုင်ပါတယ်။
-              </p>
-
-              <div className={`mt-4 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/5" : "bg-orange-50"}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <span>Order</span>
-                  <span className="text-orange-500">
-                    {orderType === "DINE_IN"
-                      ? selectedTable
-                        ? `Dine In · Table ${selectedTable.tableNo}`
-                        : "Dine In · No table"
-                      : orderType === "TAKEAWAY"
-                        ? "Takeaway"
-                        : "Delivery"}
-                  </span>
-                </div>
-              </div>
-
-              {exitError && (
-                <div className="mt-3 rounded-2xl bg-red-500/10 p-3 text-sm font-black text-red-500">
-                  {exitError}
-                </div>
-              )}
-
-              {orderType !== "DINE_IN" && (
-                <p className="mt-3 text-xs font-bold text-amber-600">
-                  Takeaway/Delivery cart ကို open order အဖြစ် မသိမ်းနိုင်သေးပါ။ Stay သို့မဟုတ် Discard ကိုရွေးပါ။
-                </p>
-              )}
-
-              {orderType === "DINE_IN" && !selectedTable && (
-                <p className="mt-3 text-xs font-bold text-amber-600">
-                  Save & Exit လုပ်ရန် table အရင်ရွေးရပါမယ်။
-                </p>
-              )}
-
-              <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setExitConfirmOpen(false)}
-                  disabled={exitSaving}
-                  className={`rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-40 ${
-                    darkMode
-                      ? "bg-white/10 text-white hover:bg-white/15"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  Stay in POS
-                </button>
-
-                {orderType === "DINE_IN" && selectedTable && (
-                  <button
-                    type="button"
-                    onClick={saveOrderAndExit}
+                    onClick={() => setExitConfirmOpen(false)}
                     disabled={exitSaving}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                    className={`grid h-10 w-10 place-items-center rounded-xl disabled:opacity-40 ${darkMode ? "bg-white/10" : "bg-slate-100"
+                      }`}
+                    aria-label="Stay in POS"
                   >
-                    {exitSaving ? <Loader2 size={17} className="animate-spin" /> : <Check size={17} />}
-                    {exitSaving ? "Saving..." : "Save & Exit"}
+                    <X size={18} />
                   </button>
-                )}
+                </div>
 
-                <button
-                  type="button"
-                  onClick={discardOrderAndExit}
-                  disabled={exitSaving}
-                  className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm font-black text-red-500 transition hover:bg-red-500 hover:text-white disabled:opacity-40 sm:col-span-2"
+                <h2 className="mt-4 text-xl font-black">
+                  Dashboard ကို သွားမလား?
+                </h2>
+                <p
+                  className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"}`}
                 >
-                  Discard & Exit
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Clear Cart Confirmation */}
-      <AnimatePresence>
-        {clearConfirmOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setClearConfirmOpen(false)}
-            className="fixed inset-0 z-[85] grid place-items-center bg-slate-950/65 p-3 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              onClick={(event) => event.stopPropagation()}
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="clear-cart-dialog-title"
-              aria-describedby="clear-cart-dialog-description"
-              className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${
-                darkMode
-                  ? "border-white/10 bg-slate-950 text-white"
-                  : "border-red-100 bg-white text-slate-950"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-500/10 text-red-500">
-                  <Trash2 size={23} />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setClearConfirmOpen(false)}
-                  className={`grid h-10 w-10 place-items-center rounded-xl ${
-                    darkMode ? "bg-white/10" : "bg-slate-100"
-                  }`}
-                  aria-label="Dialog ပိတ်ရန်"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <h2 id="clear-cart-dialog-title" className="mt-4 text-xl font-black">
-                Cart ကို ရှင်းမှာ သေချာပါသလား?
-              </h2>
-              <p
-                id="clear-cart-dialog-description"
-                className={`mt-2 text-sm font-semibold leading-6 ${
-                  darkMode ? "text-slate-300" : "text-slate-500"
-                }`}
-              >
-                Cart ထဲရှိ item အားလုံး၊ discount နှင့် လက်ရှိပြင်ဆင်ထားသော
-                အချက်အလက်များကို ဖျက်ပါမယ်။ ဒီလုပ်ဆောင်ချက်ကို ပြန်ယူ၍မရပါ။
-              </p>
-
-              <div
-                className={`mt-4 rounded-2xl p-4 ${
-                  darkMode ? "bg-white/5" : "bg-red-50"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3 text-sm font-black">
-                  <span>ဖျက်မည့် item အရေအတွက်</span>
-                  <span className="text-red-500">
-                    {cart.reduce((sum, item) => sum + item.qty, 0)} ခု
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-sm font-black">
-                  <span>စုစုပေါင်းတန်ဖိုး</span>
-                  <span className="text-red-500">
-                    {formatMoney(total)} Ks
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setClearConfirmOpen(false)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
-                    darkMode
-                      ? "bg-white/10 text-white hover:bg-white/15"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  မဖျက်တော့ပါ
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmClearOrder}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-red-500/20 transition hover:bg-red-600"
-                >
-                  <Trash2 size={17} />
-                  Cart ရှင်းရန်
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Table Picker Dialog */}
-      <AnimatePresence>
-        {tableDialogOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => {
-              if (!openOrderLoading) setTableDialogOpen(false);
-            }}
-            className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.97 }}
-              onClick={(event) => event.stopPropagation()}
-              className={`flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl ${
-                darkMode
-                  ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-[#fffdf9] text-slate-950"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-slate-200/20 p-4 sm:p-5">
-                <div>
-                  <h2 className="flex items-center gap-2 text-xl font-black">
-                    <Armchair className="text-orange-500" /> Select Table
-                  </h2>
-                  <p className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
-                    Table ကိုရွေးပြီးလျှင် Menu Items screen ကို ချက်ချင်းပြန်သွားပါမယ်။
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setTableDialogOpen(false)}
-                  disabled={openOrderLoading}
-                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl disabled:opacity-40 ${
-                    darkMode ? "bg-white/10" : "bg-slate-100"
-                  }`}
-                  aria-label="Close table picker"
-                >
-                  <X size={19} />
-                </button>
-              </div>
-
-              <div className="border-b border-slate-200/20 p-3 sm:p-4">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}>
-                    <Search size={17} className="text-slate-400" />
-                    <input
-                      value={tableSearch}
-                      onChange={(event) => setTableSearch(event.target.value)}
-                      placeholder="Search table number, name or floor..."
-                      className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
-                    />
-                    {tableSearch && (
-                      <button type="button" onClick={() => setTableSearch("")} className="text-slate-400">
-                        <X size={15} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex gap-1.5 overflow-x-auto">
-                    {["ALL", "FREE", "BUSY", "RESERVED"].map((statusKey) => (
-                      <button
-                        key={statusKey}
-                        type="button"
-                        onClick={() => setTableStatusFilter(statusKey)}
-                        className={`whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-black transition ${
-                          tableStatusFilter === statusKey
-                            ? "bg-orange-500 text-white"
-                            : darkMode
-                              ? "bg-white/10 text-slate-200"
-                              : "bg-white text-slate-700 ring-1 ring-slate-100"
-                        }`}
-                      >
-                        {statusKey === "ALL" ? "All Tables" : statusKey}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
-                {openOrderLoading || tablesLoading ? (
-                  <div className="grid min-h-[280px] place-items-center text-center">
-                    <div>
-                      <Loader2 className="mx-auto animate-spin text-orange-500" size={30} />
-                      <p className="mt-3 text-sm font-black">
-                        {openOrderLoading ? "Open order loading..." : "Restaurant tables loading..."}
-                      </p>
-                    </div>
-                  </div>
-                ) : tablesError ? (
-                  <div className="rounded-2xl bg-red-500/10 p-4 text-sm font-black text-red-500">
-                    {tablesError}
-                  </div>
-                ) : tables.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/70 p-6 text-center text-sm font-black text-slate-600">
-                    Table မရှိသေးပါ။ Restaurant Tables page မှာ table create လုပ်ပါ။
-                  </div>
-                ) : filteredTables.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-orange-200 p-6 text-center text-sm font-black text-slate-500">
-                    ဒီ search/filter နဲ့ကိုက်ညီတဲ့ table မရှိပါ။
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-                    {filteredTables.map((table) => {
-                      const active = selectedTableId === table.id;
-                      const statusKey = (table.status || "FREE").toUpperCase();
-
-                      return (
-                        <button
-                          key={table.id}
-                          type="button"
-                          onClick={() => {
-                            if (active) {
-                              setTableDialogOpen(false);
-                            } else {
-                              void handleSelectTable(table);
-                            }
-                          }}
-                          className={`rounded-2xl border p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${
-                            active
-                              ? "border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/25"
-                              : statusKey === "BUSY"
-                                ? darkMode
-                                  ? "border-red-400/30 bg-red-500/10 text-red-200"
-                                  : "border-red-100 bg-red-50 text-red-700"
-                                : statusKey === "RESERVED"
-                                  ? darkMode
-                                    ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
-                                    : "border-amber-100 bg-amber-50 text-amber-700"
-                                  : darkMode
-                                    ? "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-                                    : "border-slate-100 bg-white text-slate-700 hover:border-orange-200"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <Armchair size={19} />
-                            <span className={`rounded-full px-2 py-1 text-[9px] font-black ${
-                              active
-                                ? "bg-white/20"
-                                : darkMode
-                                  ? "bg-white/10"
-                                  : "bg-slate-950/5"
-                            }`}>
-                              {active ? "SELECTED" : statusKey}
-                            </span>
-                          </div>
-                          <div className="mt-3 text-lg font-black">{table.tableNo}</div>
-                          <div className="mt-1 truncate text-xs font-bold opacity-75">
-                            {table.tableName || table.floorName || "Main floor"}
-                          </div>
-                          <div className="mt-1 text-xs font-bold opacity-75">
-                            {table.seats || 0} seats
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Payment Dialog */}
-      <AnimatePresence>
-        {paymentOpen && (
-          <motion.div
-            className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => {
-              if (!paymentSaving) setPaymentOpen(false);
-            }}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              onClick={(e) => e.stopPropagation()}
-              className={`my-auto w-full max-w-xl rounded-[2rem] border p-4 shadow-2xl sm:p-6 ${
-                darkMode
-                  ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="flex items-center gap-2 text-2xl font-black">
-                    <Wallet className="text-orange-500" />
-                    Payment
-                  </h2>
-                  <p
-                    className={`mt-1 text-sm font-semibold ${
-                      darkMode ? "text-slate-300" : "text-slate-500"
-                    }`}
-                  >
-                    {cart.reduce((sum, item) => sum + item.qty, 0)} items · Staff: {activeStaff.staffName}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => {
-                    if (!paymentSaving) setPaymentOpen(false);
-                  }}
-                  disabled={paymentSaving}
-                  className={`rounded-2xl p-3 ${
-                    darkMode ? "bg-white/10" : "bg-slate-100"
-                  }`}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div
-                className={`mt-4 overflow-hidden rounded-3xl border ${
-                  darkMode
-                    ? "border-orange-400/20 bg-gradient-to-br from-orange-500/20 to-amber-400/5"
-                    : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50"
-                }`}
-              >
-                <div className="px-5 py-5 text-center sm:py-6">
-                  <p
-                    className={`text-xs font-black uppercase tracking-[0.18em] ${
-                      darkMode ? "text-orange-300" : "text-orange-600"
-                    }`}
-                  >
-                    ကျသင့်ငွေ
-                  </p>
-                  <p className="mt-1 text-4xl font-black tabular-nums text-orange-500 sm:text-5xl">
-                    {formatMoney(total)}
-                    <span className="ml-2 text-lg sm:text-xl">Ks</span>
-                  </p>
-                </div>
+                  Cart ထဲမှာ {cart.reduce((sum, item) => sum + item.qty, 0)}{" "}
+                  items · {formatMoney(total)} Ks ရှိနေပါတယ်။ မသိမ်းဘဲထွက်လျှင်
+                  လက်ရှိပြင်ဆင်ထားတဲ့ order ပျောက်သွားနိုင်ပါတယ်။
+                </p>
 
                 <div
-                  className={`grid grid-cols-4 border-t px-2 py-3 text-center text-[10px] font-bold sm:px-4 sm:text-xs ${
-                    darkMode
-                      ? "border-white/10 bg-black/10 text-slate-300"
-                      : "border-orange-100 bg-white/60 text-slate-600"
-                  }`}
+                  className={`mt-4 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/5" : "bg-orange-50"}`}
                 >
-                  <div>
-                    <p className="uppercase text-slate-400">Subtotal</p>
-                    <p className="mt-1 tabular-nums">{formatMoney(subtotal)}</p>
-                  </div>
-                  <div className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}>
-                    <p className="uppercase text-slate-400">Service</p>
-                    <p className="mt-1 tabular-nums">{formatMoney(serviceCharge)}</p>
-                  </div>
-                  <div className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}>
-                    <p className="uppercase text-slate-400">Tax</p>
-                    <p className="mt-1 tabular-nums">{formatMoney(tax)}</p>
-                  </div>
-                  <div className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}>
-                    <p className="uppercase text-slate-400">Discount</p>
-                    <p className="mt-1 tabular-nums">-{formatMoney(discount)}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Order</span>
+                    <span className="text-orange-500">
+                      {orderType === "DINE_IN"
+                        ? selectedTable
+                          ? `Dine In · Table ${selectedTable.tableNo}`
+                          : "Dine In · No table"
+                        : orderType === "TAKEAWAY"
+                          ? "Takeaway"
+                          : "Delivery"}
+                    </span>
                   </div>
                 </div>
-              </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {[
-                  {
-                    key: "CASH" as PaymentMethod,
-                    label: "Cash",
-                    icon: <Banknote size={18} />,
-                  },
-                  {
-                    key: "CARD" as PaymentMethod,
-                    label: "Card",
-                    icon: <CreditCard size={18} />,
-                  },
-                  {
-                    key: "WALLET" as PaymentMethod,
-                    label: "Wallet",
-                    icon: <Wallet size={18} />,
-                  },
-                ].map((method) => (
+                {exitError && (
+                  <div className="mt-3 rounded-2xl bg-red-500/10 p-3 text-sm font-black text-red-500">
+                    {exitError}
+                  </div>
+                )}
+
+                {orderType !== "DINE_IN" && (
+                  <p className="mt-3 text-xs font-bold text-amber-600">
+                    Takeaway/Delivery cart ကို open order အဖြစ်
+                    မသိမ်းနိုင်သေးပါ။ Stay သို့မဟုတ် Discard ကိုရွေးပါ။
+                  </p>
+                )}
+
+                {orderType === "DINE_IN" && !selectedTable && (
+                  <p className="mt-3 text-xs font-bold text-amber-600">
+                    Save & Exit လုပ်ရန် table အရင်ရွေးရပါမယ်။
+                  </p>
+                )}
+
+                <div className="mt-5 grid gap-2 sm:grid-cols-2">
                   <button
-                    key={method.key}
-                    onClick={() => {
-                      setPaymentMethod(method.key);
-                      setPaymentError("");
-                    }}
-                    disabled={paymentSaving}
-                    className={`rounded-2xl px-4 py-4 text-sm font-black transition ${
-                      paymentMethod === method.key
-                        ? "bg-orange-500 text-white shadow-lg shadow-orange-500/25"
-                        : darkMode
-                          ? "bg-white/10 text-slate-200"
-                          : "bg-orange-50 text-slate-700"
-                    }`}
+                    type="button"
+                    onClick={() => setExitConfirmOpen(false)}
+                    disabled={exitSaving}
+                    className={`rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-40 ${darkMode
+                        ? "bg-white/10 text-white hover:bg-white/15"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
                   >
-                    <span className="mx-auto mb-2 flex justify-center">
-                      {method.icon}
-                    </span>
-                    {method.label}
+                    Stay in POS
                   </button>
-                ))}
-              </div>
 
-              <div
-                className={`mt-4 rounded-[1.5rem] p-4 ${
-                  darkMode ? "bg-white/5" : "bg-slate-50"
-                }`}
+                  {orderType === "DINE_IN" && selectedTable && (
+                    <button
+                      type="button"
+                      onClick={saveOrderAndExit}
+                      disabled={exitSaving}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                    >
+                      {exitSaving ? (
+                        <Loader2 size={17} className="animate-spin" />
+                      ) : (
+                        <Check size={17} />
+                      )}
+                      {exitSaving ? "Saving..." : "Save & Exit"}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={discardOrderAndExit}
+                    disabled={exitSaving}
+                    className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm font-black text-red-500 transition hover:bg-red-500 hover:text-white disabled:opacity-40 sm:col-span-2"
+                  >
+                    Discard & Exit
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Clear Cart Confirmation */}
+        <AnimatePresence>
+          {clearConfirmOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setClearConfirmOpen(false)}
+              className="fixed inset-0 z-[85] grid place-items-center bg-slate-950/65 p-3 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.96 }}
+                onClick={(event) => event.stopPropagation()}
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="clear-cart-dialog-title"
+                aria-describedby="clear-cart-dialog-description"
+                className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-red-100 bg-white text-slate-950"
+                  }`}
               >
-                {paymentMethod === "CASH" && (
-                  <>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <label htmlFor="restaurant-cash-received" className="text-sm font-black">
-                          လက်ခံရရှိငွေ
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCashReceived(String(total));
-                            setPaymentError("");
-                          }}
-                          disabled={paymentSaving}
-                          className="text-xs font-black text-orange-500 hover:text-orange-600 disabled:opacity-50"
-                        >
-                          Exact amount
-                        </button>
-                      </div>
-                      <input
-                        ref={cashInputRef}
-                        id="restaurant-cash-received"
-                        value={cashReceived}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setCashReceived(
-                            value === ""
-                              ? ""
-                              : String(Math.max(0, Number(value))),
-                          );
-                          setPaymentError("");
-                        }}
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
-                        placeholder="0"
-                        disabled={paymentSaving}
-                        className={`mt-2 w-full rounded-2xl px-4 py-4 text-center text-3xl font-black tabular-nums outline-none transition focus:ring-2 focus:ring-orange-500 ${
-                          darkMode
-                            ? "bg-slate-900 text-white ring-1 ring-white/10"
-                            : "bg-white text-slate-950 ring-1 ring-slate-200"
-                        }`}
-                      />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-500/10 text-red-500">
+                    <Trash2 size={23} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setClearConfirmOpen(false)}
+                    className={`grid h-10 w-10 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-slate-100"
+                      }`}
+                    aria-label="Dialog ပိတ်ရန်"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <h2
+                  id="clear-cart-dialog-title"
+                  className="mt-4 text-xl font-black"
+                >
+                  Cart ကို ရှင်းမှာ သေချာပါသလား?
+                </h2>
+                <p
+                  id="clear-cart-dialog-description"
+                  className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"
+                    }`}
+                >
+                  Cart ထဲရှိ item အားလုံး၊ discount နှင့် လက်ရှိပြင်ဆင်ထားသော
+                  အချက်အလက်များကို ဖျက်ပါမယ်။ ဒီလုပ်ဆောင်ချက်ကို ပြန်ယူ၍မရပါ။
+                </p>
+
+                <div
+                  className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/5" : "bg-red-50"
+                    }`}
+                >
+                  <div className="flex items-center justify-between gap-3 text-sm font-black">
+                    <span>ဖျက်မည့် item အရေအတွက်</span>
+                    <span className="text-red-500">
+                      {cart.reduce((sum, item) => sum + item.qty, 0)} ခု
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-sm font-black">
+                    <span>စုစုပေါင်းတန်ဖိုး</span>
+                    <span className="text-red-500">
+                      {formatMoney(total)} Ks
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setClearConfirmOpen(false)}
+                    className={`rounded-2xl px-4 py-3 text-sm font-black transition ${darkMode
+                        ? "bg-white/10 text-white hover:bg-white/15"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                  >
+                    မဖျက်တော့ပါ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmClearOrder}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-red-500/20 transition hover:bg-red-600"
+                  >
+                    <Trash2 size={17} />
+                    Cart ရှင်းရန်
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Compact Header Controls Dialog */}
+        <AnimatePresence>
+          {headerControlsOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setHeaderControlsOpen(false)}
+              className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 18, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.97 }}
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="pos-controls-dialog-title"
+                className={`w-full max-w-lg overflow-hidden rounded-[2rem] border shadow-2xl ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-orange-100 bg-[#fffdf9] text-slate-950"
+                  }`}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200/20 p-4">
+                  <div>
+                    <h2
+                      id="pos-controls-dialog-title"
+                      className="text-xl font-black"
+                    >
+                      POS Controls
+                    </h2>
+                    <p
+                      className={`mt-0.5 text-xs font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                    >
+                      Menu နှင့် Cart ကို ဒီနေရာမှ ထိန်းချုပ်နိုင်ပါတယ်။
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHeaderControlsOpen(false)}
+                    className={`grid h-10 w-10 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                    aria-label="Close POS controls"
+                  >
+                    <X size={19} />
+                  </button>
+                </div>
+
+                <div className="max-h-[78vh] space-y-5 overflow-y-auto p-4">
+                  <section>
+                    <p
+                      className={`mb-2 text-[11px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                    >
+                      Menu & Display
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDarkMode((value) => !value)}
+                        className={`inline-flex items-center gap-2 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/10" : "bg-orange-50"}`}
+                      >
+                        {darkMode ? (
+                          <Sun size={18} className="text-orange-500" />
+                        ) : (
+                          <Moon size={18} className="text-orange-500" />
+                        )}
+                        {darkMode ? "Day Mode" : "Night Mode"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleGoToDashboard}
+                        className={`inline-flex items-center gap-2 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/10" : "bg-orange-50"}`}
+                      >
+                        <ArrowLeft size={18} className="text-orange-500" />{" "}
+                        Dashboard
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p
+                        className={`text-[11px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                      >
+                        Menu Items Control
+                      </p>
+                      <span className="text-[11px] font-black text-orange-500">
+                        {filteredMenu.length} items
+                      </span>
                     </div>
 
-                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      {quickCashAmounts.map((amount) => (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        {
+                          key: "DINE_IN" as OrderType,
+                          label: "Dine In",
+                          icon: <Utensils size={17} />,
+                        },
+                        {
+                          key: "TAKEAWAY" as OrderType,
+                          label: "Takeaway",
+                          icon: <ShoppingBag size={17} />,
+                        },
+                        {
+                          key: "DELIVERY" as OrderType,
+                          label: "Delivery",
+                          icon: <Package size={17} />,
+                        },
+                      ].map((type) => (
                         <button
+                          key={type.key}
                           type="button"
-                          key={amount}
                           onClick={() => {
-                            setCashReceived(String(amount));
-                            setPaymentError("");
+                            setOrderType(type.key);
+                            if (type.key === "DINE_IN" && !selectedTable) {
+                              setHeaderControlsOpen(false);
+                              setTableDialogOpen(true);
+                            }
                           }}
-                          disabled={paymentSaving}
-                          className={`rounded-xl px-2 py-2.5 text-xs font-black tabular-nums transition disabled:opacity-50 ${
-                            cashNumber === amount
-                              ? "bg-orange-500 text-white"
+                          className={`inline-flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-3 text-xs font-black transition ${orderType === type.key
+                              ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
                               : darkMode
-                                ? "bg-white/10 text-slate-200 hover:bg-white/15"
-                                : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-orange-50"
-                          }`}
+                                ? "bg-white/10 text-slate-200"
+                                : "bg-orange-50 text-slate-700"
+                            }`}
                         >
-                          {formatMoney(amount)} Ks
+                          {type.icon}
+                          <span className="truncate">{type.label}</span>
                         </button>
                       ))}
                     </div>
 
-                    <div
-                      className={`mt-3 overflow-hidden rounded-2xl border transition-colors duration-200 ${
-                        cashIsEnough
-                          ? darkMode
-                            ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-                            : "border-emerald-100 bg-emerald-50 text-emerald-600"
-                          : darkMode
-                            ? "border-red-400/20 bg-red-500/10 text-red-300"
-                            : "border-red-100 bg-red-50 text-red-600"
-                      }`}
-                    >
-                      <div
-                        className={`flex items-center justify-between border-b px-4 py-3 text-sm font-black ${
-                          darkMode ? "border-white/10" : "border-black/5"
-                        }`}
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderControlsOpen(false);
+                          setSearchDialogOpen(true);
+                        }}
+                        className={`inline-flex items-center gap-2 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
                       >
-                        <span>ပေးထားငွေ</span>
-                        <span className="text-lg tabular-nums">
-                          {formatMoney(cashNumber)} Ks
+                        <Search size={18} className="text-orange-500" />
+                        <span className="min-w-0 truncate">
+                          {search ? `Search: ${search}` : "Search Menu"}
                         </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderControlsOpen(false);
+                          setTableDialogOpen(true);
+                        }}
+                        disabled={orderType !== "DINE_IN"}
+                        className={`inline-flex items-center gap-2 rounded-2xl p-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                      >
+                        <Armchair size={18} className="text-orange-500" />
+                        <span className="min-w-0 truncate">
+                          {selectedTable
+                            ? `Table ${selectedTable.tableNo}`
+                            : "Select Table"}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+                      {categories.map((category) => (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => setSelectedCategory(category.id)}
+                          className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-black transition ${selectedCategory === category.id
+                              ? "bg-slate-950 text-white ring-1 ring-white/15"
+                              : darkMode
+                                ? "bg-white/10 text-slate-200"
+                                : "bg-orange-50 text-slate-700"
+                            }`}
+                        >
+                          <span className="mr-1.5">{category.icon}</span>
+                          {category.name}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p
+                        className={`text-[11px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                      >
+                        Cart Controls
+                      </p>
+                      <span className="text-xs font-black text-orange-500">
+                        {cartLineCount} types · {cartTotalQuantity} qty ·{" "}
+                        {formatMoney(total)} Ks
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderControlsOpen(false);
+                          setMobileCartOpen(true);
+                        }}
+                        disabled={cart.length === 0}
+                        className={`inline-flex items-center gap-2 rounded-2xl p-3 text-sm font-black disabled:opacity-40 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                      >
+                        <Receipt size={18} /> View Cart
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderControlsOpen(false);
+                          void sendToKitchen();
+                        }}
+                        disabled={!hasPendingKitchenItems || kitchenSaving}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-amber-500 p-3 text-sm font-black text-white disabled:opacity-40"
+                      >
+                        {kitchenSaving ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <ChefHat size={18} />
+                        )}{" "}
+                        Kitchen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderControlsOpen(false);
+                          openPaymentDialog();
+                        }}
+                        disabled={cart.length === 0}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 p-3 text-sm font-black text-white disabled:opacity-40"
+                      >
+                        <Wallet size={18} /> Payment
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderControlsOpen(false);
+                          requestClearOrder();
+                        }}
+                        disabled={cart.length === 0}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-red-500/10 p-3 text-sm font-black text-red-500 disabled:opacity-40"
+                      >
+                        <Trash2 size={18} /> Clear Cart
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <p
+                      className={`mb-2 text-[11px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                    >
+                      Staff Information
+                    </p>
+                    <div
+                      className={`flex items-center gap-3 rounded-2xl p-3 ${darkMode ? "bg-white/10" : "bg-orange-50"}`}
+                    >
+                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-orange-500 text-white">
+                        <IdCard size={21} />
                       </div>
-                      <div className="flex items-center justify-between px-4 py-4">
-                        <span className="font-black">Change</span>
-                        <span className="text-2xl font-black tabular-nums">
-                          {formatMoney(
-                            cashIsEnough ? change : remainingAmount,
-                          )} Ks
-                        </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-black">
+                          {activeStaff.staffName}
+                        </p>
+                        <p
+                          className={`mt-0.5 text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                        >
+                          Staff ID: {activeStaff.staffId}
+                        </p>
                       </div>
                     </div>
-                  </>
-                )}
-
-                {paymentMethod !== "CASH" && (
-                  <div className="flex items-center justify-between text-sm font-black">
-                    <span>Pay Amount</span>
-                    <span className="text-2xl text-orange-500">
-                      {formatMoney(total)} Ks
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {paymentError && (
-                <div
-                  className={`mt-4 rounded-2xl border p-4 text-sm font-black ${
-                    darkMode
-                      ? "border-red-400/30 bg-red-500/10 text-red-200"
-                      : "border-red-100 bg-red-50 text-red-600"
-                  }`}
-                >
-                  {paymentError}
+                  </section>
                 </div>
-              )}
-
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setPaymentOpen(false)}
-                  disabled={paymentSaving}
-                  className={`rounded-2xl px-4 py-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60 ${
-                    darkMode
-                      ? "bg-white/10 text-white"
-                      : "bg-slate-100 text-slate-700"
-                  }`}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  onClick={completePayment}
-                  disabled={paymentSaving || cart.length === 0 || !cashIsEnough}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {paymentSaving ? (
-                    <Loader2 className="animate-spin" size={18} />
-                  ) : (
-                    <Check size={18} />
-                  )}
-                  {paymentSaving
-                    ? "Saving..."
-                    : paymentMethod === "CASH" && !cashIsEnough
-                      ? `${formatMoney(remainingAmount)} Ks လိုသေးသည်`
-                      : `${formatMoney(total)} Ks Pay`}
-                </button>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* Payment Receipt Dialog */}
-      <AnimatePresence>
-        {paymentReceiptOpen && paymentReceiptData && (
-          <motion.div
-            className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/65 p-4 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={closePaymentReceiptDialog}
-          >
+        {/* Menu Search Dialog */}
+        <AnimatePresence>
+          {searchDialogOpen && (
             <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md overflow-hidden rounded-[2rem] border shadow-2xl ${
-                darkMode
-                  ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
-              }`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSearchDialogOpen(false)}
+              className="fixed inset-0 z-[75] grid place-items-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
             >
-              <div className="flex items-center justify-between border-b border-slate-200/20 p-5">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/25">
-                    <Receipt size={24} />
-                  </div>
-
+              <motion.div
+                initial={{ opacity: 0, y: 18, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.97 }}
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="menu-search-dialog-title"
+                className={`w-full max-w-xl overflow-hidden rounded-[2rem] border shadow-2xl ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-orange-100 bg-[#fffdf9] text-slate-950"
+                  }`}
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-slate-200/20 p-4 sm:p-5">
                   <div>
-                    <h2 className="text-xl font-black">Payment Complete</h2>
-                    <p
-                      className={`text-xs font-bold ${
-                        darkMode ? "text-slate-400" : "text-slate-500"
-                      }`}
+                    <h2
+                      id="menu-search-dialog-title"
+                      className="flex items-center gap-2 text-xl font-black"
                     >
-                      Receipt No: {paymentReceiptData.receiptNo}
+                      <Search className="text-orange-500" /> Search Menu
+                    </h2>
+                    <p
+                      className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                    >
+                      အစားအသောက်အမည်၊ barcode သို့မဟုတ် SKU ဖြင့်ရှာပါ။
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setSearchDialogOpen(false)}
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-slate-100"
+                      }`}
+                    aria-label="Close menu search"
+                  >
+                    <X size={19} />
+                  </button>
                 </div>
 
-                <button
-                  onClick={closePaymentReceiptDialog}
-                  className={`grid h-10 w-10 place-items-center rounded-2xl transition ${
-                    darkMode
-                      ? "bg-white/10 hover:bg-white/15"
-                      : "bg-slate-100 hover:bg-slate-200"
-                  }`}
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="p-5">
-                <div
-                  className={`rounded-[1.5rem] border p-4 ${
-                    darkMode
-                      ? "border-white/10 bg-white/5"
-                      : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <div className="text-center">
-                    <h3 className="text-lg font-black">
-                      {shopReceiptInfo.shopName || "Restaurant"}
-                    </h3>
-                    {shopReceiptInfo.address && (
-                      <p
-                        className={`mt-1 text-xs font-semibold ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }`}
+                <div className="p-4 sm:p-5">
+                  <div
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 ring-2 ring-orange-500/30 ${darkMode ? "bg-white/10" : "bg-white"
+                      }`}
+                  >
+                    <Search size={20} className="shrink-0 text-orange-500" />
+                    <input
+                      autoFocus
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") setSearchDialogOpen(false);
+                      }}
+                      placeholder="Search food, drink or barcode..."
+                      className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400"
+                    />
+                    {search && (
+                      <button
+                        type="button"
+                        onClick={() => setSearch("")}
+                        className="grid h-9 w-9 place-items-center rounded-xl bg-slate-500/10 text-slate-500"
+                        aria-label="Clear menu search"
                       >
-                        {shopReceiptInfo.address}
-                      </p>
-                    )}
-                    {shopReceiptInfo.phone && (
-                      <p
-                        className={`text-xs font-semibold ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }`}
-                      >
-                        Phone: {shopReceiptInfo.phone}
-                      </p>
+                        <X size={17} />
+                      </button>
                     )}
                   </div>
 
-                  <div className="my-4 border-t border-dashed border-slate-300" />
-
-                  <div className="space-y-2 text-sm font-bold">
-                    <div className="flex justify-between gap-4">
-                      <span
-                        className={
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }
+                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                    {categories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={`shrink-0 rounded-xl px-3 py-2 text-xs font-black transition ${selectedCategory === category.id
+                            ? "bg-orange-500 text-white"
+                            : darkMode
+                              ? "bg-white/10 text-slate-200"
+                              : "bg-orange-50 text-slate-700"
+                          }`}
                       >
-                        Order No
-                      </span>
-                      <span>{paymentReceiptData.orderNo}</span>
+                        <span className="mr-1.5">{category.icon}</span>
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch("");
+                        setSelectedCategory("all");
+                      }}
+                      className={`rounded-2xl px-4 py-3 text-sm font-black ${darkMode
+                          ? "bg-white/10 text-white"
+                          : "bg-slate-100 text-slate-700"
+                        }`}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSearchDialogOpen(false)}
+                      className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20"
+                    >
+                      Show {filteredMenu.length} items
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Table Picker Dialog */}
+        <AnimatePresence>
+          {tableDialogOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!openOrderLoading) setTableDialogOpen(false);
+              }}
+              className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.97 }}
+                onClick={(event) => event.stopPropagation()}
+                className={`flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border shadow-2xl ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-orange-100 bg-[#fffdf9] text-slate-950"
+                  }`}
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-slate-200/20 p-4 sm:p-5">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-xl font-black">
+                      <Armchair className="text-orange-500" /> Select Table
+                    </h2>
+                    <p
+                      className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"}`}
+                    >
+                      Table ကိုရွေးပြီးလျှင် Menu Items screen ကို
+                      ချက်ချင်းပြန်သွားပါမယ်။
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTableDialogOpen(false)}
+                    disabled={openOrderLoading}
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl disabled:opacity-40 ${darkMode ? "bg-white/10" : "bg-slate-100"
+                      }`}
+                    aria-label="Close table picker"
+                  >
+                    <X size={19} />
+                  </button>
+                </div>
+
+                <div className="border-b border-slate-200/20 p-3 sm:p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div
+                      className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                    >
+                      <Search size={17} className="text-slate-400" />
+                      <input
+                        value={tableSearch}
+                        onChange={(event) => setTableSearch(event.target.value)}
+                        placeholder="Search table number, name or floor..."
+                        className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
+                      />
+                      {tableSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setTableSearch("")}
+                          className="text-slate-400"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
                     </div>
 
-                    <div className="flex justify-between gap-4">
-                      <span
-                        className={
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }
-                      >
-                        Date
+                    <div className="flex gap-1.5 overflow-x-auto">
+                      {["ALL", "FREE", "BUSY", "RESERVED"].map((statusKey) => (
+                        <button
+                          key={statusKey}
+                          type="button"
+                          onClick={() => setTableStatusFilter(statusKey)}
+                          className={`whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-black transition ${tableStatusFilter === statusKey
+                              ? "bg-orange-500 text-white"
+                              : darkMode
+                                ? "bg-white/10 text-slate-200"
+                                : "bg-white text-slate-700 ring-1 ring-slate-100"
+                            }`}
+                        >
+                          {statusKey === "ALL" ? "All Tables" : statusKey}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                  {openOrderLoading || tablesLoading ? (
+                    <div className="grid min-h-[280px] place-items-center text-center">
+                      <div>
+                        <Loader2
+                          className="mx-auto animate-spin text-orange-500"
+                          size={30}
+                        />
+                        <p className="mt-3 text-sm font-black">
+                          {openOrderLoading
+                            ? "Open order loading..."
+                            : "Restaurant tables loading..."}
+                        </p>
+                      </div>
+                    </div>
+                  ) : tablesError ? (
+                    <div className="rounded-2xl bg-red-500/10 p-4 text-sm font-black text-red-500">
+                      {tablesError}
+                    </div>
+                  ) : tables.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/70 p-6 text-center text-sm font-black text-slate-600">
+                      Table မရှိသေးပါ။ Restaurant Tables page မှာ table create
+                      လုပ်ပါ။
+                    </div>
+                  ) : filteredTables.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-orange-200 p-6 text-center text-sm font-black text-slate-500">
+                      ဒီ search/filter နဲ့ကိုက်ညီတဲ့ table မရှိပါ။
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+                      {filteredTables.map((table) => {
+                        const active = selectedTableId === table.id;
+                        const statusKey = (
+                          table.status || "FREE"
+                        ).toUpperCase();
+
+                        return (
+                          <button
+                            key={table.id}
+                            type="button"
+                            onClick={() => {
+                              if (active) {
+                                setTableDialogOpen(false);
+                              } else {
+                                void handleSelectTable(table);
+                              }
+                            }}
+                            className={`rounded-2xl border p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${active
+                                ? "border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/25"
+                                : statusKey === "BUSY"
+                                  ? darkMode
+                                    ? "border-red-400/30 bg-red-500/10 text-red-200"
+                                    : "border-red-100 bg-red-50 text-red-700"
+                                  : statusKey === "RESERVED"
+                                    ? darkMode
+                                      ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
+                                      : "border-amber-100 bg-amber-50 text-amber-700"
+                                    : darkMode
+                                      ? "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                                      : "border-slate-100 bg-white text-slate-700 hover:border-orange-200"
+                              }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <Armchair size={19} />
+                              <span
+                                className={`rounded-full px-2 py-1 text-[9px] font-black ${active
+                                    ? "bg-white/20"
+                                    : darkMode
+                                      ? "bg-white/10"
+                                      : "bg-slate-950/5"
+                                  }`}
+                              >
+                                {active ? "SELECTED" : statusKey}
+                              </span>
+                            </div>
+                            <div className="mt-3 text-lg font-black">
+                              {table.tableNo}
+                            </div>
+                            <div className="mt-1 truncate text-xs font-bold opacity-75">
+                              {table.tableName ||
+                                table.floorName ||
+                                "Main floor"}
+                            </div>
+                            <div className="mt-1 text-xs font-bold opacity-75">
+                              {table.seats || 0} seats
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Payment Dialog */}
+        <AnimatePresence>
+          {paymentOpen && (
+            <motion.div
+              className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!paymentSaving) setPaymentOpen(false);
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.96 }}
+                onClick={(e) => e.stopPropagation()}
+                className={`my-auto w-full max-w-xl rounded-[2rem] border p-4 shadow-2xl sm:p-6 ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-orange-100 bg-white text-slate-950"
+                  }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-2xl font-black">
+                      <Wallet className="text-orange-500" />
+                      Payment
+                    </h2>
+                    <p
+                      className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-300" : "text-slate-500"
+                        }`}
+                    >
+                      {cart.reduce((sum, item) => sum + item.qty, 0)} items ·
+                      Staff: {activeStaff.staffName}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (!paymentSaving) setPaymentOpen(false);
+                    }}
+                    disabled={paymentSaving}
+                    className={`rounded-2xl p-3 ${darkMode ? "bg-white/10" : "bg-slate-100"
+                      }`}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div
+                  className={`mt-4 overflow-hidden rounded-3xl border ${darkMode
+                      ? "border-orange-400/20 bg-gradient-to-br from-orange-500/20 to-amber-400/5"
+                      : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50"
+                    }`}
+                >
+                  <div className="px-5 py-5 text-center sm:py-6">
+                    <p
+                      className={`text-xs font-black uppercase tracking-[0.18em] ${darkMode ? "text-orange-300" : "text-orange-600"
+                        }`}
+                    >
+                      ကျသင့်ငွေ
+                    </p>
+                    <p className="mt-1 text-4xl font-black tabular-nums text-orange-500 sm:text-5xl">
+                      {formatMoney(total)}
+                      <span className="ml-2 text-lg sm:text-xl">Ks</span>
+                    </p>
+                  </div>
+
+                  <div
+                    className={`grid grid-cols-4 border-t px-2 py-3 text-center text-[10px] font-bold sm:px-4 sm:text-xs ${darkMode
+                        ? "border-white/10 bg-black/10 text-slate-300"
+                        : "border-orange-100 bg-white/60 text-slate-600"
+                      }`}
+                  >
+                    <div>
+                      <p className="uppercase text-slate-400">Subtotal</p>
+                      <p className="mt-1 tabular-nums">
+                        {formatMoney(subtotal)}
+                      </p>
+                    </div>
+                    <div
+                      className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}
+                    >
+                      <p className="uppercase text-slate-400">Service</p>
+                      <p className="mt-1 tabular-nums">
+                        {formatMoney(serviceCharge)}
+                      </p>
+                    </div>
+                    <div
+                      className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}
+                    >
+                      <p className="uppercase text-slate-400">Tax</p>
+                      <p className="mt-1 tabular-nums">{formatMoney(tax)}</p>
+                    </div>
+                    <div
+                      className={`border-l ${darkMode ? "border-white/10" : "border-orange-100"}`}
+                    >
+                      <p className="uppercase text-slate-400">Discount</p>
+                      <p className="mt-1 tabular-nums">
+                        -{formatMoney(discount)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {[
+                    {
+                      key: "CASH" as PaymentMethod,
+                      label: "Cash",
+                      icon: <Banknote size={18} />,
+                    },
+                    {
+                      key: "CARD" as PaymentMethod,
+                      label: "Card",
+                      icon: <CreditCard size={18} />,
+                    },
+                    {
+                      key: "WALLET" as PaymentMethod,
+                      label: "Wallet",
+                      icon: <Wallet size={18} />,
+                    },
+                  ].map((method) => (
+                    <button
+                      key={method.key}
+                      onClick={() => {
+                        setPaymentMethod(method.key);
+                        setPaymentError("");
+                      }}
+                      disabled={paymentSaving}
+                      className={`rounded-2xl px-4 py-4 text-sm font-black transition ${paymentMethod === method.key
+                          ? "bg-orange-500 text-white shadow-lg shadow-orange-500/25"
+                          : darkMode
+                            ? "bg-white/10 text-slate-200"
+                            : "bg-orange-50 text-slate-700"
+                        }`}
+                    >
+                      <span className="mx-auto mb-2 flex justify-center">
+                        {method.icon}
                       </span>
-                      <span>
-                        {formatReceiptDate(paymentReceiptData.paidAt)}
+                      {method.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  className={`mt-4 rounded-[1.5rem] p-4 ${darkMode ? "bg-white/5" : "bg-slate-50"
+                    }`}
+                >
+                  {paymentMethod === "CASH" && (
+                    <>
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <label
+                            htmlFor="restaurant-cash-received"
+                            className="text-sm font-black"
+                          >
+                            လက်ခံရရှိငွေ
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCashReceived(String(total));
+                              setPaymentError("");
+                            }}
+                            disabled={paymentSaving}
+                            className="text-xs font-black text-orange-500 hover:text-orange-600 disabled:opacity-50"
+                          >
+                            Exact amount
+                          </button>
+                        </div>
+                        <input
+                          ref={cashInputRef}
+                          id="restaurant-cash-received"
+                          value={cashReceived}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setCashReceived(
+                              value === ""
+                                ? ""
+                                : String(Math.max(0, Number(value))),
+                            );
+                            setPaymentError("");
+                          }}
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          placeholder="0"
+                          disabled={paymentSaving}
+                          className={`mt-2 w-full rounded-2xl px-4 py-4 text-center text-3xl font-black tabular-nums outline-none transition focus:ring-2 focus:ring-orange-500 ${darkMode
+                              ? "bg-slate-900 text-white ring-1 ring-white/10"
+                              : "bg-white text-slate-950 ring-1 ring-slate-200"
+                            }`}
+                        />
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {quickCashAmounts.map((amount) => (
+                          <button
+                            type="button"
+                            key={amount}
+                            onClick={() => {
+                              setCashReceived(String(amount));
+                              setPaymentError("");
+                            }}
+                            disabled={paymentSaving}
+                            className={`rounded-xl px-2 py-2.5 text-xs font-black tabular-nums transition disabled:opacity-50 ${cashNumber === amount
+                                ? "bg-orange-500 text-white"
+                                : darkMode
+                                  ? "bg-white/10 text-slate-200 hover:bg-white/15"
+                                  : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-orange-50"
+                              }`}
+                          >
+                            {formatMoney(amount)} Ks
+                          </button>
+                        ))}
+                      </div>
+
+                      <div
+                        className={`mt-3 overflow-hidden rounded-2xl border transition-colors duration-200 ${cashIsEnough
+                            ? darkMode
+                              ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                              : "border-emerald-100 bg-emerald-50 text-emerald-600"
+                            : darkMode
+                              ? "border-red-400/20 bg-red-500/10 text-red-300"
+                              : "border-red-100 bg-red-50 text-red-600"
+                          }`}
+                      >
+                        <div
+                          className={`flex items-center justify-between border-b px-4 py-3 text-sm font-black ${darkMode ? "border-white/10" : "border-black/5"
+                            }`}
+                        >
+                          <span>ပေးထားငွေ</span>
+                          <span className="text-lg tabular-nums">
+                            {formatMoney(cashNumber)} Ks
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-4">
+                          <span className="font-black">Change</span>
+                          <span className="text-2xl font-black tabular-nums">
+                            {formatMoney(
+                              cashIsEnough ? change : remainingAmount,
+                            )}{" "}
+                            Ks
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {paymentMethod !== "CASH" && (
+                    <div className="flex items-center justify-between text-sm font-black">
+                      <span>Pay Amount</span>
+                      <span className="text-2xl text-orange-500">
+                        {formatMoney(total)} Ks
                       </span>
                     </div>
+                  )}
+                </div>
 
-                    <div className="flex justify-between gap-4">
-                      <span
-                        className={
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }
-                      >
-                        Cashier
-                      </span>
-                      <span>{paymentReceiptData.cashierName}</span>
+                {paymentError && (
+                  <div
+                    className={`mt-4 rounded-2xl border p-4 text-sm font-black ${darkMode
+                        ? "border-red-400/30 bg-red-500/10 text-red-200"
+                        : "border-red-100 bg-red-50 text-red-600"
+                      }`}
+                  >
+                    {paymentError}
+                  </div>
+                )}
+
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPaymentOpen(false)}
+                    disabled={paymentSaving}
+                    className={`rounded-2xl px-4 py-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60 ${darkMode
+                        ? "bg-white/10 text-white"
+                        : "bg-slate-100 text-slate-700"
+                      }`}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    onClick={completePayment}
+                    disabled={
+                      paymentSaving || cart.length === 0 || !cashIsEnough
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {paymentSaving ? (
+                      <Loader2 className="animate-spin" size={18} />
+                    ) : (
+                      <Check size={18} />
+                    )}
+                    {paymentSaving
+                      ? "Saving..."
+                      : paymentMethod === "CASH" && !cashIsEnough
+                        ? `${formatMoney(remainingAmount)} Ks လိုသေးသည်`
+                        : `${formatMoney(total)} Ks Pay`}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Payment Receipt Dialog */}
+        <AnimatePresence>
+          {paymentReceiptOpen && paymentReceiptData && (
+            <motion.div
+              className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/65 p-4 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closePaymentReceiptDialog}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.96 }}
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full max-w-md overflow-hidden rounded-[2rem] border shadow-2xl ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-orange-100 bg-white text-slate-950"
+                  }`}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200/20 p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/25">
+                      <Receipt size={24} />
                     </div>
 
-                    {paymentReceiptData.orderType === "DINE_IN" && (
+                    <div>
+                      <h2 className="text-xl font-black">Payment Complete</h2>
+                      <p
+                        className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                      >
+                        Receipt No: {paymentReceiptData.receiptNo}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={closePaymentReceiptDialog}
+                    className={`grid h-10 w-10 place-items-center rounded-2xl transition ${darkMode
+                        ? "bg-white/10 hover:bg-white/15"
+                        : "bg-slate-100 hover:bg-slate-200"
+                      }`}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <div
+                    className={`rounded-[1.5rem] border p-4 ${darkMode
+                        ? "border-white/10 bg-white/5"
+                        : "border-slate-200 bg-slate-50"
+                      }`}
+                  >
+                    <div className="text-center">
+                      <h3 className="text-lg font-black">
+                        {shopReceiptInfo.shopName || "Restaurant"}
+                      </h3>
+                      {shopReceiptInfo.address && (
+                        <p
+                          className={`mt-1 text-xs font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                        >
+                          {shopReceiptInfo.address}
+                        </p>
+                      )}
+                      {shopReceiptInfo.phone && (
+                        <p
+                          className={`text-xs font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                        >
+                          Phone: {shopReceiptInfo.phone}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="my-4 border-t border-dashed border-slate-300" />
+
+                    <div className="space-y-2 text-sm font-bold">
                       <div className="flex justify-between gap-4">
                         <span
                           className={
                             darkMode ? "text-slate-400" : "text-slate-500"
                           }
                         >
-                          Table
+                          Order No
                         </span>
-                        <span>{paymentReceiptData.tableNo || "-"}</span>
+                        <span>{paymentReceiptData.orderNo}</span>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="my-4 border-t border-dashed border-slate-300" />
+                      <div className="flex justify-between gap-4">
+                        <span
+                          className={
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }
+                        >
+                          Date
+                        </span>
+                        <span>
+                          {formatReceiptDate(paymentReceiptData.paidAt)}
+                        </span>
+                      </div>
 
-                  <div className="max-h-56 space-y-3 overflow-auto pr-1">
-                    {paymentReceiptData.items.map((item, index) => (
-                      <div
-                        key={`${item.productId}-${index}`}
-                        className="flex justify-between gap-3"
-                      >
-                        <div>
-                          <p className="text-sm font-black">{item.itemName}</p>
-                          <p
-                            className={`text-xs font-semibold ${
+                      <div className="flex justify-between gap-4">
+                        <span
+                          className={
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }
+                        >
+                          Cashier
+                        </span>
+                        <span>{paymentReceiptData.cashierName}</span>
+                      </div>
+
+                      {paymentReceiptData.orderType === "DINE_IN" && (
+                        <div className="flex justify-between gap-4">
+                          <span
+                            className={
                               darkMode ? "text-slate-400" : "text-slate-500"
-                            }`}
+                            }
                           >
-                            {item.quantity} × {formatMoney(item.unitPrice)} Ks
-                          </p>
+                            Table
+                          </span>
+                          <span>{paymentReceiptData.tableNo || "-"}</span>
                         </div>
-                        <strong className="text-sm">
-                          {formatMoney(item.totalPrice)} Ks
-                        </strong>
+                      )}
+                    </div>
+
+                    <div className="my-4 border-t border-dashed border-slate-300" />
+
+                    <div className="max-h-56 space-y-3 overflow-auto pr-1">
+                      {paymentReceiptData.items.map((item, index) => (
+                        <div
+                          key={`${item.productId}-${index}`}
+                          className="flex justify-between gap-3"
+                        >
+                          <div>
+                            <p className="text-sm font-black">
+                              {item.itemName}
+                            </p>
+                            <p
+                              className={`text-xs font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"
+                                }`}
+                            >
+                              {item.quantity} × {formatMoney(item.unitPrice)} Ks
+                            </p>
+                          </div>
+                          <strong className="text-sm">
+                            {formatMoney(item.totalPrice)} Ks
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="my-4 border-t border-dashed border-slate-300" />
+
+                    <div className="space-y-2 text-sm font-bold">
+                      <div className="flex justify-between">
+                        <span>Subtotal</span>
+                        <span>
+                          {formatMoney(paymentReceiptData.subtotal)} Ks
+                        </span>
                       </div>
-                    ))}
+
+                      <div className="flex justify-between">
+                        <span>
+                          Service{" "}
+                          {formatRatePercent(
+                            paymentReceiptData.serviceChargeRatePercent,
+                          )}
+                          %
+                        </span>
+                        <span>
+                          {formatMoney(paymentReceiptData.serviceCharge)} Ks
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between">
+                        <span>
+                          Tax{" "}
+                          {formatRatePercent(paymentReceiptData.taxRatePercent)}
+                          %
+                        </span>
+                        <span>{formatMoney(paymentReceiptData.tax)} Ks</span>
+                      </div>
+
+                      <div className="flex justify-between">
+                        <span>Discount</span>
+                        <span>
+                          {formatMoney(paymentReceiptData.discount)} Ks
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between border-t border-slate-300 pt-3 text-lg font-black">
+                        <span>Total</span>
+                        <span>{formatMoney(paymentReceiptData.total)} Ks</span>
+                      </div>
+
+                      <div className="flex justify-between">
+                        <span>Payment</span>
+                        <span>{paymentReceiptData.paymentMethod}</span>
+                      </div>
+
+                      {paymentReceiptData.paymentMethod === "CASH" && (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Cash Received</span>
+                            <span>
+                              {formatMoney(paymentReceiptData.cashReceived)} Ks
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between">
+                            <span>Change</span>
+                            <span>
+                              {formatMoney(paymentReceiptData.changeAmount)} Ks
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="my-4 border-t border-dashed border-slate-300" />
-
-                  <div className="space-y-2 text-sm font-bold">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>{formatMoney(paymentReceiptData.subtotal)} Ks</span>
+                  {paymentError && (
+                    <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-600">
+                      {paymentError}
                     </div>
+                  )}
 
-                    <div className="flex justify-between">
-                      <span>
-                        Service{" "}
-                        {formatRatePercent(
-                          paymentReceiptData.serviceChargeRatePercent,
-                        )}
-                        %
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button
+                      onClick={closePaymentReceiptDialog}
+                      className={`rounded-2xl px-4 py-3 text-sm font-black transition ${darkMode
+                          ? "bg-white/10 hover:bg-white/15"
+                          : "bg-slate-100 hover:bg-slate-200"
+                        }`}
+                    >
+                      Close
+                    </button>
+
+                    <button
+                      onClick={printPaymentReceipt}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600"
+                    >
+                      <Printer size={18} />
+                      Print Receipt
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Kitchen Success Dialog */}
+        <AnimatePresence>
+          {kitchenSuccessOpen && (
+            <motion.div
+              className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setKitchenSuccessOpen(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.96 }}
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full max-w-md rounded-[2rem] border p-6 text-center shadow-2xl ${darkMode
+                    ? "border-white/10 bg-slate-950 text-white"
+                    : "border-orange-100 bg-white text-slate-950"
+                  }`}
+              >
+                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-500 text-white shadow-lg shadow-orange-500/30">
+                  <ChefHat size={38} />
+                </div>
+
+                <h2 className="mt-5 text-2xl font-black">Kitchen Order Sent</h2>
+
+                <p
+                  className={`mt-2 text-sm font-bold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"
+                    }`}
+                >
+                  {kitchenSuccessMessage}
+                </p>
+
+                <div
+                  className={`mt-5 rounded-2xl p-4 text-left ${darkMode ? "bg-white/5" : "bg-orange-50"
+                    }`}
+                >
+                  <div className="flex items-center justify-between text-sm font-black">
+                    <span>Order Type</span>
+                    <span className="text-orange-500">{orderType}</span>
+                  </div>
+
+                  {orderType === "DINE_IN" && selectedTable && (
+                    <div className="mt-2 flex items-center justify-between text-sm font-black">
+                      <span>Table</span>
+                      <span className="text-orange-500">
+                        {selectedTable.tableNo}
                       </span>
-                      <span>
-                        {formatMoney(paymentReceiptData.serviceCharge)} Ks
-                      </span>
                     </div>
+                  )}
 
-                    <div className="flex justify-between">
-                      <span>
-                        Tax{" "}
-                        {formatRatePercent(paymentReceiptData.taxRatePercent)}%
-                      </span>
-                      <span>{formatMoney(paymentReceiptData.tax)} Ks</span>
-                    </div>
+                  <div className="mt-2 flex items-center justify-between text-sm font-black">
+                    <span>Items</span>
+                    <span className="text-orange-500">
+                      {kitchenSuccessItemCount}
+                    </span>
+                  </div>
 
-                    <div className="flex justify-between">
-                      <span>Discount</span>
-                      <span>{formatMoney(paymentReceiptData.discount)} Ks</span>
-                    </div>
-
-                    <div className="flex justify-between border-t border-slate-300 pt-3 text-lg font-black">
-                      <span>Total</span>
-                      <span>{formatMoney(paymentReceiptData.total)} Ks</span>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span>Payment</span>
-                      <span>{paymentReceiptData.paymentMethod}</span>
-                    </div>
-
-                    {paymentReceiptData.paymentMethod === "CASH" && (
-                      <>
-                        <div className="flex justify-between">
-                          <span>Cash Received</span>
-                          <span>
-                            {formatMoney(paymentReceiptData.cashReceived)} Ks
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between">
-                          <span>Change</span>
-                          <span>
-                            {formatMoney(paymentReceiptData.changeAmount)} Ks
-                          </span>
-                        </div>
-                      </>
-                    )}
+                  <div className="mt-2 flex items-center justify-between text-sm font-black">
+                    <span>Total</span>
+                    <span className="text-orange-500">
+                      {formatMoney(total)} Ks
+                    </span>
                   </div>
                 </div>
 
-                {paymentError && (
-                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-600">
-                    {paymentError}
-                  </div>
-                )}
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="mt-6 grid grid-cols-2 gap-3">
                   <button
-                    onClick={closePaymentReceiptDialog}
-                    className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
-                      darkMode
-                        ? "bg-white/10 hover:bg-white/15"
-                        : "bg-slate-100 hover:bg-slate-200"
-                    }`}
+                    onClick={() => setKitchenSuccessOpen(false)}
+                    className={`rounded-2xl px-4 py-3 text-sm font-black ${darkMode
+                        ? "bg-white/10 text-white hover:bg-white/15"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
                   >
                     Close
                   </button>
 
                   <button
-                    onClick={printPaymentReceipt}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600"
+                    onClick={() => {
+                      setKitchenSuccessOpen(false);
+                      window.location.href = "/dashboard/restaurant/kitchen";
+                    }}
+                    className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 hover:bg-orange-600"
                   >
-                    <Printer size={18} />
-                    Print Receipt
+                    View Kitchen
                   </button>
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </main>
+      <RestaurantMobileCartBar
+        darkMode={darkMode}
+        dragging={Boolean(draggingMenuItemId)}
+        itemCount={cart.reduce((sum, item) => sum + item.qty, 0)}
+        total={total}
+        onViewCart={() => setMobileCartOpen(true)}
+        onKitchen={sendToKitchen}
+        onPayment={openPaymentDialog}
+        kitchenSaving={kitchenSaving}
+        canSendToKitchen={hasPendingKitchenItems}
+        kitchenDisabledMessage={kitchenDisabledMessage}
+        addedFeedbackVisible={addedFeedbackVisible}
+      />
 
-      {/* Kitchen Success Dialog */}
       <AnimatePresence>
-        {kitchenSuccessOpen && (
+        {flyingItem && (
           <motion.div
-            className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setKitchenSuccessOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md rounded-[2rem] border p-6 text-center shadow-2xl ${
-                darkMode
-                  ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
+            key={flyingItem.token}
+            initial={{
+              left: flyingItem.from.x,
+              top: flyingItem.from.y,
+              scale: 1,
+              opacity: 1,
+            }}
+            animate={{
+              left: [
+                flyingItem.from.x,
+                (flyingItem.from.x + flyingItem.to.x) / 2,
+                flyingItem.to.x,
+              ],
+              top: [
+                flyingItem.from.y,
+                Math.min(flyingItem.from.y, flyingItem.to.y) - 75,
+                flyingItem.to.y,
+              ],
+              scale: [1, 0.78, 0.2],
+              rotate: [0, -7, 5],
+              opacity: [1, 1, 0.25],
+            }}
+            transition={{
+              duration: 0.72,
+              times: [0, 0.55, 1],
+              ease: "easeInOut",
+            }}
+            onAnimationComplete={() => setFlyingItem(null)}
+            className={`pointer-events-none fixed z-[100] flex w-40 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border p-2 shadow-2xl ${darkMode
+                ? "border-orange-400 bg-slate-900 text-white"
+                : "border-orange-200 bg-white text-slate-950"
               }`}
-            >
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-500 text-white shadow-lg shadow-orange-500/30">
-                <ChefHat size={38} />
-              </div>
-
-              <h2 className="mt-5 text-2xl font-black">Kitchen Order Sent</h2>
-
-              <p
-                className={`mt-2 text-sm font-bold leading-6 ${
-                  darkMode ? "text-slate-300" : "text-slate-500"
-                }`}
-              >
-                {kitchenSuccessMessage}
+          >
+            <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-orange-100 text-xl">
+              {flyingItem.item.image ? (
+                <img
+                  src={flyingItem.item.image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                categories.find(
+                  (category) => category.id === flyingItem.item.categoryId,
+                )?.icon || "🍽️"
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-black">
+                {flyingItem.item.name}
               </p>
-
-              <div
-                className={`mt-5 rounded-2xl p-4 text-left ${
-                  darkMode ? "bg-white/5" : "bg-orange-50"
-                }`}
-              >
-                <div className="flex items-center justify-between text-sm font-black">
-                  <span>Order Type</span>
-                  <span className="text-orange-500">{orderType}</span>
-                </div>
-
-                {orderType === "DINE_IN" && selectedTable && (
-                  <div className="mt-2 flex items-center justify-between text-sm font-black">
-                    <span>Table</span>
-                    <span className="text-orange-500">
-                      {selectedTable.tableNo}
-                    </span>
-                  </div>
-                )}
-
-                <div className="mt-2 flex items-center justify-between text-sm font-black">
-                  <span>Items</span>
-                  <span className="text-orange-500">
-                    {kitchenSuccessItemCount}
-                  </span>
-                </div>
-
-                <div className="mt-2 flex items-center justify-between text-sm font-black">
-                  <span>Total</span>
-                  <span className="text-orange-500">
-                    {formatMoney(total)} Ks
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setKitchenSuccessOpen(false)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-black ${
-                    darkMode
-                      ? "bg-white/10 text-white hover:bg-white/15"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  Close
-                </button>
-
-                <button
-                  onClick={() => {
-                    setKitchenSuccessOpen(false);
-                    window.location.href = "/dashboard/restaurant/kitchen";
-                  }}
-                  className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 hover:bg-orange-600"
-                >
-                  View Kitchen
-                </button>
-              </div>
-            </motion.div>
+              <p className="text-xs font-black text-emerald-500">+1 Added</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </main>
-    <RestaurantMobileCartBar
-      darkMode={darkMode}
-      dragging={Boolean(draggingMenuItemId)}
-      itemCount={cart.reduce((sum, item) => sum + item.qty, 0)}
-      total={total}
-      onViewCart={() => setMobileCartOpen(true)}
-      onKitchen={sendToKitchen}
-      onPayment={openPaymentDialog}
-      kitchenSaving={kitchenSaving}
-      canSendToKitchen={hasPendingKitchenItems}
-      kitchenDisabledMessage={kitchenDisabledMessage}
-      addedFeedbackVisible={addedFeedbackVisible}
-    />
 
-    <AnimatePresence>
-      {flyingItem && (
-        <motion.div
-          key={flyingItem.token}
-          initial={{
-            left: flyingItem.from.x,
-            top: flyingItem.from.y,
-            scale: 1,
-            opacity: 1,
-          }}
-          animate={{
-            left: [
-              flyingItem.from.x,
-              (flyingItem.from.x + flyingItem.to.x) / 2,
-              flyingItem.to.x,
-            ],
-            top: [
-              flyingItem.from.y,
-              Math.min(flyingItem.from.y, flyingItem.to.y) - 75,
-              flyingItem.to.y,
-            ],
-            scale: [1, 0.78, 0.2],
-            rotate: [0, -7, 5],
-            opacity: [1, 1, 0.25],
-          }}
-          transition={{ duration: 0.72, times: [0, 0.55, 1], ease: "easeInOut" }}
-          onAnimationComplete={() => setFlyingItem(null)}
-          className={`pointer-events-none fixed z-[100] flex w-40 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border p-2 shadow-2xl ${
-            darkMode
-              ? "border-orange-400 bg-slate-900 text-white"
-              : "border-orange-200 bg-white text-slate-950"
-          }`}
-        >
-          <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-orange-100 text-xl">
-            {flyingItem.item.image ? (
-              <img
-                src={flyingItem.item.image}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              categories.find(
-                (category) => category.id === flyingItem.item.categoryId,
-              )?.icon || "🍽️"
-            )}
+      <DragOverlay>
+        {draggingMenuItem && (
+          <div
+            className={`flex w-[280px] items-center gap-3 rounded-2xl border p-3 shadow-2xl ${darkMode
+                ? "border-orange-400 bg-slate-900 text-white"
+                : "border-orange-200 bg-white text-slate-950"
+              }`}
+          >
+            <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-orange-100 text-2xl">
+              {draggingMenuItem.image ? (
+                <img
+                  src={draggingMenuItem.image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                categories.find((cat) => cat.id === draggingMenuItem.categoryId)
+                  ?.icon || "🍽️"
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black">
+                {draggingMenuItem.name}
+              </p>
+              <p className="mt-1 text-lg font-black text-orange-500">
+                {formatMoney(draggingMenuItem.price)} Ks
+              </p>
+            </div>
+            <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black text-white">
+              Dragging
+            </span>
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-black">{flyingItem.item.name}</p>
-            <p className="text-xs font-black text-emerald-500">+1 Added</p>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-
-    <DragOverlay>
-      {draggingMenuItem && (
-        <div
-          className={`flex w-[280px] items-center gap-3 rounded-2xl border p-3 shadow-2xl ${
-            darkMode
-              ? "border-orange-400 bg-slate-900 text-white"
-              : "border-orange-200 bg-white text-slate-950"
-          }`}
-        >
-          <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-orange-100 text-2xl">
-            {draggingMenuItem.image ? (
-              <img
-                src={draggingMenuItem.image}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              categories.find((cat) => cat.id === draggingMenuItem.categoryId)?.icon || "🍽️"
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black">{draggingMenuItem.name}</p>
-            <p className="mt-1 text-lg font-black text-orange-500">
-              {formatMoney(draggingMenuItem.price)} Ks
-            </p>
-          </div>
-          <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black text-white">
-            Dragging
-          </span>
-        </div>
-      )}
-    </DragOverlay>
+        )}
+      </DragOverlay>
     </DragDropProvider>
   );
 }

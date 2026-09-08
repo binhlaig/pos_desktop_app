@@ -18,7 +18,7 @@ export default async function ProtectedLayout({
     !sessionRecord?.accessToken ||
     sessionRecord.error === "AccessTokenExpired"
   ) {
-    redirect("/login");
+    redirect("/Sign_in");
   }
 
   return children;
