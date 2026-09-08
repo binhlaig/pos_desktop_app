@@ -1,35 +1,96 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { getSession } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+} from "lucide-react";
 
 import {
-  BusinessType,
+  type BusinessType,
   filterSidebarItemsByFeatures,
   getAllowedSidebarItemsByBusinessType,
 } from "@/lib/business-type";
 import { resolveCurrentBusinessType } from "@/components/dashboard/business-type-client";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+type SidebarUser = {
+  name: string;
+  role: string;
+  email: string;
+};
+
+const SIDEBAR_COLLAPSED_KEY = "binhlaig_dashboard_sidebar_collapsed";
+
+function textValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function formatBusinessType(type: BusinessType | null) {
+  if (!type) return "Loading workspace";
+
+  return String(type)
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function initials(name: string) {
+  const result = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+  return result || "AD";
+}
 
 export function DashboardSidebar() {
   const pathname = usePathname();
-  const [businessType, setBusinessType] = useState<BusinessType | null>(null);
-  const [features, setFeatures] = useState<Record<string, unknown> | null>(
-    null,
+
+  const [businessType, setBusinessType] =
+    useState<BusinessType | null>(null);
+  const [features, setFeatures] = useState<
+    Record<string, unknown> | null
+  >(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState<SidebarUser>({
+    name: "Administrator",
+    role: "Admin",
+    email: "",
+  });
+
+  const navItems = useMemo(
+    () =>
+      filterSidebarItemsByFeatures(
+        getAllowedSidebarItemsByBusinessType(businessType),
+        features,
+      ),
+    [businessType, features],
   );
-  const navItems = filterSidebarItemsByFeatures(
-    getAllowedSidebarItemsByBusinessType(businessType),
-    features,
-  );
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    setCollapsed(stored === "true");
+  }, []);
 
   useEffect(() => {
     let active = true;
 
-    resolveCurrentBusinessType().then((type) => {
-      if (active) setBusinessType(type);
-    });
+    resolveCurrentBusinessType()
+      .then((type) => {
+        if (active) setBusinessType(type);
+      })
+      .catch(() => {
+        if (active) setBusinessType(null);
+      });
 
     getSession()
       .then((session) => {
@@ -43,14 +104,29 @@ export function DashboardSidebar() {
           sessionRecord.user && typeof sessionRecord.user === "object"
             ? (sessionRecord.user as Record<string, unknown>)
             : {};
+
         const nextFeatures =
           userRecord.features && typeof userRecord.features === "object"
             ? (userRecord.features as Record<string, unknown>)
-            : sessionRecord.features && typeof sessionRecord.features === "object"
+            : sessionRecord.features &&
+                typeof sessionRecord.features === "object"
               ? (sessionRecord.features as Record<string, unknown>)
               : null;
 
         setFeatures(nextFeatures);
+        setUser({
+          name:
+            textValue(userRecord.name) ||
+            textValue(userRecord.username) ||
+            textValue(sessionRecord.name) ||
+            "Administrator",
+          role:
+            textValue(userRecord.role) ||
+            textValue(sessionRecord.role) ||
+            "Admin",
+          email:
+            textValue(userRecord.email) || textValue(sessionRecord.email),
+        });
       })
       .catch(() => {
         if (active) setFeatures(null);
@@ -61,43 +137,236 @@ export function DashboardSidebar() {
     };
   }, []);
 
+  function changeCollapsed(nextValue: boolean) {
+    setCollapsed(nextValue);
+    window.localStorage.setItem(
+      SIDEBAR_COLLAPSED_KEY,
+      String(nextValue),
+    );
+  }
+
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-border bg-background px-3 py-4 lg:block">
-      <div className="mb-5 px-2">
-        <div className="text-sm font-black uppercase tracking-normal text-muted-foreground">
-          POS Dashboard
-        </div>
-        <div className="mt-1 text-lg font-black text-foreground">
-          {businessType || "Dashboard"}
-        </div>
+    <aside
+      className={cn(
+        `
+          sticky top-0 hidden h-screen shrink-0 overflow-hidden
+          border-r border-blue-950/80
+          bg-[linear-gradient(180deg,#0b1f3a_0%,#0a2547_48%,#07182f_100%)]
+          text-blue-50 shadow-[8px_0_30px_rgba(8,26,51,0.12)]
+          transition-[width] duration-300 ease-out
+          lg:flex lg:flex-col
+        `,
+        collapsed ? "w-[78px]" : "w-[250px] xl:w-[268px]",
+      )}
+    >
+      {/* Brand */}
+      <div
+        className={cn(
+          "flex h-[78px] shrink-0 items-center border-b border-white/10",
+          collapsed ? "justify-center px-2" : "justify-between px-4",
+        )}
+      >
+        <Link
+          href="/dashboard"
+          className={cn(
+            "group flex min-w-0 items-center",
+            collapsed ? "justify-center" : "gap-3",
+          )}
+          title={collapsed ? "Binhlaig POS" : undefined}
+        >
+          <span
+            className="
+              grid size-10 shrink-0 place-items-center rounded-xl
+              bg-sky-200 text-sm font-black text-slate-950
+              shadow-[0_8px_24px_rgba(125,211,252,0.18)]
+              ring-1 ring-white/30 transition-transform
+              group-hover:scale-[1.03]
+            "
+          >
+            B
+          </span>
+
+          {!collapsed && (
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold tracking-wide text-white">
+                Binhlaig POS
+              </span>
+              <span className="mt-0.5 block truncate text-[11px] font-medium text-blue-200/75">
+                {formatBusinessType(businessType)}
+              </span>
+            </span>
+          )}
+        </Link>
+
+        {!collapsed && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => changeCollapsed(true)}
+            className="size-8 shrink-0 rounded-lg text-blue-200 hover:bg-white/10 hover:text-white"
+            aria-label="Collapse sidebar"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+        )}
       </div>
 
-      <nav className="space-y-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active =
-            pathname === item.href ||
-            (item.href !== "/dashboard" &&
-              item.href !== "/dashboard/register" &&
-              pathname.startsWith(`${item.href}/`));
+      {/* Open collapsed sidebar */}
+      {collapsed && (
+        <div className="flex shrink-0 justify-center border-b border-white/10 py-2.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => changeCollapsed(false)}
+            className="size-9 rounded-xl text-blue-200 hover:bg-white/10 hover:text-white"
+            aria-label="Expand sidebar"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      )}
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition",
-                active
-                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
+      {/* Navigation */}
+      <div
+        className={cn(
+          "sidebar-scrollbar flex-1 overflow-y-auto py-5",
+          collapsed ? "px-2.5" : "px-3.5",
+        )}
+      >
+        {!collapsed && (
+          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-200/60">
+            Management
+          </p>
+        )}
+
+        <nav className="space-y-1.5" aria-label="Dashboard navigation">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              pathname === item.href ||
+              (item.href !== "/dashboard" &&
+                item.href !== "/dashboard/register" &&
+                pathname.startsWith(`${item.href}/`));
+
+            return (
+              <Button
+                key={item.href}
+                variant="ghost"
+                asChild
+                className={cn(
+                  `
+                    group relative h-11 overflow-hidden rounded-xl
+                    border border-transparent font-medium
+                    transition-all duration-200
+                  `,
+                  collapsed
+                    ? "w-full justify-center px-0"
+                    : "w-full justify-start gap-3 px-3",
+                  isActive
+                    ? `
+                      border-sky-100/70 bg-sky-200 text-slate-950
+                      shadow-[0_8px_22px_rgba(125,211,252,0.14)]
+                      hover:bg-sky-200 hover:text-slate-950
+                    `
+                    : `
+                      text-blue-50/80
+                      hover:border-white/5 hover:bg-white/10 hover:text-white
+                    `,
+                )}
+              >
+                <Link
+                  href={item.href}
+                  title={collapsed ? item.label : undefined}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <span
+                    className={cn(
+                      `
+                        grid size-7 shrink-0 place-items-center rounded-lg
+                        transition-colors duration-200
+                      `,
+                      isActive
+                        ? "bg-blue-950/10 text-slate-950"
+                        : "text-blue-100/75 group-hover:bg-white/5 group-hover:text-sky-200",
+                    )}
+                  >
+                    <Icon className="size-[18px]"  />
+                  </span>
+
+                  {!collapsed && (
+                    <span className="flex-1 truncate text-left text-[13px]">
+                      {item.label}
+                    </span>
+                  )}
+
+                  {!collapsed && isActive && (
+                    <span className="size-1.5 shrink-0 rounded-full bg-blue-900" />
+                  )}
+                </Link>
+              </Button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Account */}
+      <div
+        className={cn(
+          "shrink-0 border-t border-white/10",
+          collapsed ? "p-2.5" : "p-3.5",
+        )}
+      >
+        {collapsed ? (
+          <div className="space-y-2">
+            <div
+              className="grid size-11 w-full place-items-center rounded-xl bg-sky-200 text-xs font-black text-slate-950"
+              title={`${user.name} · ${user.role}`}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+              {initials(user.name)}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => void signOut({ callbackUrl: "/Sign_in" })}
+              className="size-11 w-full rounded-xl text-blue-200 hover:bg-red-500/15 hover:text-red-200"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="size-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-2.5 shadow-inner shadow-black/5">
+            <div className="flex items-center gap-3 px-1 py-1">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-sky-200 text-xs font-black text-slate-950">
+                {initials(user.name)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-white">
+                  {user.name}
+                </span>
+                <span className="mt-0.5 block truncate text-[10px] capitalize text-blue-200/65">
+                  {user.role.toLowerCase()}
+                  {user.email ? ` · ${user.email}` : ""}
+                </span>
+              </span>
+            </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void signOut({ callbackUrl: "/Sign_in" })}
+              className="mt-2 h-9 w-full justify-start gap-2 rounded-xl px-3 text-xs font-medium text-blue-100/70 hover:bg-red-500/15 hover:text-red-100"
+            >
+              <LogOut className="size-4" />
+              Sign out
+            </Button>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }

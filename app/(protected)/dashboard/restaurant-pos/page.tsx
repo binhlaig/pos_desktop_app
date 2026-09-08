@@ -458,6 +458,8 @@ const MAX_CART_WIDTH = 680;
 const CART_DRAFT_VERSION = 1;
 const CART_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;
 const CART_DRAFT_KEY_PREFIX = "restaurant_pos_cart_draft_v1";
+const NO_PENDING_KITCHEN_ITEMS_MESSAGE =
+  "Kitchen ကိုပို့ရန် အသစ်ထပ်မှာထားသော item မရှိပါ။";
 
 function getShopDraftScope(token?: string | null) {
   try {
@@ -838,6 +840,26 @@ function createCartItemId() {
   );
 }
 
+function menuItemIdentity(item: MenuItem) {
+  if (item.dbId?.trim()) return `db:${item.dbId.trim()}`;
+  if (item.barcode?.trim()) return `barcode:${item.barcode.trim()}`;
+  if (item.sku?.trim()) return `sku:${item.sku.trim()}`;
+
+  return `fallback:${item.name.trim().toLowerCase()}|${item.price}`;
+}
+
+function cartItemIdentity(item: CartItem) {
+  if (item.dbId?.trim()) return `db:${item.dbId.trim()}`;
+  if (item.barcode?.trim()) return `barcode:${item.barcode.trim()}`;
+  if (item.sku?.trim()) return `sku:${item.sku.trim()}`;
+
+  return `fallback:${item.name.trim().toLowerCase()}|${item.price}`;
+}
+
+function isSameMenuItem(cartItem: CartItem, menuItem: MenuItem) {
+  return cartItemIdentity(cartItem) === menuItemIdentity(menuItem);
+}
+
 function mapOpenOrderItemToCartItem(item: Record<string, unknown>): CartItem {
   const menuItemId =
     pickString(item, [
@@ -929,7 +951,7 @@ function mapProductToMenuItem(product: BackendProduct): MenuItem {
     "product_barcode",
   ]);
   const sku = pickString(product, ["sku"]);
-  const id =
+  const rawId =
     dbId || barcode || sku || pickString(product, ["productCode", "code"]);
   const name =
     pickString(product, ["productName", "name", "product_name", "title"]) ||
@@ -951,6 +973,9 @@ function mapProductToMenuItem(product: BackendProduct): MenuItem {
     "unit_price",
     "amount",
   ]);
+  const id =
+    rawId ||
+    `menu:${name.trim().toLowerCase()}|${categoryId.trim().toLowerCase()}|${price}`;
   const quantity = pickOptionalNumber(product, [
     "productQuantityAmount",
     "product_quantity_amount",
@@ -1145,6 +1170,8 @@ function RestaurantMobileCartBar({
   onKitchen,
   onPayment,
   kitchenSaving,
+  canSendToKitchen,
+  kitchenDisabledMessage,
   addedFeedbackVisible,
 }: {
   darkMode: boolean;
@@ -1155,6 +1182,8 @@ function RestaurantMobileCartBar({
   onKitchen: () => void;
   onPayment: () => void;
   kitchenSaving: boolean;
+  canSendToKitchen: boolean;
+  kitchenDisabledMessage: string;
   addedFeedbackVisible: boolean;
 }) {
   const { ref, isDropTarget } = useDroppable({ id: MOBILE_CART_DROP_ID });
@@ -1197,9 +1226,18 @@ function RestaurantMobileCartBar({
           <button
             type="button"
             onClick={onKitchen}
-            disabled={!hasItems || kitchenSaving}
+            disabled={!canSendToKitchen || kitchenSaving}
             className="grid h-11 w-11 place-items-center rounded-xl bg-slate-950 text-white disabled:opacity-40"
-            aria-label="Send to kitchen"
+            aria-label={
+              canSendToKitchen
+                ? "Send to kitchen"
+                : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
+            }
+            title={
+              canSendToKitchen
+                ? "Kitchen ကိုပို့ရန်"
+                : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
+            }
           >
             {kitchenSaving ? <Loader2 size={18} className="animate-spin" /> : <ChefHat size={18} />}
           </button>
@@ -1242,6 +1280,7 @@ export default function RestaurantCashierPOSPage() {
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
   const [tableStatusFilter, setTableStatusFilter] = useState("ALL");
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [exitSaving, setExitSaving] = useState(false);
   const [exitError, setExitError] = useState("");
@@ -1429,19 +1468,52 @@ export default function RestaurantCashierPOSPage() {
       .slice(0, 4);
   }, [total]);
 
+  const cartLineCount = cart.length;
+  const cartTotalQuantity = useMemo(
+    () => cart.reduce((sum, item) => sum + item.qty, 0),
+    [cart],
+  );
   const cartTotalPages = Math.max(
     1,
-    Math.ceil(cart.length / CART_ITEMS_PER_PAGE),
+    Math.ceil(cartLineCount / CART_ITEMS_PER_PAGE),
   );
   const safeCartPage = Math.min(cartPage, cartTotalPages);
   const cartPageStart =
-    cart.length === 0 ? 0 : (safeCartPage - 1) * CART_ITEMS_PER_PAGE + 1;
-  const cartPageEnd = Math.min(safeCartPage * CART_ITEMS_PER_PAGE, cart.length);
+    cartLineCount === 0 ? 0 : (safeCartPage - 1) * CART_ITEMS_PER_PAGE + 1;
+  const cartPageEnd = Math.min(
+    safeCartPage * CART_ITEMS_PER_PAGE,
+    cartLineCount,
+  );
+  const canGoToPreviousCartPage = safeCartPage > 1;
+  const canGoToNextCartPage = cartPageEnd < cartLineCount;
 
   const paginatedCart = useMemo(() => {
     const start = (safeCartPage - 1) * CART_ITEMS_PER_PAGE;
     return cart.slice(start, start + CART_ITEMS_PER_PAGE);
   }, [cart, safeCartPage]);
+
+  const goToCartPage = (nextPage: number) => {
+    const normalizedPage = Math.min(
+      Math.max(Math.trunc(nextPage), 1),
+      cartTotalPages,
+    );
+    setCartPage(normalizedPage);
+  };
+
+  const pendingKitchenItemCount = useMemo(
+    () =>
+      cart.reduce(
+        (sum, item) =>
+          sum + Math.max(item.qty - item.kitchenSentQty, 0),
+        0,
+      ),
+    [cart],
+  );
+  const hasPendingKitchenItems = pendingKitchenItemCount > 0;
+  const kitchenDisabledMessage =
+    cart.length > 0 && !hasPendingKitchenItems
+      ? NO_PENDING_KITCHEN_ITEMS_MESSAGE
+      : "";
 
   async function verifyStaff(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2095,11 +2167,14 @@ export default function RestaurantCashierPOSPage() {
 
   useEffect(() => {
     setCartPage((currentPage) => {
-      const maxPage = Math.max(1, Math.ceil(cart.length / CART_ITEMS_PER_PAGE));
+      const maxPage = Math.max(
+        1,
+        Math.ceil(cartLineCount / CART_ITEMS_PER_PAGE),
+      );
 
       return Math.min(currentPage, maxPage);
     });
-  }, [cart.length]);
+  }, [cartLineCount]);
 
   useEffect(() => {
     if (!lastAddedMenuItemId) return;
@@ -2193,13 +2268,7 @@ export default function RestaurantCashierPOSPage() {
   }, [filteredMenu.length]);
 
   const findCatalogItemForCartItem = (cartItem: CartItem) =>
-    menuItems.find(
-      (product) =>
-        product.id === cartItem.menuItemId ||
-        (!!cartItem.dbId && product.dbId === cartItem.dbId) ||
-        (!!cartItem.barcode && product.barcode === cartItem.barcode) ||
-        (!!cartItem.sku && product.sku === cartItem.sku),
-    );
+    menuItems.find((product) => isSameMenuItem(cartItem, product));
 
   const getCurrentStockForCartItem = (cartItem: CartItem) => {
     const product = findCatalogItemForCartItem(cartItem);
@@ -2228,8 +2297,8 @@ export default function RestaurantCashierPOSPage() {
       return false;
     }
 
-    const currentItem = cart.find(
-      (cartItem) => cartItem.menuItemId === item.id,
+    const currentItem = cart.find((cartItem) =>
+      isSameMenuItem(cartItem, item),
     );
 
     if (
@@ -2252,11 +2321,11 @@ export default function RestaurantCashierPOSPage() {
 
     setKitchenError("");
     setPaymentError("");
-    setLastAddedMenuItemId(item.id);
+    setLastAddedMenuItemId(menuItemIdentity(item));
     setCartPage(1);
 
     setCart((prev) => {
-      const found = prev.find((cartItem) => cartItem.menuItemId === item.id);
+      const found = prev.find((cartItem) => isSameMenuItem(cartItem, item));
 
       if (found) {
         if (item.stock !== null && found.qty + 1 > item.stock) {
@@ -2435,7 +2504,7 @@ export default function RestaurantCashierPOSPage() {
 
   const isLastAddedItem = (item: CartItem) =>
     Boolean(
-      lastAddedMenuItemId && item.menuItemId === lastAddedMenuItemId,
+      lastAddedMenuItemId && cartItemIdentity(item) === lastAddedMenuItemId,
     );
 
   const updateQty = (id: string, action: "plus" | "minus") => {
@@ -2502,6 +2571,16 @@ export default function RestaurantCashierPOSPage() {
     setDiscount(0);
     setCashReceived("");
     setPaymentOpen(false);
+    setClearConfirmOpen(false);
+  };
+
+  const requestClearOrder = () => {
+    if (cart.length === 0) return;
+    setClearConfirmOpen(true);
+  };
+
+  const confirmClearOrder = () => {
+    clearOrder();
   };
 
   const sendToKitchen = async () => {
@@ -2532,7 +2611,7 @@ export default function RestaurantCashierPOSPage() {
       .filter((item) => item.pendingQty > 0);
 
     if (pendingKitchenItems.length === 0) {
-      setKitchenError("Kitchen ကိုပို့ရန် အသစ်ထပ်မှာထားသော item မရှိပါ။");
+      setKitchenError(NO_PENDING_KITCHEN_ITEMS_MESSAGE);
       return;
     }
 
@@ -2861,12 +2940,8 @@ export default function RestaurantCashierPOSPage() {
       setPaymentOpen(false);
       setMenuItems((prev) =>
         prev.map((menuItem) => {
-          const cartItem = cart.find(
-            (item) =>
-              (!!item.dbId && item.dbId === menuItem.dbId) ||
-              item.menuItemId === menuItem.id ||
-              (!!item.barcode && item.barcode === menuItem.barcode) ||
-              (!!item.sku && item.sku === menuItem.sku),
+          const cartItem = cart.find((item) =>
+            isSameMenuItem(item, menuItem),
           );
 
           if (!cartItem || menuItem.stock === null) return menuItem;
@@ -3129,7 +3204,9 @@ export default function RestaurantCashierPOSPage() {
                 }`}
               >
                 <Receipt size={17} className="text-orange-500" />
-                <span>{cart.length} items</span>
+                <span>
+                  {cartLineCount} မျိုး · Qty {cartTotalQuantity}
+                </span>
                 <span className="text-orange-500">{formatMoney(total)} Ks</span>
               </div>
 
@@ -3150,7 +3227,12 @@ export default function RestaurantCashierPOSPage() {
 
               <button
                 onClick={sendToKitchen}
-                disabled={cart.length === 0 || kitchenSaving}
+                disabled={!hasPendingKitchenItems || kitchenSaving}
+                title={
+                  hasPendingKitchenItems
+                    ? "Kitchen ကိုပို့ရန်"
+                    : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
+                }
                 className="inline-flex items-center gap-2 rounded-2xl bg-amber-500 px-3 py-2 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {kitchenSaving ? (
@@ -3171,7 +3253,7 @@ export default function RestaurantCashierPOSPage() {
               </button>
 
               <button
-                onClick={clearOrder}
+                onClick={requestClearOrder}
                 disabled={cart.length === 0}
                 className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   darkMode
@@ -3614,15 +3696,15 @@ export default function RestaurantCashierPOSPage() {
               darkMode={darkMode}
               addedFeedbackVisible={addedFeedbackVisible}
             >
-            <div className="border-b border-slate-200/20 p-4">
+            <div className="shrink-0 border-b border-slate-200/20 p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="flex items-center gap-2 text-xl font-black">
-                    <Receipt className="text-orange-500" />
+                  <h2 className="flex items-center gap-2 text-lg font-black">
+                    <Receipt size={19} className="text-orange-500" />
                     Current Order
                   </h2>
                   <p
-                    className={`mt-1 text-sm font-semibold ${
+                    className={`mt-0.5 text-xs font-semibold ${
                       darkMode ? "text-slate-300" : "text-slate-500"
                     }`}
                   >
@@ -3667,15 +3749,17 @@ export default function RestaurantCashierPOSPage() {
                   <button
                     type="button"
                     onClick={() => setMobileCartOpen(false)}
-                    className="rounded-2xl bg-slate-500/10 p-3 transition lg:landscape:hidden"
+                    className="rounded-xl bg-slate-500/10 p-2.5 transition lg:landscape:hidden"
                     aria-label="Close cart"
                   >
                     <X size={20} />
                   </button>
                   <button
-                    onClick={clearOrder}
-                    className="rounded-2xl bg-red-500/10 p-3 text-red-500 transition hover:bg-red-500 hover:text-white"
-                    aria-label="Clear order"
+                    onClick={requestClearOrder}
+                    disabled={cart.length === 0}
+                    className="rounded-xl bg-red-500/10 p-2.5 text-red-500 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Cart ရှင်းရန်"
+                    title="Cart ရှင်းရန်"
                   >
                     <Trash2 size={20} />
                   </button>
@@ -3683,7 +3767,7 @@ export default function RestaurantCashierPOSPage() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2.5">
               <AnimatePresence initial={false} mode="wait">
                 {cart.length === 0 ? (
                   <motion.div
@@ -3719,10 +3803,10 @@ export default function RestaurantCashierPOSPage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -18 }}
                     transition={{ duration: 0.18 }}
-                    className="space-y-3"
+                    className="space-y-2"
                   >
                     <div
-                      className={`rounded-[1.5rem] border px-4 py-3 ${
+                      className={`rounded-2xl border px-3 py-2 ${
                         darkMode
                           ? "border-white/10 bg-slate-900/70"
                           : "border-orange-100 bg-orange-50/70"
@@ -3730,26 +3814,29 @@ export default function RestaurantCashierPOSPage() {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-black">
-                            Items {cartPageStart}-{cartPageEnd}
+                          <p className="text-xs font-black">
+                            Menu {cartPageStart}-{cartPageEnd} / {cartLineCount} မျိုး
                           </p>
                           <p
-                            className={`mt-0.5 text-xs font-bold ${
+                            className={`mt-0.5 max-w-[230px] truncate text-[10px] font-bold ${
                               darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
-                            Latest item first · Total {cart.length} items · Page {safeCartPage} /{" "}
-                            {cartTotalPages}
+                            အသစ်ဆုံးကိုအရင်ပြ · စုစုပေါင်း Qty {cartTotalQuantity} ခု · စာမျက်နှာ {safeCartPage}/{cartTotalPages}
                           </p>
                         </div>
 
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() =>
-                              setCartPage((page) => Math.max(1, page - 1))
+                            type="button"
+                            onClick={() => goToCartPage(safeCartPage - 1)}
+                            disabled={!canGoToPreviousCartPage}
+                            title={
+                              canGoToPreviousCartPage
+                                ? "Previous cart page"
+                                : "ပထမစာမျက်နှာဖြစ်သည်"
                             }
-                            disabled={safeCartPage === 1}
-                            className={`grid h-9 w-9 place-items-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                            className={`grid h-8 w-8 place-items-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
                               darkMode
                                 ? "bg-white/10 text-white hover:bg-white/15"
                                 : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-100"
@@ -3759,13 +3846,15 @@ export default function RestaurantCashierPOSPage() {
                           </button>
 
                           <button
-                            onClick={() =>
-                              setCartPage((page) =>
-                                Math.min(cartTotalPages, page + 1),
-                              )
+                            type="button"
+                            onClick={() => goToCartPage(safeCartPage + 1)}
+                            disabled={!canGoToNextCartPage}
+                            title={
+                              canGoToNextCartPage
+                                ? "Next cart page"
+                                : `Next စာမျက်နှာအတွက် Menu ${CART_ITEMS_PER_PAGE + 1} မျိုးနှင့်အထက် လိုအပ်သည်`
                             }
-                            disabled={safeCartPage === cartTotalPages}
-                            className={`grid h-9 w-9 place-items-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                            className={`grid h-8 w-8 place-items-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
                               darkMode
                                 ? "bg-white/10 text-white hover:bg-white/15"
                                 : "bg-white text-slate-900 shadow-sm ring-1 ring-orange-100 hover:bg-orange-100"
@@ -3777,7 +3866,7 @@ export default function RestaurantCashierPOSPage() {
                       </div>
 
                       {cartTotalPages > 1 && (
-                        <div className="mt-3 flex gap-1.5">
+                        <div className="mt-2 flex gap-1.5">
                           {Array.from({ length: cartTotalPages }).map(
                             (_, index) => {
                               const page = index + 1;
@@ -3786,7 +3875,8 @@ export default function RestaurantCashierPOSPage() {
                               return (
                                 <button
                                   key={page}
-                                  onClick={() => setCartPage(page)}
+                                  type="button"
+                                  onClick={() => goToCartPage(page)}
                                   className={`h-2 flex-1 rounded-full transition ${
                                     active
                                       ? "bg-orange-500"
@@ -3811,7 +3901,7 @@ export default function RestaurantCashierPOSPage() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.98 }}
                         transition={{ delay: index * 0.03 }}
-                        className={`rounded-[1.5rem] border p-3 shadow-sm transition-colors ${
+                        className={`rounded-2xl border p-2.5 shadow-sm transition-colors ${
                           isLastAddedItem(item)
                             ? darkMode
                               ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
@@ -3821,10 +3911,10 @@ export default function RestaurantCashierPOSPage() {
                               : "border-slate-100 bg-slate-50"
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-orange-500/10 text-orange-500">
+                              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-orange-500/10 text-orange-500">
                                 <Utensils size={17} />
                               </div>
 
@@ -3854,7 +3944,7 @@ export default function RestaurantCashierPOSPage() {
                           </button>
                         </div>
 
-                        <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="mt-2 flex items-center justify-between gap-2">
                           <div
                             className={`inline-flex items-center gap-2 rounded-2xl p-1 shadow-sm ring-1 ${
                               darkMode
@@ -3899,7 +3989,7 @@ export default function RestaurantCashierPOSPage() {
                           </div>
                         </div>
 
-                        <div className="mt-3 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
                           {modifiers.map((modifier) => {
                             const active = item.modifiers.includes(modifier);
 
@@ -3909,7 +3999,7 @@ export default function RestaurantCashierPOSPage() {
                                 onClick={() =>
                                   toggleModifier(item.id, modifier)
                                 }
-                                className={`rounded-full px-2.5 py-1 text-[11px] font-black transition ${
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black transition ${
                                   active
                                     ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20"
                                     : darkMode
@@ -3927,7 +4017,7 @@ export default function RestaurantCashierPOSPage() {
                           value={item.note || ""}
                           onChange={(e) => updateNote(item.id, e.target.value)}
                           placeholder="Kitchen note..."
-                          className={`mt-3 w-full rounded-2xl px-3 py-2 text-sm font-semibold outline-none ring-1 ${
+                          className={`mt-2 w-full rounded-xl px-3 py-1.5 text-xs font-semibold outline-none ring-1 ${
                             darkMode
                               ? "bg-white/10 text-white ring-white/10 placeholder:text-slate-400"
                               : "bg-white text-slate-900 ring-slate-100 placeholder:text-slate-400"
@@ -3940,21 +4030,27 @@ export default function RestaurantCashierPOSPage() {
               </AnimatePresence>
             </div>
 
-            <div className="border-t border-slate-200/20 p-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm font-bold">
-                  <span
-                    className={darkMode ? "text-slate-300" : "text-slate-500"}
-                  >
+            <div className="shrink-0 border-t border-slate-200/20 px-3 pb-3 pt-2.5">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-bold">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={darkMode ? "text-slate-400" : "text-slate-500"}>
                     Subtotal
                   </span>
-                  <span>{formatMoney(subtotal)} Ks</span>
+                  <span className="truncate">{formatMoney(subtotal)} Ks</span>
                 </div>
 
-                <div className="flex items-center justify-between text-sm font-bold">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={darkMode ? "text-slate-400" : "text-slate-500"}>
+                    Tax {formatRatePercent(taxRatePercent)}%
+                  </span>
+                  <span className="truncate">{formatMoney(tax)} Ks</span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
                   <button
+                    type="button"
                     onClick={() => setServiceChargeEnabled((v) => !v)}
-                    className={`inline-flex items-center gap-2 rounded-xl px-2 py-1 ${
+                    className={`inline-flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-0.5 ${
                       serviceChargeEnabled
                         ? "bg-orange-500/10 text-orange-500"
                         : darkMode
@@ -3962,35 +4058,28 @@ export default function RestaurantCashierPOSPage() {
                           : "bg-slate-100 text-slate-500"
                     }`}
                   >
-                    <MoreHorizontal size={14} />
-                    Service {formatRatePercent(serviceChargeRatePercent)}%
+                    <MoreHorizontal size={12} />
+                    <span className="truncate">
+                      Service {formatRatePercent(serviceChargeRatePercent)}%
+                    </span>
                   </button>
-                  <span>{formatMoney(serviceCharge)} Ks</span>
+                  <span className="truncate">{formatMoney(serviceCharge)} Ks</span>
                 </div>
 
-                <div className="flex items-center justify-between text-sm font-bold">
-                  <span
-                    className={darkMode ? "text-slate-300" : "text-slate-500"}
-                  >
-                    Tax {formatRatePercent(taxRatePercent)}%
-                  </span>
-                  <span>{formatMoney(tax)} Ks</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-2">
                   <label
-                    className={`flex items-center gap-2 text-sm font-bold ${
-                      darkMode ? "text-slate-300" : "text-slate-500"
+                    className={`inline-flex min-w-0 items-center gap-1 ${
+                      darkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
-                    <BadgePercent size={16} />
-                    Discount
+                    <BadgePercent size={13} />
+                    <span className="truncate">Discount</span>
                   </label>
                   <input
                     value={discount || ""}
                     onChange={(e) => setDiscount(Number(e.target.value || 0))}
                     type="number"
-                    className={`w-32 rounded-2xl px-3 py-2 text-right text-sm font-black outline-none ${
+                    className={`h-7 w-20 rounded-lg px-2 text-right text-xs font-black outline-none ${
                       darkMode
                         ? "bg-slate-900 text-white"
                         : "bg-slate-100 text-slate-900"
@@ -4000,36 +4089,46 @@ export default function RestaurantCashierPOSPage() {
                 </div>
 
                 <div
-                  className={`mt-3 rounded-[1.5rem] p-4 ${
+                  className={`col-span-2 mt-0.5 flex items-center justify-between rounded-xl px-3 py-2 ${
                     darkMode ? "bg-orange-500/15" : "bg-orange-50"
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-black">Total</span>
-                    <span className="text-3xl font-black text-orange-500">
-                      {formatMoney(total)} Ks
-                    </span>
-                  </div>
+                  <span className="text-xs font-black">Total</span>
+                  <span className="text-xl font-black text-orange-500">
+                    {formatMoney(total)} Ks
+                  </span>
                 </div>
               </div>
 
-              {kitchenError && (
+              {(kitchenError || kitchenDisabledMessage) && (
                 <div
-                  className={`mt-4 rounded-2xl border p-3 text-sm font-black ${
-                    darkMode
-                      ? "border-red-400/30 bg-red-500/10 text-red-200"
-                      : "border-red-100 bg-red-50 text-red-600"
+                  title={kitchenError || kitchenDisabledMessage}
+                  className={`mt-2 flex min-h-8 items-center rounded-xl border px-2.5 py-1.5 text-[11px] font-bold ${
+                    kitchenError
+                      ? darkMode
+                        ? "border-red-400/30 bg-red-500/10 text-red-200"
+                        : "border-red-100 bg-red-50 text-red-600"
+                      : darkMode
+                        ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
+                        : "border-amber-200 bg-amber-50 text-amber-700"
                   }`}
                 >
-                  {kitchenError}
+                  <span className={kitchenError ? "line-clamp-2" : "truncate"}>
+                    {kitchenError || kitchenDisabledMessage}
+                  </span>
                 </div>
               )}
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
                   onClick={sendToKitchen}
-                  disabled={cart.length === 0 || kitchenSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!hasPendingKitchenItems || kitchenSaving}
+                  title={
+                    hasPendingKitchenItems
+                      ? "Kitchen ကိုပို့ရန်"
+                      : kitchenDisabledMessage || "Cart ထဲတွင် item မရှိပါ။"
+                  }
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {kitchenSaving ? (
                     <Loader2 className="animate-spin" size={18} />
@@ -4042,7 +4141,7 @@ export default function RestaurantCashierPOSPage() {
                 <button
                   onClick={openPaymentDialog}
                   disabled={cart.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 text-xs font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Payment
                   <ChevronRight size={18} />
@@ -4179,6 +4278,105 @@ export default function RestaurantCashierPOSPage() {
                   className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm font-black text-red-500 transition hover:bg-red-500 hover:text-white disabled:opacity-40 sm:col-span-2"
                 >
                   Discard & Exit
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Clear Cart Confirmation */}
+      <AnimatePresence>
+        {clearConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setClearConfirmOpen(false)}
+            className="fixed inset-0 z-[85] grid place-items-center bg-slate-950/65 p-3 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.96 }}
+              onClick={(event) => event.stopPropagation()}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="clear-cart-dialog-title"
+              aria-describedby="clear-cart-dialog-description"
+              className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${
+                darkMode
+                  ? "border-white/10 bg-slate-950 text-white"
+                  : "border-red-100 bg-white text-slate-950"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-500/10 text-red-500">
+                  <Trash2 size={23} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setClearConfirmOpen(false)}
+                  className={`grid h-10 w-10 place-items-center rounded-xl ${
+                    darkMode ? "bg-white/10" : "bg-slate-100"
+                  }`}
+                  aria-label="Dialog ပိတ်ရန်"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <h2 id="clear-cart-dialog-title" className="mt-4 text-xl font-black">
+                Cart ကို ရှင်းမှာ သေချာပါသလား?
+              </h2>
+              <p
+                id="clear-cart-dialog-description"
+                className={`mt-2 text-sm font-semibold leading-6 ${
+                  darkMode ? "text-slate-300" : "text-slate-500"
+                }`}
+              >
+                Cart ထဲရှိ item အားလုံး၊ discount နှင့် လက်ရှိပြင်ဆင်ထားသော
+                အချက်အလက်များကို ဖျက်ပါမယ်။ ဒီလုပ်ဆောင်ချက်ကို ပြန်ယူ၍မရပါ။
+              </p>
+
+              <div
+                className={`mt-4 rounded-2xl p-4 ${
+                  darkMode ? "bg-white/5" : "bg-red-50"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3 text-sm font-black">
+                  <span>ဖျက်မည့် item အရေအတွက်</span>
+                  <span className="text-red-500">
+                    {cart.reduce((sum, item) => sum + item.qty, 0)} ခု
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-sm font-black">
+                  <span>စုစုပေါင်းတန်ဖိုး</span>
+                  <span className="text-red-500">
+                    {formatMoney(total)} Ks
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setClearConfirmOpen(false)}
+                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                    darkMode
+                      ? "bg-white/10 text-white hover:bg-white/15"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  မဖျက်တော့ပါ
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmClearOrder}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-red-500/20 transition hover:bg-red-600"
+                >
+                  <Trash2 size={17} />
+                  Cart ရှင်းရန်
                 </button>
               </div>
             </motion.div>
@@ -5017,6 +5215,8 @@ export default function RestaurantCashierPOSPage() {
       onKitchen={sendToKitchen}
       onPayment={openPaymentDialog}
       kitchenSaving={kitchenSaving}
+      canSendToKitchen={hasPendingKitchenItems}
+      kitchenDisabledMessage={kitchenDisabledMessage}
       addedFeedbackVisible={addedFeedbackVisible}
     />
 
