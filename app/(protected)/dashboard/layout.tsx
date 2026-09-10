@@ -7,6 +7,7 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { getPageTypeByPath, isPosCashierRoute } from "@/lib/business-type";
 import { DashboardHeader } from "@/components/dashboard/header";
 
+
 export default function DashboardLayout({
   children,
 }: Readonly<{

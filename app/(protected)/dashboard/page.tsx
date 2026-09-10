@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -177,6 +178,42 @@ const TOKEN_KEYS = [
   "jwt",
 ] as const;
 const STOCK_COLORS = ["#16a34a", "#f59e0b", "#ef4444"];
+const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
+
+type BrandColors = { name: string; primary: string; accent: string };
+
+const DEFAULT_BRAND_COLORS: BrandColors = {
+  name: "Binhlaig",
+  primary: "#0B1F3A",
+  accent: "#D4A017",
+};
+
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+}
+
+function getStoredBrandColors(): BrandColors {
+  if (typeof window === "undefined") return DEFAULT_BRAND_COLORS;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null") as Partial<BrandColors> | null;
+    if (stored && isHexColor(stored.primary) && isHexColor(stored.accent)) {
+      return { name: stored.name || "Custom", primary: stored.primary, accent: stored.accent };
+    }
+  } catch {
+    // Invalid saved preferences fall back to the main brand palette.
+  }
+  return DEFAULT_BRAND_COLORS;
+}
+
+function applyBrandColors(colors: BrandColors) {
+  if (typeof document === "undefined") return;
+
+  const root = document.documentElement;
+  root.style.setProperty("--brand-primary", colors.primary);
+  root.style.setProperty("--brand-accent", colors.accent);
+  root.style.setProperty("--dashboard-primary", colors.primary);
+  root.style.setProperty("--dashboard-accent", colors.accent);
+}
 
 function getAccessToken() {
   if (typeof window === "undefined") return null;
@@ -447,8 +484,8 @@ function StatCard({
   loading: boolean;
 }) {
   const tones = {
-    navy: "bg-blue-950/10 text-blue-900 dark:bg-sky-400/10 dark:text-sky-300",
-    blue: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+    navy: "bg-[var(--brand-soft)] text-[var(--brand-primary)] dark:text-[var(--brand-accent)]",
+    blue: "bg-[var(--brand-soft)] text-[var(--brand-primary)] dark:text-[var(--brand-accent)]",
     amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
   };
@@ -460,7 +497,7 @@ function StatCard({
           <div className={`grid size-10 place-items-center rounded-xl ${tones[tone]}`}>
             <Icon className="size-5" />
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-1 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
             <ArrowUpRight className="size-3" /> တိုက်ရိုက်
           </span>
         </div>
@@ -487,6 +524,7 @@ function EmptyState({ icon: Icon, title }: { icon: ElementType; title: string })
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
+  const [brandColors, setBrandColors] = useState<BrandColors>(DEFAULT_BRAND_COLORS);
   const [businessType, setBusinessType] = useState<BusinessType>("SUPERMARKET");
   const [rangeDays, setRangeDays] = useState<RangeDays>(1);
   const [products, setProducts] = useState<DashboardProduct[]>([]);
@@ -579,8 +617,38 @@ export default function DashboardPage() {
   useEffect(() => {
     setMounted(true);
     setBusinessType(getBusinessTypeFromStorage());
+    const storedColors = getStoredBrandColors();
+    setBrandColors(storedColors);
+    applyBrandColors(storedColors);
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    const syncBrandColors = (colors: BrandColors) => {
+      if (!isHexColor(colors.primary) || !isHexColor(colors.accent)) return;
+      setBrandColors(colors);
+      applyBrandColors(colors);
+    };
+
+    const handleBrandColorChange = (event: Event) => {
+      const colors = (event as CustomEvent<BrandColors>).detail;
+      if (colors) syncBrandColors(colors);
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === BRAND_COLOR_STORAGE_KEY) {
+        syncBrandColors(getStoredBrandColors());
+      }
+    };
+
+    window.addEventListener("brand-colors-changed", handleBrandColorChange);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("brand-colors-changed", handleBrandColorChange);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;
@@ -852,7 +920,7 @@ export default function DashboardPage() {
       >
         <div className="mx-auto flex max-w-[1600px] animate-pulse flex-col gap-4">
           <div className="h-[116px] rounded-2xl border border-border/60 bg-card shadow-sm" />
-          <div className="h-[390px] rounded-2xl bg-blue-950/90 shadow-lg" />
+          <div className="h-[390px] rounded-2xl bg-[var(--brand-primary)] opacity-90 shadow-lg" />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
               <div
@@ -871,7 +939,7 @@ export default function DashboardPage() {
       <div className="mx-auto flex max-w-[1600px] flex-col gap-4">
         <section className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800 dark:text-sky-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
               {mounted ? businessTypeLabel(businessType) : "POS"} ဒက်ရှ်ဘုတ်
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{getTitle(businessType)}</h1>
@@ -889,7 +957,7 @@ export default function DashboardPage() {
                   onClick={() => setRangeDays(days)}
                   className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
                     rangeDays === days
-                      ? "bg-blue-950 text-white shadow-sm dark:bg-sky-300 dark:text-blue-950"
+                      ? "bg-[var(--brand-primary)] text-white shadow-sm dark:bg-[var(--brand-accent)] dark:text-slate-950"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
@@ -905,7 +973,7 @@ export default function DashboardPage() {
             </Button>
             <Button
               type="button"
-              className="rounded-xl bg-blue-950 text-white hover:bg-blue-900 dark:bg-sky-300 dark:text-blue-950 dark:hover:bg-sky-200"
+              className="rounded-xl bg-[var(--brand-primary)] text-white hover:brightness-110 dark:bg-[var(--brand-accent)] dark:text-slate-950"
               onClick={refreshAll}
               disabled={dashboardRefreshing}
             >
@@ -922,18 +990,18 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <Card className="overflow-hidden border-0 bg-[linear-gradient(135deg,#0b1f3a_0%,#0a2547_52%,#07182f_100%)] text-white shadow-lg shadow-blue-950/15">
+        <Card className="overflow-hidden border-0 text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${brandColors.primary} 0%, color-mix(in srgb, ${brandColors.primary} 86%, black) 100%)`, boxShadow: `0 12px 28px color-mix(in srgb, ${brandColors.primary} 22%, transparent)` }}>
           <CardContent className="p-0">
             <div className="flex flex-col gap-3 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold">အရောင်းအခြေအနေ</h2>
-                <p className="mt-1 text-xs text-blue-100/70">
+                <p className="mt-1 text-xs text-white/70">
                   {rangeDays === 1
                     ? "ယနေ့ နာရီအလိုက် အရောင်းရငွေနှင့် ငွေရှင်းမှတ်တမ်း"
                     : `နောက်ဆုံး ${rangeDays === 7 ? "၇ ရက်" : "၃၀ ရက်"} အရောင်းရငွေနှင့် ငွေရှင်းမှတ်တမ်း`}
                 </p>
               </div>
-              <div className="flex items-center gap-5 text-xs text-blue-100/80">
+              <div className="flex items-center gap-5 text-xs text-white/80">
                 <span><strong className="block text-base text-white">{formatMoney(rangeSales)}</strong>အရောင်းရငွေ</span>
                 <span><strong className="block text-base text-white">{rangeTransactions}</strong>ငွေရှင်းမှတ်တမ်း</span>
               </div>
@@ -943,8 +1011,8 @@ export default function DashboardPage() {
                 <AreaChart data={salesData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="sales-fill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7dd3fc" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#7dd3fc" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor={brandColors.accent} stopOpacity={0.5} />
+                      <stop offset="95%" stopColor={brandColors.accent} stopOpacity={0.02} />
                     </linearGradient>
                     <linearGradient id="transaction-fill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#a5b4fc" stopOpacity={0.38} />
@@ -962,7 +1030,7 @@ export default function DashboardPage() {
                     labelFormatter={(_, payload) => payload?.[0]?.payload?.date || ""}
                   />
                   <Legend formatter={(value) => value === "sales" ? "အရောင်းရငွေ" : "ငွေရှင်းမှတ်တမ်း"} />
-                  <Area yAxisId="sales" type="monotone" dataKey="sales" stroke="#7dd3fc" strokeWidth={2.5} fill="url(#sales-fill)" />
+                  <Area yAxisId="sales" type="monotone" dataKey="sales" stroke={brandColors.accent} strokeWidth={2.5} fill="url(#sales-fill)" />
                   <Area yAxisId="transactions" type="monotone" dataKey="transactions" stroke="#a5b4fc" strokeWidth={2} fill="url(#transaction-fill)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -1073,7 +1141,7 @@ export default function DashboardPage() {
                   const Icon = action.icon;
                   return (
                     <Button key={`${action.label}-${action.href}`} asChild variant="outline" className="h-20 flex-col gap-2 rounded-xl text-xs">
-                      <Link href={action.href}><Icon className="size-5 text-blue-800 dark:text-sky-300" />{action.label}</Link>
+                      <Link href={action.href}><Icon className="size-5 text-[var(--brand-primary)] dark:text-[var(--brand-accent)]" />{action.label}</Link>
                     </Button>
                   );
                 })}

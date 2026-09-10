@@ -150,14 +150,22 @@ export function DashboardSidebar() {
       className={cn(
         `
           sticky top-0 hidden h-screen shrink-0 overflow-hidden
-          border-r border-blue-950/80
-          bg-[linear-gradient(180deg,#0b1f3a_0%,#0a2547_48%,#07182f_100%)]
-          text-blue-50 shadow-[8px_0_30px_rgba(8,26,51,0.12)]
+          border-r border-white/10 text-white
           transition-[width] duration-300 ease-out
           lg:flex lg:flex-col
         `,
         collapsed ? "w-[78px]" : "w-[250px] xl:w-[268px]",
       )}
+      style={{
+        background: `linear-gradient(
+          180deg,
+          var(--brand-primary) 0%,
+          color-mix(in srgb, var(--brand-primary) 88%, black) 52%,
+          color-mix(in srgb, var(--brand-primary) 68%, black) 100%
+        )`,
+        boxShadow:
+          "8px 0 30px color-mix(in srgb, var(--brand-primary) 16%, transparent)",
+      }}
     >
       {/* Brand */}
       <div
@@ -177,11 +185,14 @@ export function DashboardSidebar() {
           <span
             className="
               grid size-10 shrink-0 place-items-center rounded-xl
-              bg-sky-200 text-sm font-black text-slate-950
-              shadow-[0_8px_24px_rgba(125,211,252,0.18)]
+              bg-[var(--brand-accent)] text-sm font-black text-slate-950
               ring-1 ring-white/30 transition-transform
               group-hover:scale-[1.03]
             "
+            style={{
+              boxShadow:
+                "0 8px 24px color-mix(in srgb, var(--brand-accent) 30%, transparent)",
+            }}
           >
             B
           </span>
@@ -191,7 +202,7 @@ export function DashboardSidebar() {
               <span className="block truncate text-sm font-bold tracking-wide text-white">
                 Binhlaig POS
               </span>
-              <span className="mt-0.5 block truncate text-[11px] font-medium text-blue-200/75">
+              <span className="mt-0.5 block truncate text-[11px] font-medium text-white/70">
                 {formatBusinessType(businessType)}
               </span>
             </span>
@@ -204,7 +215,7 @@ export function DashboardSidebar() {
             variant="ghost"
             size="icon"
             onClick={() => changeCollapsed(true)}
-            className="size-8 shrink-0 rounded-lg text-blue-200 hover:bg-white/10 hover:text-white"
+            className="size-8 shrink-0 rounded-lg text-white/70 hover:bg-white/10 hover:text-[var(--brand-accent)]"
             aria-label="Collapse sidebar"
           >
             <ChevronLeft className="size-4" />
@@ -220,7 +231,7 @@ export function DashboardSidebar() {
             variant="ghost"
             size="icon"
             onClick={() => changeCollapsed(false)}
-            className="size-9 rounded-xl text-blue-200 hover:bg-white/10 hover:text-white"
+            className="size-9 rounded-xl text-white/70 hover:bg-white/10 hover:text-[var(--brand-accent)]"
             aria-label="Expand sidebar"
           >
             <ChevronRight className="size-4" />
@@ -236,7 +247,7 @@ export function DashboardSidebar() {
         )}
       >
         {!collapsed && (
-          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-200/60">
+          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
             Management
           </p>
         )}
@@ -266,13 +277,13 @@ export function DashboardSidebar() {
                     : "w-full justify-start gap-3 px-3",
                   isActive
                     ? `
-                      border-sky-100/70 bg-sky-200 text-slate-950
-                      shadow-[0_8px_22px_rgba(125,211,252,0.14)]
-                      hover:bg-sky-200 hover:text-slate-950
+                      border-white/40 bg-[var(--brand-accent)] text-slate-950
+                      shadow-md hover:bg-[var(--brand-accent)]
+                      hover:text-slate-950
                     `
                     : `
-                      text-blue-50/80
-                      hover:border-white/5 hover:bg-white/10 hover:text-white
+                      text-white/80 hover:border-white/10
+                      hover:bg-white/10 hover:text-white
                     `,
                 )}
               >
@@ -288,8 +299,8 @@ export function DashboardSidebar() {
                         transition-colors duration-200
                       `,
                       isActive
-                        ? "bg-blue-950/10 text-slate-950"
-                        : "text-blue-100/75 group-hover:bg-white/5 group-hover:text-sky-200",
+                        ? "bg-black/10 text-slate-950"
+                        : "text-white/70 group-hover:bg-white/5 group-hover:text-[var(--brand-accent)]",
                     )}
                   >
                     <Icon className="size-[18px]"  />
@@ -302,7 +313,7 @@ export function DashboardSidebar() {
                   )}
 
                   {!collapsed && isActive && (
-                    <span className="size-1.5 shrink-0 rounded-full bg-blue-900" />
+                    <span className="size-1.5 shrink-0 rounded-full bg-slate-950" />
                   )}
                 </Link>
               </Button>
@@ -321,7 +332,7 @@ export function DashboardSidebar() {
         {collapsed ? (
           <div className="space-y-2">
             <div
-              className="grid size-11 w-full place-items-center rounded-xl bg-sky-200 text-xs font-black text-slate-950"
+              className="grid size-11 w-full place-items-center rounded-xl bg-[var(--brand-accent)] text-xs font-black text-slate-950"
               title={`${user.name} · ${user.role}`}
             >
               {initials(user.name)}
@@ -331,7 +342,7 @@ export function DashboardSidebar() {
               variant="ghost"
               size="icon"
               onClick={() => void signOut({ callbackUrl: "/Sign_in" })}
-              className="size-11 w-full rounded-xl text-blue-200 hover:bg-red-500/15 hover:text-red-200"
+              className="size-11 w-full rounded-xl text-white/70 hover:bg-red-500/15 hover:text-red-200"
               aria-label="Sign out"
               title="Sign out"
             >
@@ -341,14 +352,14 @@ export function DashboardSidebar() {
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-2.5 shadow-inner shadow-black/5">
             <div className="flex items-center gap-3 px-1 py-1">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-sky-200 text-xs font-black text-slate-950">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--brand-accent)] text-xs font-black text-slate-950">
                 {initials(user.name)}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-semibold text-white">
                   {user.name}
                 </span>
-                <span className="mt-0.5 block truncate text-[10px] capitalize text-blue-200/65">
+                <span className="mt-0.5 block truncate text-[10px] capitalize text-white/60">
                   {user.role.toLowerCase()}
                   {user.email ? ` · ${user.email}` : ""}
                 </span>
@@ -359,7 +370,7 @@ export function DashboardSidebar() {
               type="button"
               variant="ghost"
               onClick={() => void signOut({ callbackUrl: "/Sign_in" })}
-              className="mt-2 h-9 w-full justify-start gap-2 rounded-xl px-3 text-xs font-medium text-blue-100/70 hover:bg-red-500/15 hover:text-red-100"
+              className="mt-2 h-9 w-full justify-start gap-2 rounded-xl px-3 text-xs font-medium text-white/70 hover:bg-red-500/15 hover:text-red-100"
             >
               <LogOut className="size-4" />
               Sign out

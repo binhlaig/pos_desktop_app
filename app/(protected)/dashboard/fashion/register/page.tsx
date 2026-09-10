@@ -132,6 +132,29 @@ const MAX_CART_WIDTH = 680;
 const CART_DRAFT_VERSION = 1;
 const CART_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;
 const CART_DRAFT_KEY_PREFIX = "fashion_pos_cart_draft_v1";
+const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
+
+function applyStoredBrandColors() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null",
+    ) as { primary?: unknown; accent?: unknown } | null;
+    const isHexColor = (value: unknown): value is string =>
+      typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+
+    if (stored && isHexColor(stored.primary) && isHexColor(stored.accent)) {
+      const root = document.documentElement;
+      root.style.setProperty("--brand-primary", stored.primary);
+      root.style.setProperty("--brand-accent", stored.accent);
+      root.style.setProperty("--dashboard-primary", stored.primary);
+      root.style.setProperty("--dashboard-accent", stored.accent);
+    }
+  } catch {
+    // Invalid saved colors leave the global default palette unchanged.
+  }
+}
 
 function getShopDraftScope(token?: string | null) {
   try {
@@ -454,15 +477,15 @@ function CartDropSurface({
             : "border-emerald-400 bg-emerald-50 ring-4 ring-emerald-300/35"
           : dragging
             ? darkMode
-              ? "border-orange-400 bg-orange-500/10 ring-4 ring-orange-400/20"
-              : "border-orange-400 bg-orange-50 ring-4 ring-orange-300/30"
+              ? "border-[var(--brand-primary)] bg-[var(--brand-soft)] ring-4 ring-[var(--brand-border)]"
+              : "border-[var(--brand-primary)] bg-[var(--brand-soft)] ring-4 ring-[var(--brand-border)]"
           : darkMode
             ? "border-white/10 bg-white/5"
-            : "border-orange-100 bg-white/92"
+            : "border-[var(--brand-border)] bg-white/92"
       }`}
     >
       {dragging && (
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-30 rounded-2xl bg-orange-500 px-4 py-2 text-center text-xs font-black text-white shadow-lg">
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-30 rounded-2xl bg-[var(--brand-primary)] px-4 py-2 text-center text-xs font-black text-white shadow-lg">
           {isDropTarget ? "Release to add item" : "Drop here to add item"}
         </div>
       )}
@@ -511,12 +534,12 @@ function MobileCartBar({
         isDropTarget
           ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
           : dragging
-            ? "border-orange-400 bg-orange-500 text-white ring-4 ring-orange-400/20"
+            ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white ring-4 ring-[var(--brand-border)]"
             : addedFeedbackVisible
               ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
             : darkMode
               ? "border-white/10 bg-slate-900/95 text-white"
-              : "border-orange-100 bg-white/95 text-slate-950"
+              : "border-[var(--brand-border)] bg-white/95 text-slate-950"
       }`}
       style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
     >
@@ -531,7 +554,7 @@ function MobileCartBar({
             type="button"
             onClick={onViewCart}
             disabled={!hasItems}
-            className="relative grid h-12 w-12 place-items-center rounded-xl bg-orange-500 text-white disabled:opacity-50"
+            className="relative grid h-12 w-12 place-items-center rounded-xl bg-[var(--brand-primary)] text-white disabled:opacity-50"
             aria-label="Open cart"
           >
             <ShoppingBag size={21} />
@@ -549,7 +572,7 @@ function MobileCartBar({
             <p className="truncate text-[11px] font-black uppercase tracking-wide text-slate-400">
               {hasItems ? "Cart Total" : "Cart is empty"}
             </p>
-            <p className="truncate text-lg font-black tabular-nums text-orange-500">
+            <p className="truncate text-lg font-black tabular-nums text-[var(--brand-primary)]">
               {formatMoney(total)} Ks
             </p>
           </button>
@@ -569,7 +592,7 @@ function MobileCartBar({
               type="button"
               onClick={onPayment}
               disabled={!hasItems}
-              className="rounded-xl bg-orange-500 px-3 py-3 text-xs font-black text-white shadow-lg shadow-orange-500/25 disabled:opacity-40 sm:px-4"
+              className="rounded-xl bg-[var(--brand-primary)] px-3 py-3 text-xs font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] disabled:opacity-40 sm:px-4"
             >
               Pay
             </button>
@@ -826,6 +849,22 @@ export default function FashionRegisterPage() {
     address: "",
     phone: "",
   });
+
+  useEffect(() => {
+    const syncBrandColors = () => applyStoredBrandColors();
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === BRAND_COLOR_STORAGE_KEY) syncBrandColors();
+    };
+
+    syncBrandColors();
+    window.addEventListener("brand-colors-changed", syncBrandColors);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("brand-colors-changed", syncBrandColors);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   const categories = useMemo(() => {
     const unique = Array.from(new Set(products.map((p) => p.category)));
@@ -1640,7 +1679,7 @@ export default function FashionRegisterPage() {
         className={`min-h-screen ${
           darkMode
             ? "bg-slate-950 text-slate-50"
-            : "bg-[#f8f3ea] text-slate-950"
+            : "bg-[var(--brand-soft)] text-slate-950"
         }`}
       >
         <BusinessTypeGuard allow="FASHION" />
@@ -1650,12 +1689,12 @@ export default function FashionRegisterPage() {
             className={`rounded-[2rem] border p-4 shadow-sm ${
               darkMode
                 ? "border-white/10 bg-white/5"
-                : "border-orange-100 bg-white/80"
+                : "border-[var(--brand-border)] bg-white/80"
             }`}
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/30">
+                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]">
                   <ShoppingBag size={26} />
                 </div>
                 <div>
@@ -1694,11 +1733,11 @@ export default function FashionRegisterPage() {
               className={`w-full max-w-xl rounded-[2rem] border p-6 shadow-sm ${
                 darkMode
                   ? "border-white/10 bg-white/5"
-                  : "border-orange-100 bg-white/90"
+                  : "border-[var(--brand-border)] bg-white/90"
               }`}
             >
               <div className="flex items-start gap-4">
-                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-orange-500/10 text-orange-500">
+                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-primary)]">
                   <IdCard size={30} />
                 </div>
                 <div>
@@ -1719,7 +1758,7 @@ export default function FashionRegisterPage() {
                   className={`mt-2 flex items-center gap-3 rounded-2xl px-4 py-3 ${
                     darkMode
                       ? "bg-slate-900 ring-1 ring-white/10"
-                      : "bg-slate-50 ring-1 ring-orange-100"
+                      : "bg-slate-50 ring-1 ring-[var(--brand-border)]"
                   }`}
                 >
                   <Search size={18} className="text-slate-400" />
@@ -1752,7 +1791,7 @@ export default function FashionRegisterPage() {
               <button
                 type="submit"
                 disabled={staffLoading}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {staffLoading ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -1777,7 +1816,7 @@ export default function FashionRegisterPage() {
         className={`min-h-screen ${
           darkMode
             ? "bg-slate-950 text-slate-50"
-            : "bg-[#f8f3ea] text-slate-950"
+            : "bg-[var(--brand-soft)] text-slate-950"
         } ${isResizingCart ? "cursor-col-resize" : ""}`}
       >
         <BusinessTypeGuard allow="FASHION" />
@@ -1787,7 +1826,7 @@ export default function FashionRegisterPage() {
           className={`sticky top-0 z-30 -mx-2 -mt-2 border-b px-2 py-2.5 backdrop-blur-xl sm:-mx-3 sm:-mt-3 sm:px-3 lg:-mx-5 lg:-mt-5 lg:px-5 ${
             darkMode
               ? "border-white/10 bg-slate-950/92"
-              : "border-orange-100 bg-[#f8f3ea]/92"
+              : "border-[var(--brand-border)] bg-[var(--brand-soft)]"
           }`}
         >
           <div className="flex flex-col gap-3">
@@ -1799,11 +1838,11 @@ export default function FashionRegisterPage() {
                   className={`inline-flex items-center justify-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 transition sm:px-3 sm:py-1.5 sm:text-sm ${
                     darkMode
                       ? "bg-white/10 text-white ring-white/10 hover:bg-white/15"
-                      : "bg-white text-slate-900 ring-orange-100 hover:bg-orange-50"
+                      : "bg-white text-slate-900 ring-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
                   }`}
                   aria-label="Go to dashboard"
                 >
-                  <ArrowLeft size={17} className="text-orange-500" />
+                  <ArrowLeft size={17} className="text-[var(--brand-primary)]" />
                   <span className="hidden sm:inline">Dashboard</span>
                 </button>
 
@@ -1811,10 +1850,10 @@ export default function FashionRegisterPage() {
                   className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm ${
                     darkMode
                       ? "bg-white/10 text-white ring-white/10"
-                      : "bg-white text-slate-900 ring-orange-100"
+                      : "bg-white text-slate-900 ring-[var(--brand-border)]"
                   }`}
                 >
-                  <IdCard size={17} className="text-orange-500" />
+                  <IdCard size={17} className="text-[var(--brand-primary)]" />
                   <span className="min-w-0 max-w-[120px] truncate sm:max-w-[170px]">
                     {activeStaff.staffName}
                   </span>
@@ -1822,7 +1861,7 @@ export default function FashionRegisterPage() {
                     className={`rounded-full px-2 py-0.5 text-[11px] ${
                       darkMode
                         ? "bg-slate-900 text-slate-300"
-                        : "bg-orange-50 text-orange-600"
+                        : "bg-[var(--brand-soft)] text-[var(--brand-primary)]"
                     }`}
                   >
                     {activeStaff.staffId}
@@ -1833,10 +1872,10 @@ export default function FashionRegisterPage() {
                   className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm ${
                     darkMode
                       ? "bg-white/10 text-white ring-white/10"
-                      : "bg-white text-slate-900 ring-orange-100"
+                      : "bg-white text-slate-900 ring-[var(--brand-border)]"
                   }`}
                 >
-                  <Package size={17} className="text-orange-500" />
+                  <Package size={17} className="text-[var(--brand-primary)]" />
                   <span>{filteredProducts.length} products</span>
                 </div>
 
@@ -1844,12 +1883,12 @@ export default function FashionRegisterPage() {
                   className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm ${
                     darkMode
                       ? "bg-white/10 text-white ring-white/10"
-                      : "bg-white text-slate-900 ring-orange-100"
+                      : "bg-white text-slate-900 ring-[var(--brand-border)]"
                   }`}
                 >
-                  <Receipt size={17} className="text-orange-500" />
+                  <Receipt size={17} className="text-[var(--brand-primary)]" />
                   <span>{cart.length} items</span>
-                  <span className="text-orange-500">
+                  <span className="text-[var(--brand-primary)]">
                     {formatMoney(total)} Ks
                   </span>
                 </div>
@@ -1862,7 +1901,7 @@ export default function FashionRegisterPage() {
                     setPaymentOpen(true);
                   }}
                   disabled={cart.length === 0}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-orange-500 px-2.5 py-2.5 text-xs font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-sm"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-[var(--brand-primary)] px-2.5 py-2.5 text-xs font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-sm"
                 >
                   <Wallet size={17} />
                   Payment
@@ -1874,7 +1913,7 @@ export default function FashionRegisterPage() {
                   className={`inline-flex items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2.5 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-sm ${
                     darkMode
                       ? "bg-white/10 text-white hover:bg-white/15"
-                      : "bg-white text-slate-900 ring-1 ring-orange-100 hover:bg-orange-50"
+                      : "bg-white text-slate-900 ring-1 ring-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
                   }`}
                 >
                   <Receipt size={17} />
@@ -1887,7 +1926,7 @@ export default function FashionRegisterPage() {
                   className={`inline-flex items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2.5 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-sm ${
                     darkMode
                       ? "bg-white/10 text-white hover:bg-white/15"
-                      : "bg-white text-slate-900 ring-1 ring-orange-100 hover:bg-orange-50"
+                      : "bg-white text-slate-900 ring-1 ring-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
                   }`}
                 >
                   <Trash2 size={17} />
@@ -1913,7 +1952,7 @@ export default function FashionRegisterPage() {
                 className={`flex items-center gap-2.5 rounded-2xl px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 ${
                   darkMode
                     ? "bg-slate-900 ring-1 ring-white/10"
-                    : "bg-white ring-1 ring-orange-100"
+                    : "bg-white ring-1 ring-[var(--brand-border)]"
                 }`}
               >
                 <Search size={18} className="text-slate-400" />
@@ -1931,7 +1970,7 @@ export default function FashionRegisterPage() {
                 className={`rounded-2xl px-3 py-2.5 text-xs font-black outline-none sm:px-4 sm:py-3 sm:text-sm ${
                   darkMode
                     ? "bg-slate-900 text-white ring-1 ring-white/10"
-                    : "bg-white text-slate-900 ring-1 ring-orange-100"
+                    : "bg-white text-slate-900 ring-1 ring-[var(--brand-border)]"
                 }`}
               >
                 {categories.map((category) => (
@@ -1946,14 +1985,14 @@ export default function FashionRegisterPage() {
                   onClick={() => setProductPage((p) => Math.max(1, p - 1))}
                   disabled={safeProductPage <= 1}
                   className={`grid h-11 w-11 place-items-center rounded-2xl disabled:opacity-40 ${
-                    darkMode ? "bg-white/10" : "bg-white ring-1 ring-orange-100"
+                    darkMode ? "bg-white/10" : "bg-white ring-1 ring-[var(--brand-border)]"
                   }`}
                 >
                   <ChevronLeft size={18} />
                 </button>
                 <span
                   className={`rounded-2xl px-4 py-3 text-sm font-black ${
-                    darkMode ? "bg-white/10" : "bg-white ring-1 ring-orange-100"
+                    darkMode ? "bg-white/10" : "bg-white ring-1 ring-[var(--brand-border)]"
                   }`}
                 >
                   {safeProductPage}/{productTotalPages}
@@ -1964,7 +2003,7 @@ export default function FashionRegisterPage() {
                   }
                   disabled={safeProductPage >= productTotalPages}
                   className={`grid h-11 w-11 place-items-center rounded-2xl disabled:opacity-40 ${
-                    darkMode ? "bg-white/10" : "bg-white ring-1 ring-orange-100"
+                    darkMode ? "bg-white/10" : "bg-white ring-1 ring-[var(--brand-border)]"
                   }`}
                 >
                   <ChevronRight size={18} />
@@ -1996,14 +2035,14 @@ export default function FashionRegisterPage() {
                 </p>
               </div>
 
-              <span className="w-fit rounded-2xl bg-orange-500/10 px-3 py-1.5 text-xs font-black text-orange-600 sm:px-4 sm:py-2 sm:text-sm">
+              <span className="w-fit rounded-2xl bg-[var(--brand-soft)] px-3 py-1.5 text-xs font-black text-[var(--brand-primary)] sm:px-4 sm:py-2 sm:text-sm">
                 Showing {paginatedProducts.length} of {filteredProducts.length}
               </span>
             </div>
 
             {productsLoading ? (
               <div className="grid min-h-[520px] place-items-center">
-                <Loader2 className="animate-spin text-orange-500" size={34} />
+                <Loader2 className="animate-spin text-[var(--brand-primary)]" size={34} />
               </div>
             ) : productsError ? (
               <div
@@ -2020,7 +2059,7 @@ export default function FashionRegisterPage() {
                 className={`grid min-h-[420px] place-items-center rounded-[2rem] border border-dashed p-8 text-center text-sm font-black ${
                   darkMode
                     ? "border-white/10 bg-white/5 text-slate-300"
-                    : "border-orange-200 bg-orange-50/70 text-slate-600"
+                    : "border-[var(--brand-border)] bg-[var(--brand-soft)] text-slate-600"
                 }`}
               >
                 Product မရှိသေးပါ။
@@ -2040,14 +2079,14 @@ export default function FashionRegisterPage() {
                           : "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300/40"
                         : darkMode
                         ? "border-white/10 bg-slate-900 hover:bg-slate-800"
-                        : "border-orange-100 bg-white hover:border-orange-200 hover:bg-orange-50"
+                        : "border-[var(--brand-border)] bg-white hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
                     }`}
                   >
                     <div
                       className={`relative m-1.5 grid h-[96px] w-[78px] shrink-0 place-items-center overflow-hidden rounded-[1rem] px-1.5 py-1.5 ring-1 sm:m-2 sm:h-[112px] sm:w-[104px] sm:rounded-[1.1rem] sm:px-2 sm:py-2 ${
                         darkMode
                           ? "bg-white/5 ring-white/10"
-                          : "bg-gradient-to-br from-orange-50 via-amber-50 to-white ring-orange-100"
+                          : "bg-gradient-to-br from-[var(--brand-soft)] via-[var(--background)] to-white ring-[var(--brand-border)]"
                       }`}
                     >
                       {product.image ? (
@@ -2058,7 +2097,7 @@ export default function FashionRegisterPage() {
                           className="h-full max-h-[82px] w-full object-contain drop-shadow-sm transition duration-300 group-hover:scale-105 sm:max-h-[96px]"
                         />
                       ) : (
-                        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-orange-500/10 text-orange-400 sm:h-16 sm:w-16">
+                        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-accent)] sm:h-16 sm:w-16">
                           <ShoppingBag size={26} />
                         </div>
                       )}
@@ -2094,7 +2133,7 @@ export default function FashionRegisterPage() {
                         </div>
 
                         <div className="mt-1.5 flex flex-wrap gap-1 sm:mt-2 sm:gap-1.5">
-                          <span className="max-w-[140px] truncate rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-black text-orange-600">
+                          <span className="max-w-[140px] truncate rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[10px] font-black text-[var(--brand-primary)]">
                             {product.category}
                           </span>
                           {product.size && (
@@ -2123,14 +2162,14 @@ export default function FashionRegisterPage() {
                       </div>
 
                       <div className="mt-2 flex items-center justify-between gap-2 sm:mt-3">
-                        <span className="text-sm font-black text-orange-500 sm:text-lg">
+                        <span className="text-sm font-black text-[var(--brand-primary)] sm:text-lg">
                           {formatMoney(product.price)} Ks
                         </span>
                         <span
                           className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[10px] font-black text-white shadow-sm sm:rounded-2xl sm:px-3 sm:text-[11px] ${
                             (product.variantId || product.id) === lastAddedProductKey
                               ? "bg-emerald-500 shadow-emerald-500/20"
-                              : "bg-orange-500 shadow-orange-500/20"
+                              : "bg-[var(--brand-primary)] shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
                           }`}
                         >
                           {(product.variantId || product.id) === lastAddedProductKey ? (
@@ -2154,10 +2193,10 @@ export default function FashionRegisterPage() {
               onDoubleClick={() => setCartWidth(DEFAULT_CART_WIDTH)}
               className={`absolute -left-2 top-1/2 z-40 hidden h-24 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border shadow-lg xl:landscape:flex ${
                 isResizingCart
-                  ? "border-orange-400 bg-orange-500 text-white"
+                  ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white"
                   : darkMode
-                    ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-orange-500 hover:text-white"
-                    : "border-orange-100 bg-white text-orange-500 hover:bg-orange-500 hover:text-white"
+                    ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-[var(--brand-primary)] hover:text-white"
+                    : "border-[var(--brand-border)] bg-white text-[var(--brand-primary)] hover:bg-[var(--brand-primary)] hover:text-white"
               }`}
               aria-label="Resize cart width"
               title="Drag to resize cart · Double-click to reset"
@@ -2172,12 +2211,12 @@ export default function FashionRegisterPage() {
             >
             <div
               className={`flex items-center justify-between gap-2 border-b p-2.5 sm:gap-3 sm:p-3 ${
-                darkMode ? "border-white/10" : "border-orange-100"
+                darkMode ? "border-white/10" : "border-[var(--brand-border)]"
               }`}
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="grid h-9 w-9 place-items-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25 sm:h-10 sm:w-10">
+                  <div className="grid h-9 w-9 place-items-center rounded-2xl bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] sm:h-10 sm:w-10">
                     <Receipt size={20} />
                   </div>
                   <div className="min-w-0">
@@ -2195,7 +2234,7 @@ export default function FashionRegisterPage() {
 
               <div
                 className={`hidden items-center gap-1 rounded-xl p-1 xl:landscape:flex ${
-                  darkMode ? "bg-white/10" : "bg-orange-50"
+                  darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
                 }`}
               >
                 <button
@@ -2214,7 +2253,7 @@ export default function FashionRegisterPage() {
                 >
                   <Minus size={13} />
                 </button>
-                <GripVertical size={13} className="text-orange-500" />
+                <GripVertical size={13} className="text-[var(--brand-primary)]" />
                 <button
                   type="button"
                   onClick={() =>
@@ -2237,7 +2276,7 @@ export default function FashionRegisterPage() {
                 <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">
                   Total
                 </div>
-                <div className="text-lg font-black text-orange-500 sm:text-xl">
+                <div className="text-lg font-black text-[var(--brand-primary)] sm:text-xl">
                   {formatMoney(total)} Ks
                 </div>
               </div>
@@ -2249,11 +2288,11 @@ export default function FashionRegisterPage() {
                   className={`grid h-full min-h-[280px] place-items-center rounded-[1.5rem] border border-dashed px-4 text-center sm:min-h-[360px] sm:px-5 ${
                     darkMode
                       ? "border-white/10 bg-white/5 text-slate-400"
-                      : "border-orange-200 bg-orange-50/60 text-slate-500"
+                      : "border-[var(--brand-border)] bg-[var(--brand-soft)] text-slate-500"
                   }`}
                 >
                   <div>
-                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-orange-500/10 text-orange-500">
+                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-primary)]">
                       <ShoppingBag size={28} />
                     </div>
                     <p className="mt-3 text-sm font-black">
@@ -2273,17 +2312,17 @@ export default function FashionRegisterPage() {
                       className={`group rounded-[1rem] border p-1.5 transition hover:-translate-y-0.5 sm:rounded-[1.15rem] sm:p-2 ${
                         isLastAddedItem(item)
                           ? darkMode
-                            ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
-                            : "border-orange-400 bg-orange-50 ring-2 ring-orange-300/40"
+                            ? "border-[var(--brand-primary)] bg-[var(--brand-soft)] ring-2 ring-[var(--brand-border)]"
+                            : "border-[var(--brand-primary)] bg-[var(--brand-soft)] ring-2 ring-[var(--brand-border)]"
                           : darkMode
                             ? "border-white/10 bg-slate-900/90 hover:bg-slate-900"
-                            : "border-orange-100 bg-white hover:border-orange-200 hover:bg-orange-50/50"
+                            : "border-[var(--brand-border)] bg-white hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
                       }`}
                     >
                       <div className="flex items-center gap-2 sm:gap-2.5">
                         <div
                           className={`grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl sm:h-11 sm:w-11 sm:rounded-2xl ${
-                            darkMode ? "bg-white/10" : "bg-orange-50"
+                            darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
                           }`}
                         >
                           {item.image ? (
@@ -2296,7 +2335,7 @@ export default function FashionRegisterPage() {
                           ) : (
                             <ShoppingBag
                               size={19}
-                              className="text-orange-400"
+                              className="text-[var(--brand-accent)]"
                             />
                           )}
                         </div>
@@ -2309,7 +2348,7 @@ export default function FashionRegisterPage() {
                                   {item.name}
                                 </h3>
                                 {isLastAddedItem(item) && (
-                                  <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                  <span className="shrink-0 rounded-full bg-[var(--brand-primary)] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
                                     Latest
                                   </span>
                                 )}
@@ -2333,13 +2372,13 @@ export default function FashionRegisterPage() {
                           </div>
 
                           <div className="mt-1.5 flex items-center justify-between gap-1.5 sm:gap-2">
-                            <div className="inline-flex items-center gap-1 rounded-2xl bg-orange-500/10 p-1 text-orange-600">
+                            <div className="inline-flex items-center gap-1 rounded-2xl bg-[var(--brand-soft)] p-1 text-[var(--brand-primary)]">
                               <button
                                 onClick={() => updateQty(item.cartId, "minus")}
                                 className={`grid h-6 w-6 place-items-center rounded-lg ${
                                   darkMode
-                                    ? "bg-slate-950 text-orange-400"
-                                    : "bg-white text-orange-600"
+                                    ? "bg-slate-950 text-[var(--brand-accent)]"
+                                    : "bg-white text-[var(--brand-primary)]"
                                 }`}
                                 aria-label="Decrease quantity"
                               >
@@ -2352,8 +2391,8 @@ export default function FashionRegisterPage() {
                                 onClick={() => updateQty(item.cartId, "plus")}
                                 className={`grid h-6 w-6 place-items-center rounded-lg ${
                                   darkMode
-                                    ? "bg-slate-950 text-orange-400"
-                                    : "bg-white text-orange-600"
+                                    ? "bg-slate-950 text-[var(--brand-accent)]"
+                                    : "bg-white text-[var(--brand-primary)]"
                                 }`}
                                 aria-label="Increase quantity"
                               >
@@ -2365,7 +2404,7 @@ export default function FashionRegisterPage() {
                               <div className="text-[11px] font-bold text-slate-400">
                                 {formatMoney(item.price)} × {item.qty}
                               </div>
-                              <div className="text-sm font-black text-orange-500">
+                              <div className="text-sm font-black text-[var(--brand-primary)]">
                                 {formatMoney(item.price * item.qty)} Ks
                               </div>
                             </div>
@@ -2380,7 +2419,7 @@ export default function FashionRegisterPage() {
 
             <div
               className={`border-t p-2 sm:p-2.5 ${
-                darkMode ? "border-white/10" : "border-orange-100"
+                darkMode ? "border-white/10" : "border-[var(--brand-border)]"
               }`}
             >
               <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -2388,7 +2427,7 @@ export default function FashionRegisterPage() {
                   onClick={() => setCartPage((p) => Math.max(1, p - 1))}
                   disabled={safeCartPage <= 1}
                   className={`grid h-8 w-8 place-items-center rounded-xl disabled:opacity-40 ${
-                    darkMode ? "bg-white/10" : "bg-orange-50"
+                    darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
                   }`}
                 >
                   <ChevronLeft size={17} />
@@ -2396,7 +2435,7 @@ export default function FashionRegisterPage() {
 
                 <span
                   className={`rounded-xl px-3 py-1.5 text-xs font-black ${
-                    darkMode ? "bg-white/10" : "bg-orange-50 text-slate-700"
+                    darkMode ? "bg-white/10" : "bg-[var(--brand-soft)] text-slate-700"
                   }`}
                 >
                   {safeCartPage}/{cartTotalPages}
@@ -2408,7 +2447,7 @@ export default function FashionRegisterPage() {
                   }
                   disabled={safeCartPage >= cartTotalPages}
                   className={`grid h-8 w-8 place-items-center rounded-xl disabled:opacity-40 ${
-                    darkMode ? "bg-white/10" : "bg-orange-50"
+                    darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
                   }`}
                 >
                   <ChevronRight size={17} />
@@ -2419,7 +2458,7 @@ export default function FashionRegisterPage() {
                 className={`rounded-[1.25rem] border p-2.5 ${
                   darkMode
                     ? "border-white/10 bg-slate-900"
-                    : "border-orange-100 bg-orange-50/60"
+                    : "border-[var(--brand-border)] bg-[var(--brand-soft)]"
                 }`}
               >
                 <div className="grid grid-cols-2 gap-1.5 text-xs font-black">
@@ -2440,7 +2479,7 @@ export default function FashionRegisterPage() {
                     }`}
                   >
                     <div className="text-slate-400">Total</div>
-                    <div className="mt-0.5 text-sm text-orange-500">
+                    <div className="mt-0.5 text-sm text-[var(--brand-primary)]">
                       {formatMoney(total)} Ks
                     </div>
                   </div>
@@ -2503,7 +2542,7 @@ export default function FashionRegisterPage() {
                 <button
                   onClick={() => setPaymentOpen(true)}
                   disabled={cart.length === 0}
-                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Wallet size={18} />
                   Payment
@@ -2546,7 +2585,7 @@ export default function FashionRegisterPage() {
               className={`w-full max-w-md rounded-[2rem] border p-5 shadow-2xl sm:p-6 ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
+                  : "border-[var(--brand-border)] bg-white text-slate-950"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -2571,14 +2610,14 @@ export default function FashionRegisterPage() {
                 Payment မပြီးသေးဘဲထွက်လျှင် လက်ရှိ cart ပျောက်သွားနိုင်ပါတယ်။
               </p>
 
-              <div className={`mt-4 rounded-2xl p-3 ${darkMode ? "bg-white/5" : "bg-orange-50"}`}>
+              <div className={`mt-4 rounded-2xl p-3 ${darkMode ? "bg-white/5" : "bg-[var(--brand-soft)]"}`}>
                 <div className="flex items-center justify-between text-sm font-black">
                   <span>Subtotal</span>
                   <span>{formatMoney(subtotal)} Ks</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-base font-black">
                   <span>Total</span>
-                  <span className="text-orange-500">{formatMoney(total)} Ks</span>
+                  <span className="text-[var(--brand-primary)]">{formatMoney(total)} Ks</span>
                 </div>
               </div>
 
@@ -2598,7 +2637,7 @@ export default function FashionRegisterPage() {
                 <button
                   type="button"
                   onClick={continueToPaymentFromExit}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
                 >
                   <Wallet size={17} />
                   Continue to Payment
@@ -2635,16 +2674,16 @@ export default function FashionRegisterPage() {
               className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-[2rem] border shadow-2xl sm:max-w-2xl sm:rounded-[2rem] ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
+                  : "border-[var(--brand-border)] bg-white text-slate-950"
               }`}
             >
               <div
                 className={`flex items-center justify-between gap-3 border-b p-4 ${
-                  darkMode ? "border-white/10" : "border-orange-100"
+                  darkMode ? "border-white/10" : "border-[var(--brand-border)]"
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]">
                     <Receipt size={22} />
                   </div>
                   <div className="min-w-0">
@@ -2677,11 +2716,11 @@ export default function FashionRegisterPage() {
                     className={`grid min-h-[300px] place-items-center rounded-[1.5rem] border border-dashed px-5 text-center ${
                       darkMode
                         ? "border-white/10 bg-white/5 text-slate-400"
-                        : "border-orange-200 bg-orange-50/60 text-slate-500"
+                        : "border-[var(--brand-border)] bg-[var(--brand-soft)] text-slate-500"
                     }`}
                   >
                     <div>
-                      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-orange-500/10 text-orange-500">
+                      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-primary)]">
                         <ShoppingBag size={28} />
                       </div>
                       <p className="mt-3 text-sm font-black">
@@ -2697,11 +2736,11 @@ export default function FashionRegisterPage() {
                         className={`rounded-[1.15rem] border p-2 transition ${
                           isLastAddedItem(item)
                             ? darkMode
-                              ? "border-orange-400 bg-orange-500/15 ring-2 ring-orange-400/30"
-                              : "border-orange-400 bg-orange-50 ring-2 ring-orange-300/40"
+                              ? "border-[var(--brand-primary)] bg-[var(--brand-soft)] ring-2 ring-[var(--brand-border)]"
+                              : "border-[var(--brand-primary)] bg-[var(--brand-soft)] ring-2 ring-[var(--brand-border)]"
                             : darkMode
                               ? "border-white/10 bg-slate-900"
-                              : "border-orange-100 bg-orange-50/40"
+                              : "border-[var(--brand-border)] bg-[var(--brand-soft)]"
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
@@ -2718,7 +2757,7 @@ export default function FashionRegisterPage() {
                                 className="h-full w-full object-contain p-1"
                               />
                             ) : (
-                              <ShoppingBag size={20} className="text-orange-400" />
+                              <ShoppingBag size={20} className="text-[var(--brand-accent)]" />
                             )}
                           </div>
 
@@ -2730,7 +2769,7 @@ export default function FashionRegisterPage() {
                                     {item.name}
                                   </h3>
                                   {isLastAddedItem(item) && (
-                                    <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                    <span className="shrink-0 rounded-full bg-[var(--brand-primary)] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
                                       Latest
                                     </span>
                                   )}
@@ -2752,13 +2791,13 @@ export default function FashionRegisterPage() {
                             </div>
 
                             <div className="mt-2 flex items-center justify-between gap-2">
-                              <div className="inline-flex items-center gap-1 rounded-2xl bg-orange-500/10 p-1 text-orange-600">
+                              <div className="inline-flex items-center gap-1 rounded-2xl bg-[var(--brand-soft)] p-1 text-[var(--brand-primary)]">
                                 <button
                                   onClick={() => updateQty(item.cartId, "minus")}
                                   className={`grid h-7 w-7 place-items-center rounded-lg ${
                                     darkMode
-                                      ? "bg-slate-950 text-orange-400"
-                                      : "bg-white text-orange-600"
+                                      ? "bg-slate-950 text-[var(--brand-accent)]"
+                                      : "bg-white text-[var(--brand-primary)]"
                                   }`}
                                 >
                                   <Minus size={13} />
@@ -2770,8 +2809,8 @@ export default function FashionRegisterPage() {
                                   onClick={() => updateQty(item.cartId, "plus")}
                                   className={`grid h-7 w-7 place-items-center rounded-lg ${
                                     darkMode
-                                      ? "bg-slate-950 text-orange-400"
-                                      : "bg-white text-orange-600"
+                                      ? "bg-slate-950 text-[var(--brand-accent)]"
+                                      : "bg-white text-[var(--brand-primary)]"
                                   }`}
                                 >
                                   <Plus size={13} />
@@ -2782,7 +2821,7 @@ export default function FashionRegisterPage() {
                                 <div className="text-[11px] font-bold text-slate-400">
                                   {formatMoney(item.price)} × {item.qty}
                                 </div>
-                                <div className="text-sm font-black text-orange-500">
+                                <div className="text-sm font-black text-[var(--brand-primary)]">
                                   {formatMoney(item.price * item.qty)} Ks
                                 </div>
                               </div>
@@ -2797,7 +2836,7 @@ export default function FashionRegisterPage() {
 
               <div
                 className={`border-t p-3 sm:p-4 ${
-                  darkMode ? "border-white/10" : "border-orange-100"
+                  darkMode ? "border-white/10" : "border-[var(--brand-border)]"
                 }`}
               >
                 <div className="mb-3 flex items-center justify-between gap-2">
@@ -2805,7 +2844,7 @@ export default function FashionRegisterPage() {
                     onClick={() => setCartPage((p) => Math.max(1, p - 1))}
                     disabled={safeCartPage <= 1}
                     className={`grid h-10 w-10 place-items-center rounded-2xl disabled:opacity-40 ${
-                      darkMode ? "bg-white/10" : "bg-orange-50"
+                      darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
                     }`}
                   >
                     <ChevronLeft size={18} />
@@ -2824,7 +2863,7 @@ export default function FashionRegisterPage() {
                     }
                     disabled={safeCartPage >= cartTotalPages}
                     className={`grid h-10 w-10 place-items-center rounded-2xl disabled:opacity-40 ${
-                      darkMode ? "bg-white/10" : "bg-orange-50"
+                      darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
                     }`}
                   >
                     <ChevronRight size={18} />
@@ -2835,7 +2874,7 @@ export default function FashionRegisterPage() {
                   className={`rounded-[1.5rem] border p-3 ${
                     darkMode
                       ? "border-white/10 bg-slate-900"
-                      : "border-orange-100 bg-orange-50/70"
+                      : "border-[var(--brand-border)] bg-[var(--brand-soft)]"
                   }`}
                 >
                   <div className="grid grid-cols-2 gap-2 text-xs font-black">
@@ -2853,7 +2892,7 @@ export default function FashionRegisterPage() {
                       }`}
                     >
                       <div className="text-slate-400">Total</div>
-                      <div className="mt-1 text-sm text-orange-500">
+                      <div className="mt-1 text-sm text-[var(--brand-primary)]">
                         {formatMoney(total)} Ks
                       </div>
                     </div>
@@ -2866,7 +2905,7 @@ export default function FashionRegisterPage() {
                       setPaymentOpen(true);
                     }}
                     disabled={cart.length === 0}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Wallet size={18} />
                     Payment
@@ -2897,7 +2936,7 @@ export default function FashionRegisterPage() {
               className={`my-auto w-full max-w-lg rounded-[2rem] border p-4 shadow-2xl sm:p-6 ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
+                  : "border-[var(--brand-border)] bg-white text-slate-950"
               }`}
             >
               <div className="flex items-center justify-between">
@@ -2926,19 +2965,19 @@ export default function FashionRegisterPage() {
               <div
                 className={`mt-4 overflow-hidden rounded-3xl border ${
                   darkMode
-                    ? "border-orange-400/20 bg-gradient-to-br from-orange-500/20 to-amber-400/5"
-                    : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50"
+                    ? "border-[var(--brand-border)] bg-gradient-to-br from-[var(--brand-soft)] to-transparent"
+                    : "border-[var(--brand-border)] bg-gradient-to-br from-[var(--brand-soft)] to-[var(--brand-soft)]"
                 }`}
               >
                 <div className="px-5 py-5 text-center sm:py-6">
                   <p
                     className={`text-xs font-black uppercase tracking-[0.18em] ${
-                      darkMode ? "text-orange-300" : "text-orange-600"
+                      darkMode ? "text-[var(--brand-accent)]" : "text-[var(--brand-primary)]"
                     }`}
                   >
                     ကျသင့်ငွေ
                   </p>
-                  <p className="mt-1 text-4xl font-black tabular-nums text-orange-500 sm:text-5xl">
+                  <p className="mt-1 text-4xl font-black tabular-nums text-[var(--brand-primary)] sm:text-5xl">
                     {formatMoney(total)}
                     <span className="ml-2 text-lg sm:text-xl">Ks</span>
                   </p>
@@ -2948,14 +2987,14 @@ export default function FashionRegisterPage() {
                   className={`grid grid-cols-3 border-t px-4 py-3 text-center text-xs font-bold ${
                     darkMode
                       ? "border-white/10 bg-black/10 text-slate-300"
-                      : "border-orange-100 bg-white/60 text-slate-600"
+                      : "border-[var(--brand-border)] bg-white/60 text-slate-600"
                   }`}
                 >
                   <div>
                     <p className="text-[10px] uppercase text-slate-400">Subtotal</p>
                     <p className="mt-1 tabular-nums">{formatMoney(subtotal)} Ks</p>
                   </div>
-                  <div className={`border-x ${darkMode ? "border-white/10" : "border-orange-100"}`}>
+                  <div className={`border-x ${darkMode ? "border-white/10" : "border-[var(--brand-border)]"}`}>
                     <p className="text-[10px] uppercase text-slate-400">Discount</p>
                     <p className="mt-1 tabular-nums">-{formatMoney(discount)} Ks</p>
                   </div>
@@ -2996,10 +3035,10 @@ export default function FashionRegisterPage() {
                       disabled={paymentSaving}
                       className={`rounded-2xl p-3 text-sm font-black transition ${
                         paymentMethod === method.key
-                          ? "bg-orange-500 text-white"
+                          ? "bg-[var(--brand-primary)] text-white"
                           : darkMode
                             ? "bg-white/10 text-slate-200"
-                            : "bg-orange-50 text-slate-700"
+                            : "bg-[var(--brand-soft)] text-slate-700"
                       }`}
                     >
                       <Icon className="mx-auto mb-1" size={18} />
@@ -3022,7 +3061,7 @@ export default function FashionRegisterPage() {
                         setPaymentError("");
                       }}
                       disabled={paymentSaving}
-                      className="text-xs font-black text-orange-500 hover:text-orange-600 disabled:opacity-50"
+                      className="text-xs font-black text-[var(--brand-primary)] hover:text-[var(--brand-primary)] disabled:opacity-50"
                     >
                       Exact amount
                     </button>
@@ -3041,7 +3080,7 @@ export default function FashionRegisterPage() {
                     min="0"
                     placeholder="0"
                     disabled={paymentSaving}
-                    className={`mt-2 w-full rounded-2xl px-4 py-4 text-center text-3xl font-black tabular-nums outline-none transition focus:ring-2 focus:ring-orange-500 ${
+                    className={`mt-2 w-full rounded-2xl px-4 py-4 text-center text-3xl font-black tabular-nums outline-none transition focus:ring-2 focus:ring-[var(--brand-primary)] ${
                       darkMode
                         ? "bg-slate-900 text-white ring-1 ring-white/10"
                         : "bg-white text-slate-950 ring-1 ring-slate-200"
@@ -3060,10 +3099,10 @@ export default function FashionRegisterPage() {
                         disabled={paymentSaving}
                         className={`rounded-xl px-2 py-2.5 text-xs font-black tabular-nums transition disabled:opacity-50 ${
                           cashNumber === amount
-                            ? "bg-orange-500 text-white"
+                            ? "bg-[var(--brand-primary)] text-white"
                             : darkMode
                               ? "bg-white/10 text-slate-200 hover:bg-white/15"
-                              : "bg-slate-100 text-slate-700 hover:bg-orange-50"
+                              : "bg-slate-100 text-slate-700 hover:bg-[var(--brand-soft)]"
                         }`}
                       >
                         {formatMoney(amount)} Ks
@@ -3130,7 +3169,7 @@ export default function FashionRegisterPage() {
                 <button
                   onClick={completePayment}
                   disabled={paymentSaving || cart.length === 0 || !cashIsEnough}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {paymentSaving ? (
                     <Loader2 className="animate-spin" size={18} />
@@ -3166,7 +3205,7 @@ export default function FashionRegisterPage() {
               className={`w-full max-w-md overflow-hidden rounded-[2rem] border shadow-2xl ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
-                  : "border-orange-100 bg-white text-slate-950"
+                  : "border-[var(--brand-border)] bg-white text-slate-950"
               }`}
             >
               <div className="flex items-center justify-between border-b border-slate-200/20 p-5">
@@ -3258,7 +3297,7 @@ export default function FashionRegisterPage() {
                     </div>
                     <div className="flex justify-between text-lg">
                       <span>Total</span>
-                      <span className="text-orange-500">
+                      <span className="text-[var(--brand-primary)]">
                         {formatMoney(receiptData.total)} Ks
                       </span>
                     </div>
@@ -3279,7 +3318,7 @@ export default function FashionRegisterPage() {
 
                   <button
                     onClick={printReceipt}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]"
                   >
                     <Printer size={18} />
                     Print
@@ -3334,13 +3373,13 @@ export default function FashionRegisterPage() {
             onAnimationComplete={() => setFlyingProduct(null)}
             className={`pointer-events-none fixed z-[100] flex w-40 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border p-2 shadow-2xl ${
               darkMode
-                ? "border-orange-400 bg-slate-900 text-white"
-                : "border-orange-200 bg-white text-slate-950"
+                ? "border-[var(--brand-primary)] bg-slate-900 text-white"
+                : "border-[var(--brand-border)] bg-white text-slate-950"
             }`}
           >
             <div
               className={`grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl ${
-                darkMode ? "bg-white/10" : "bg-orange-50"
+                darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
               }`}
             >
               {flyingProduct.product.image ? (
@@ -3350,7 +3389,7 @@ export default function FashionRegisterPage() {
                   className="h-full w-full object-contain p-1"
                 />
               ) : (
-                <ShoppingBag size={22} className="text-orange-500" />
+                <ShoppingBag size={22} className="text-[var(--brand-primary)]" />
               )}
             </div>
             <div className="min-w-0">
@@ -3368,13 +3407,13 @@ export default function FashionRegisterPage() {
           <div
             className={`flex w-[280px] items-center gap-3 rounded-2xl border p-3 shadow-2xl ${
               darkMode
-                ? "border-orange-400 bg-slate-900 text-white"
-                : "border-orange-200 bg-white text-slate-950"
+                ? "border-[var(--brand-primary)] bg-slate-900 text-white"
+                : "border-[var(--brand-border)] bg-white text-slate-950"
             }`}
           >
             <div
               className={`grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl ${
-                darkMode ? "bg-white/10" : "bg-orange-50"
+                darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"
               }`}
             >
               {draggingProduct.image ? (
@@ -3385,18 +3424,18 @@ export default function FashionRegisterPage() {
                   className="h-full w-full object-contain p-1"
                 />
               ) : (
-                <ShoppingBag size={24} className="text-orange-500" />
+                <ShoppingBag size={24} className="text-[var(--brand-primary)]" />
               )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black">
                 {draggingProduct.name}
               </p>
-              <p className="mt-1 text-lg font-black text-orange-500">
+              <p className="mt-1 text-lg font-black text-[var(--brand-primary)]">
                 {formatMoney(draggingProduct.price)} Ks
               </p>
             </div>
-            <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black text-white">
+            <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[10px] font-black text-white">
               Dragging
             </span>
           </div>
