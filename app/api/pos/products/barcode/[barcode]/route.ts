@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { readAvailableForSale } from "@/lib/product-availability";
 
 type ParamsContext = {
   params: Promise<{ barcode: string }> | { barcode: string };
@@ -43,6 +44,7 @@ function normalizeProductForPos(p: any) {
     ),
 
     taxable: true,
+    availableForSale: readAvailableForSale(p),
 
     imagePath:
       p?.imagePath ??

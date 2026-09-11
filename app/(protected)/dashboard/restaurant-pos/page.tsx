@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import {
   DragDropProvider,
   DragOverlay,
@@ -14,6 +15,7 @@ import {
 import { BusinessTypeGuard } from "@/components/dashboard/business-type-guard";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
 import { fetchStaffById } from "@/lib/staff-validation";
+import { readAvailableForSale, unavailableToastMessage } from "@/lib/product-availability";
 import {
   ArrowLeft,
   Armchair,
@@ -66,7 +68,7 @@ type MenuItem = {
   stock: number | null;
   image?: string;
   popular?: boolean;
-  available?: boolean;
+  availableForSale: boolean;
   prepTime?: string;
 };
 
@@ -1028,7 +1030,7 @@ function mapProductToMenuItem(product: BackendProduct): MenuItem {
     price,
     stock: quantity,
     image,
-    available: quantity === null ? true : quantity > 0,
+    availableForSale: readAvailableForSale(product),
   };
 }
 
@@ -1123,9 +1125,9 @@ function DraggableMenuCard({
       ref={ref}
       type="button"
       onClick={onClick}
-      disabled={disabled}
+      aria-disabled={disabled}
       className={`${className} touch-none select-none cursor-grab active:cursor-grabbing ${isDragging ? "scale-[0.98] opacity-35" : ""
-        }`}
+        } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
     >
       {children}
     </button>
@@ -1163,7 +1165,7 @@ function RestaurantCartDropSurface({
         }`}
     >
       {dragging && (
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-30 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-2 text-center text-xs font-black text-white shadow-lg">
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-30 rounded-2xl bg-[var(--brand-primary)] px-4 py-2 text-center text-xs font-black text-white shadow-lg">
           {isDropTarget ? "Release to add item" : "Drop here to add item"}
         </div>
       )}
@@ -1219,7 +1221,7 @@ function RestaurantMobileCartBar({
       className={`fixed inset-x-2 bottom-2 z-50 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl transition-colors lg:landscape:hidden ${isDropTarget
           ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
           : dragging
-            ? "border-[var(--brand-primary)] bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white ring-4 ring-[var(--brand-border)]"
+            ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white ring-4 ring-[var(--brand-border)]"
             : addedFeedbackVisible
               ? "border-emerald-400 bg-emerald-500 text-white ring-4 ring-emerald-400/25"
               : darkMode
@@ -1280,7 +1282,7 @@ function RestaurantMobileCartBar({
             type="button"
             onClick={onPayment}
             disabled={!hasItems}
-            className="rounded-xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 py-3 text-xs font-black text-white disabled:opacity-40"
+            className="rounded-xl bg-[var(--brand-primary)] px-3 py-3 text-xs font-black text-white disabled:opacity-40"
           >
             Pay
           </button>
@@ -1653,9 +1655,9 @@ export default function RestaurantCashierPOSPage() {
     }
   }
 
-  async function fetchMenuItems() {
-    setMenuLoading(true);
-    setMenuError("");
+  async function fetchMenuItems(options: { silent?: boolean } = {}) {
+    if (!options.silent) setMenuLoading(true);
+    if (!options.silent) setMenuError("");
 
     try {
       const usableToken = ensurePageAccessToken(sessionAccessToken);
@@ -1698,14 +1700,16 @@ export default function RestaurantCashierPOSPage() {
 
         return "all";
       });
+      return nextMenuItems;
     } catch (err) {
-      setMenuItems([]);
-      setSelectedCategory("all");
-      setMenuError(
+      if (!options.silent) setMenuItems([]);
+      if (!options.silent) setSelectedCategory("all");
+      if (!options.silent) setMenuError(
         err instanceof Error ? err.message : "Menu products loading error",
       );
+      return [];
     } finally {
-      setMenuLoading(false);
+      if (!options.silent) setMenuLoading(false);
     }
   }
 
@@ -2057,10 +2061,16 @@ export default function RestaurantCashierPOSPage() {
     void fetchMenuItems();
     void fetchOrderRates();
 
+    const refreshAvailability = () => void fetchMenuItems({ silent: true });
+    const availabilityInterval = window.setInterval(refreshAvailability, 30_000);
+    window.addEventListener("focus", refreshAvailability);
+
     window.addEventListener(SHOP_SETTINGS_UPDATED_EVENT, fetchOrderRates);
 
     return () => {
       window.removeEventListener(SHOP_SETTINGS_UPDATED_EVENT, fetchOrderRates);
+      window.clearInterval(availabilityInterval);
+      window.removeEventListener("focus", refreshAvailability);
     };
   }, [sessionAccessToken, status]);
 
@@ -2333,7 +2343,15 @@ export default function RestaurantCashierPOSPage() {
   };
 
   const addToCart = (item: MenuItem) => {
-    if (!item.available || item.stock === 0) {
+    if (!item.availableForSale) {
+      const message = unavailableToastMessage(item.name);
+      setKitchenError(message);
+      setPaymentError(message);
+      toast.error(message);
+      return false;
+    }
+
+    if (item.stock === 0) {
       const message = `${item.name} stock မရှိပါ။ Add to cart လုပ်မရပါ။`;
 
       setKitchenError(message);
@@ -2514,6 +2532,25 @@ export default function RestaurantCashierPOSPage() {
 
     if (addToCart(item)) {
       animateItemToCart(item, event.currentTarget);
+      showCartAddedFeedback();
+    }
+  }
+
+  function handleBarcodeSearchEnter() {
+    const code = search.trim().toLowerCase();
+    if (!code) return;
+    const item = menuItems.find((product) =>
+      [product.barcode, product.sku].some(
+        (value) => value?.trim().toLowerCase() === code,
+      ),
+    );
+    if (!item) {
+      setSearchDialogOpen(false);
+      return;
+    }
+    if (addToCart(item)) {
+      setSearch("");
+      setSearchDialogOpen(false);
       showCartAddedFeedback();
     }
   }
@@ -2771,6 +2808,20 @@ export default function RestaurantCashierPOSPage() {
 
     if (cart.length === 0) return;
 
+    const latestMenuItems = await fetchMenuItems({ silent: true });
+    const unavailableItem = cart.find((item) => {
+      const latest = latestMenuItems.find((product) => isSameMenuItem(item, product));
+      return !latest || !latest.availableForSale;
+    });
+
+    if (unavailableItem) {
+      const message = unavailableToastMessage(unavailableItem.name);
+      setPaymentError(message);
+      setKitchenError(message);
+      toast.error(message);
+      return;
+    }
+
     const stockError = validateCartStock();
 
     if (stockError) {
@@ -2986,7 +3037,6 @@ export default function RestaurantCashierPOSPage() {
           return {
             ...menuItem,
             stock: nextStock,
-            available: nextStock > 0,
           };
         }),
       );
@@ -3057,7 +3107,7 @@ export default function RestaurantCashierPOSPage() {
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]">
+                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]">
                   <ChefHat size={30} />
                 </div>
                 <div>
@@ -3148,7 +3198,7 @@ export default function RestaurantCashierPOSPage() {
               <button
                 type="submit"
                 disabled={staffLoading}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {staffLoading ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -3245,7 +3295,7 @@ export default function RestaurantCashierPOSPage() {
                   <MoreHorizontal size={18} />
                   <span className="hidden sm:inline">Controls</span>
                   {cartTotalQuantity > 0 && (
-                    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-1 text-[10px] text-white">
+                    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[var(--brand-primary)] px-1 text-[10px] text-white">
                       {cartTotalQuantity}
                     </span>
                   )}
@@ -3416,7 +3466,7 @@ export default function RestaurantCashierPOSPage() {
                               key={page}
                               onClick={() => setMenuPage(page)}
                               className={`h-2 flex-1 rounded-full transition ${active
-                                  ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))]"
+                                  ? "bg-[var(--brand-primary)]"
                                   : darkMode
                                     ? "bg-white/10 hover:bg-white/20"
                                     : "bg-[var(--brand-soft)] hover:bg-[var(--brand-soft)]"
@@ -3443,7 +3493,7 @@ export default function RestaurantCashierPOSPage() {
                           key={item.id}
                           menuItemId={item.id}
                           onClick={(event) => handleMenuClick(item, event)}
-                          disabled={!item.available}
+                          disabled={!item.availableForSale || item.stock === 0}
                           className={`group rounded-[1.75rem] border p-4 text-left shadow-sm transition ${lastAddedMenuItemId === item.id
                               ? darkMode
                                 ? "border-emerald-400 bg-emerald-500/15 ring-2 ring-emerald-400/30"
@@ -3475,15 +3525,15 @@ export default function RestaurantCashierPOSPage() {
                                 </span>
                               )}
                               <span
-                                className={`rounded-full px-2.5 py-1 text-[11px] font-black ${item.available
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-black ${item.availableForSale && item.stock !== 0
                                     ? "bg-emerald-500/10 text-emerald-600"
                                     : "bg-red-500/10 text-red-600"
                                   }`}
                               >
-                                {item.stock === null
-                                  ? item.available
+                                {!item.availableForSale
+                                  ? "Out of Stock"
+                                  : item.stock === null
                                     ? "Available"
-                                    : "Sold out"
                                   : item.stock > 0
                                     ? `Stock ${item.stock}`
                                     : "Sold out"}
@@ -3523,7 +3573,7 @@ export default function RestaurantCashierPOSPage() {
                             <div
                               className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-white transition ${lastAddedMenuItemId === item.id
                                   ? "bg-emerald-500"
-                                  : "bg-slate-950 group-hover:bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))]"
+                                  : "bg-slate-950 group-hover:bg-[var(--brand-primary)]"
                                 }`}
                             >
                               {lastAddedMenuItemId === item.id ? (
@@ -3561,10 +3611,10 @@ export default function RestaurantCashierPOSPage() {
                 onPointerDown={beginCartResize}
                 onDoubleClick={() => setCartWidth(DEFAULT_CART_WIDTH)}
                 className={`absolute -left-2 top-1/2 z-40 hidden h-24 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border shadow-lg xl:landscape:flex ${isResizingCart
-                    ? "border-[var(--brand-primary)] bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"
+                    ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white"
                     : darkMode
-                      ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] hover:text-white"
-                      : "border-[var(--brand-border)] bg-white text-[var(--brand-primary)] hover:bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] hover:text-white"
+                      ? "border-white/10 bg-slate-800 text-slate-300 hover:bg-[var(--brand-primary)] hover:text-white"
+                      : "border-[var(--brand-border)] bg-white text-[var(--brand-primary)] hover:bg-[var(--brand-primary)] hover:text-white"
                   }`}
                 aria-label="Resize cart width"
                 title="Drag to resize cart · Double-click to reset"
@@ -3665,7 +3715,7 @@ export default function RestaurantCashierPOSPage() {
                           }`}
                       >
                         <div>
-                          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]">
+                          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]">
                             <Coffee size={36} />
                           </div>
                           <h3 className="mt-4 text-lg font-black">
@@ -3760,7 +3810,7 @@ export default function RestaurantCashierPOSPage() {
                                       type="button"
                                       onClick={() => goToCartPage(page)}
                                       className={`h-2 flex-1 rounded-full transition ${active
-                                          ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))]"
+                                          ? "bg-[var(--brand-primary)]"
                                           : darkMode
                                             ? "bg-white/10 hover:bg-white/20"
                                             : "bg-[var(--brand-soft)] hover:bg-[var(--brand-soft)]"
@@ -3804,7 +3854,7 @@ export default function RestaurantCashierPOSPage() {
                                         {item.name}
                                       </h3>
                                       {isLastAddedItem(item) && (
-                                        <span className="shrink-0 rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                        <span className="shrink-0 rounded-full bg-[var(--brand-primary)] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
                                           Latest
                                         </span>
                                       )}
@@ -3850,7 +3900,7 @@ export default function RestaurantCashierPOSPage() {
 
                                 <button
                                   onClick={() => updateQty(item.id, "plus")}
-                                  className="grid h-8 w-8 place-items-center rounded-xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"
+                                  className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--brand-primary)] text-white"
                                 >
                                   <Plus size={16} />
                                 </button>
@@ -3878,7 +3928,7 @@ export default function RestaurantCashierPOSPage() {
                                       toggleModifier(item.id, modifier)
                                     }
                                     className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black transition ${active
-                                        ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-sm shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
+                                        ? "bg-[var(--brand-primary)] text-white shadow-sm shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
                                         : darkMode
                                           ? "bg-white/10 text-slate-300 hover:bg-white/15"
                                           : "bg-white text-slate-500 ring-1 ring-slate-100 hover:bg-[var(--brand-soft)]"
@@ -4030,7 +4080,7 @@ export default function RestaurantCashierPOSPage() {
                     <button
                       onClick={openPaymentDialog}
                       disabled={cart.length === 0}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 text-xs font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Payment
                       <ChevronRight size={18} />
@@ -4399,7 +4449,7 @@ export default function RestaurantCashierPOSPage() {
                             }
                           }}
                           className={`inline-flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-3 text-xs font-black transition ${orderType === type.key
-                              ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-md shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
+                              ? "bg-[var(--brand-primary)] text-white shadow-md shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
                               : darkMode
                                 ? "bg-white/10 text-slate-200"
                                 : "bg-[var(--brand-soft)] text-slate-700"
@@ -4511,7 +4561,7 @@ export default function RestaurantCashierPOSPage() {
                           openPaymentDialog();
                         }}
                         disabled={cart.length === 0}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] p-3 text-sm font-black text-white disabled:opacity-40"
+                        className="inline-flex items-center gap-2 rounded-2xl bg-[var(--brand-primary)] p-3 text-sm font-black text-white disabled:opacity-40"
                       >
                         <Wallet size={18} /> Payment
                       </button>
@@ -4538,7 +4588,7 @@ export default function RestaurantCashierPOSPage() {
                     <div
                       className={`flex items-center gap-3 rounded-2xl p-3 ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"}`}
                     >
-                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white">
+                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--brand-primary)] text-white">
                         <IdCard size={21} />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -4618,7 +4668,7 @@ export default function RestaurantCashierPOSPage() {
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter") setSearchDialogOpen(false);
+                        if (event.key === "Enter") handleBarcodeSearchEnter();
                       }}
                       placeholder="Search food, drink or barcode..."
                       className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:text-slate-400"
@@ -4642,7 +4692,7 @@ export default function RestaurantCashierPOSPage() {
                         type="button"
                         onClick={() => setSelectedCategory(category.id)}
                         className={`shrink-0 rounded-xl px-3 py-2 text-xs font-black transition ${selectedCategory === category.id
-                            ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"
+                            ? "bg-[var(--brand-primary)] text-white"
                             : darkMode
                               ? "bg-white/10 text-slate-200"
                               : "bg-[var(--brand-soft)] text-slate-700"
@@ -4671,7 +4721,7 @@ export default function RestaurantCashierPOSPage() {
                     <button
                       type="button"
                       onClick={() => setSearchDialogOpen(false)}
-                      className="rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
+                      className="rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
                     >
                       Show {filteredMenu.length} items
                     </button>
@@ -4758,7 +4808,7 @@ export default function RestaurantCashierPOSPage() {
                           type="button"
                           onClick={() => setTableStatusFilter(statusKey)}
                           className={`whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-black transition ${tableStatusFilter === statusKey
-                              ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"
+                              ? "bg-[var(--brand-primary)] text-white"
                               : darkMode
                                 ? "bg-white/10 text-slate-200"
                                 : "bg-white text-slate-700 ring-1 ring-slate-100"
@@ -4819,7 +4869,7 @@ export default function RestaurantCashierPOSPage() {
                               }
                             }}
                             className={`rounded-2xl border p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${active
-                                ? "border-[var(--brand-primary)] bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]"
+                                ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]"
                                 : statusKey === "BUSY"
                                   ? darkMode
                                     ? "border-red-400/30 bg-red-500/10 text-red-200"
@@ -4999,7 +5049,7 @@ export default function RestaurantCashierPOSPage() {
                       }}
                       disabled={paymentSaving}
                       className={`rounded-2xl px-4 py-4 text-sm font-black transition ${paymentMethod === method.key
-                          ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]"
+                          ? "bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]"
                           : darkMode
                             ? "bg-white/10 text-slate-200"
                             : "bg-[var(--brand-soft)] text-slate-700"
@@ -5075,7 +5125,7 @@ export default function RestaurantCashierPOSPage() {
                             }}
                             disabled={paymentSaving}
                             className={`rounded-xl px-2 py-2.5 text-xs font-black tabular-nums transition disabled:opacity-50 ${cashNumber === amount
-                                ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"
+                                ? "bg-[var(--brand-primary)] text-white"
                                 : darkMode
                                   ? "bg-white/10 text-slate-200 hover:bg-white/15"
                                   : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-[var(--brand-soft)]"
@@ -5156,7 +5206,7 @@ export default function RestaurantCashierPOSPage() {
                     disabled={
                       paymentSaving || cart.length === 0 || !cashIsEnough
                     }
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {paymentSaving ? (
                       <Loader2 className="animate-spin" size={18} />
@@ -5418,7 +5468,7 @@ export default function RestaurantCashierPOSPage() {
 
                     <button
                       onClick={printPaymentReceipt}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] transition hover:brightness-110"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] transition hover:brightness-110"
                     >
                       <Printer size={18} />
                       Print Receipt
@@ -5450,7 +5500,7 @@ export default function RestaurantCashierPOSPage() {
                     : "border-[var(--brand-border)] bg-white text-slate-950"
                   }`}
               >
-                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]">
+                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]">
                   <ChefHat size={38} />
                 </div>
 
@@ -5512,7 +5562,7 @@ export default function RestaurantCashierPOSPage() {
                       setKitchenSuccessOpen(false);
                       window.location.href = "/dashboard/restaurant/kitchen";
                     }}
-                    className="rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] hover:brightness-110"
+                    className="rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)] hover:brightness-110"
                   >
                     View Kitchen
                   </button>
@@ -5623,7 +5673,7 @@ export default function RestaurantCashierPOSPage() {
                 {formatMoney(draggingMenuItem.price)} Ks
               </p>
             </div>
-            <span className="rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-2.5 py-1 text-[10px] font-black text-white">
+            <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[10px] font-black text-white">
               Dragging
             </span>
           </div>

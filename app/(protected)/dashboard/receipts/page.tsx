@@ -101,6 +101,44 @@ type ShopPrintInfo = {
 };
 
 const SHOP_PRINT_INFO_STORAGE_KEY = "receipt_shop_print_info";
+const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
+
+function applyStoredBrandColors() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null",
+    ) as { primary?: unknown; accent?: unknown } | null;
+    const isHexColor = (value: unknown): value is string =>
+      typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    const root = document.documentElement;
+    const styles = window.getComputedStyle(root);
+    const primary = stored && isHexColor(stored.primary)
+      ? stored.primary
+      : styles.getPropertyValue("--dashboard-primary").trim() || "#2563eb";
+    const accent = stored && isHexColor(stored.accent)
+      ? stored.accent
+      : styles.getPropertyValue("--dashboard-accent").trim() || "#60a5fa";
+
+    root.style.setProperty("--brand-primary", primary);
+    root.style.setProperty("--brand-accent", accent);
+    root.style.setProperty("--dashboard-primary", primary);
+    root.style.setProperty("--dashboard-accent", accent);
+    root.style.setProperty("--primary", primary);
+    root.style.setProperty("--ring", primary);
+    root.style.setProperty("--sidebar-primary", primary);
+    root.style.setProperty("--sidebar-ring", primary);
+    root.style.setProperty("--brand-soft", "color-mix(in srgb, var(--brand-primary) 10%, transparent)");
+    root.style.setProperty("--brand-border", "color-mix(in srgb, var(--brand-primary) 28%, transparent)");
+  } catch {
+    const root = document.documentElement;
+    root.style.setProperty("--brand-primary", "#2563eb");
+    root.style.setProperty("--brand-accent", "#60a5fa");
+    root.style.setProperty("--brand-soft", "color-mix(in srgb, var(--brand-primary) 10%, transparent)");
+    root.style.setProperty("--brand-border", "color-mix(in srgb, var(--brand-primary) 28%, transparent)");
+  }
+}
 
 const DEFAULT_SHOP_PRINT_INFO: ShopPrintInfo = {
   shopName: "Clear Blue Light POS",
@@ -428,6 +466,22 @@ export default function ReceiptsPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    const syncBrandColors = () => applyStoredBrandColors();
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === BRAND_COLOR_STORAGE_KEY) syncBrandColors();
+    };
+
+    syncBrandColors();
+    window.addEventListener("brand-colors-changed", syncBrandColors);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("brand-colors-changed", syncBrandColors);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   const filteredReceipts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -917,15 +971,15 @@ export default function ReceiptsPage() {
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-[-140px] top-20 h-96 w-96 rounded-full bg-sky-500/10 blur-3xl" />
-        <div className="absolute right-[-120px] top-32 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl" />
-        <div className="absolute bottom-[-120px] left-1/2 h-96 w-[720px] -translate-x-1/2 rounded-full bg-cyan-500/10 blur-3xl" />
+        <div className="absolute left-[-140px] top-20 h-96 w-96 rounded-full bg-[var(--brand-soft)] blur-3xl" />
+        <div className="absolute right-[-120px] top-32 h-96 w-96 rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] blur-3xl" />
+        <div className="absolute bottom-[-120px] left-1/2 h-96 w-[720px] -translate-x-1/2 rounded-full bg-[var(--brand-soft)] blur-3xl" />
       </div>
 
       <main className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 md:px-6">
         <div className="mb-7 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-500">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-[var(--brand-soft)] px-4 py-2 text-sm font-semibold text-[var(--brand-accent)]">
               <Receipt className="h-4 w-4" />
               Receipts
             </div>
@@ -943,7 +997,7 @@ export default function ReceiptsPage() {
             <Button
               variant="outline"
               onClick={() => router.push("/dashboard")}
-              className="h-11 rounded-xl border-sky-300/25 bg-sky-500/10 text-sky-600 hover:bg-sky-500/15 dark:text-sky-300"
+              className="h-11 rounded-xl border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand-primary)] hover:brightness-95 dark:text-[var(--brand-accent)]"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back Home
@@ -956,9 +1010,9 @@ export default function ReceiptsPage() {
               className="h-11 rounded-xl"
             >
               {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin text-[var(--brand-accent)]" />
               ) : (
-                <RefreshCcw className="mr-2 h-4 w-4" />
+                <RefreshCcw className="mr-2 h-4 w-4 text-[var(--brand-accent)]" />
               )}
               Reload
             </Button>
@@ -969,14 +1023,14 @@ export default function ReceiptsPage() {
               disabled={!filteredReceipts.length}
               className="h-11 rounded-xl"
             >
-              <Download className="mr-2 h-4 w-4" />
+              <Download className="mr-2 h-4 w-4 text-[var(--brand-accent)]" />
               Export CSV
             </Button>
           </div>
         </div>
 
-        <div className="mb-4 rounded-2xl border border-sky-300/20 bg-sky-500/10 p-4 text-sm leading-6 text-muted-foreground">
-          <b className="text-sky-500">Print Shop Info:</b>{" "}
+        <div className="mb-4 rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-soft)] p-4 text-sm leading-6 text-muted-foreground">
+          <b className="text-[var(--brand-accent)]">Print Shop Info:</b>{" "}
           {shopPrintInfo.shopName}
           {shopPrintInfo.address ? ` · ${shopPrintInfo.address}` : ""}
           {shopPrintInfo.phone ? ` · Phone: ${shopPrintInfo.phone}` : ""}
@@ -1011,7 +1065,7 @@ export default function ReceiptsPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-sky-500" />
+                  <ShieldCheck className="h-5 w-5 text-[var(--brand-accent)]" />
                   Receipt History
                 </CardTitle>
                 <CardDescription>
@@ -1022,7 +1076,7 @@ export default function ReceiptsPage() {
 
               <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
                 <div className="relative w-full lg:w-[360px]">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-500" />
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-accent)]" />
                   <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -1049,7 +1103,7 @@ export default function ReceiptsPage() {
             {loading ? (
               <div className="grid min-h-[360px] place-items-center">
                 <div className="text-center">
-                  <Loader2 className="mx-auto h-9 w-9 animate-spin text-sky-500" />
+                  <Loader2 className="mx-auto h-9 w-9 animate-spin text-[var(--brand-accent)]" />
                   <div className="mt-3 text-sm text-muted-foreground">
                     Loading receipts...
                   </div>
@@ -1254,9 +1308,9 @@ function StatCard({
   tone: "sky" | "emerald" | "violet";
 }) {
   const styles = {
-    sky: "border-sky-300/25 bg-sky-500/10 text-sky-500",
+    sky: "border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand-accent)]",
     emerald: "border-emerald-300/25 bg-emerald-500/10 text-emerald-500",
-    violet: "border-violet-300/25 bg-violet-500/10 text-violet-500",
+    violet: "border-[color-mix(in_srgb,var(--brand-accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] text-[var(--brand-accent)]",
   }[tone];
 
   return (
@@ -1303,8 +1357,8 @@ function ReceiptCard({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <button onClick={onToggle} className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl border border-sky-300/25 bg-sky-500/10">
-              <Receipt className="h-5 w-5 text-sky-500" />
+            <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-soft)]">
+              <Receipt className="h-5 w-5 text-[var(--brand-accent)]" />
             </div>
 
             <div className="min-w-0">
@@ -1345,7 +1399,7 @@ function ReceiptCard({
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
               Grand Total
             </div>
-            <div className="text-2xl font-black text-sky-500">
+            <div className="text-2xl font-black text-[var(--brand-accent)]">
               {jpy(receipt.grandTotal)}
             </div>
             <div className="text-xs text-muted-foreground">
@@ -1360,7 +1414,7 @@ function ReceiptCard({
               onClick={onPrint}
               className="rounded-xl"
             >
-              <Printer className="h-4 w-4" />
+              <Printer className="h-4 w-4 text-[var(--brand-accent)]" />
             </Button>
 
             <Button
@@ -1459,16 +1513,16 @@ function ReceiptCard({
 
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black">Grand Total</span>
-                    <span className="text-2xl font-black text-sky-500">
+                    <span className="text-2xl font-black text-[var(--brand-accent)]">
                       {jpy(receipt.grandTotal)}
                     </span>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-sky-300/20 bg-sky-500/10 p-3 text-xs leading-5 text-muted-foreground">
-                    <b className="text-sky-500">Created by:</b>{" "}
+                  <div className="mt-4 rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-soft)] p-3 text-xs leading-5 text-muted-foreground">
+                    <b className="text-[var(--brand-accent)]">Created by:</b>{" "}
                     {receipt.createdByUsername || "-"}
                     <br />
-                    <b className="text-sky-500">Role:</b>{" "}
+                    <b className="text-[var(--brand-accent)]">Role:</b>{" "}
                     {receipt.createdByRole || "-"}
                   </div>
                 </div>

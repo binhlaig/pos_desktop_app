@@ -552,7 +552,7 @@ export default function RestaurantServingPage() {
             <button
               type="button"
               onClick={() => setDarkMode((current) => !current)}
-              className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10" : "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"}`}
+              className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10" : "bg-[var(--brand-primary)] text-white"}`}
             >
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -601,7 +601,7 @@ export default function RestaurantServingPage() {
             <button
               type="submit"
               disabled={staffLoading}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-50"
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-50"
             >
               {staffLoading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
               Open Serving Board
@@ -634,7 +634,7 @@ export default function RestaurantServingPage() {
               >
                 <ChefHat size={16} /> Kitchen
               </button>
-              <div className="inline-flex min-w-0 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 py-2 text-xs font-black text-white">
+              <div className="inline-flex min-w-0 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 py-2 text-xs font-black text-white">
                 <UserCheck size={16} />
                 <span className="max-w-[130px] truncate">{activeStaff.staffName}</span>
                 <span className="opacity-75">{activeStaff.staffId}</span>
@@ -653,7 +653,7 @@ export default function RestaurantServingPage() {
               <button
                 type="button"
                 onClick={() => setDarkMode((current) => !current)}
-                className={`grid h-9 w-9 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"}`}
+                className={`grid h-9 w-9 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-[var(--brand-primary)] text-white"}`}
               >
                 {darkMode ? <Sun size={17} /> : <Moon size={17} />}
               </button>
@@ -769,7 +769,7 @@ export default function RestaurantServingPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 py-1 text-xs font-black text-white">
+                            <span className="rounded-full bg-[var(--brand-primary)] px-3 py-1 text-xs font-black text-white">
                               {ticket.ticketNo || `KT-${ticket.id}`}
                             </span>
                             <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${waitingMinutes >= 10 ? "bg-red-500 text-white" : "bg-emerald-500/15 text-emerald-600"}`}>

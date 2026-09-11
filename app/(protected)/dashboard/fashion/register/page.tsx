@@ -6,6 +6,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import {
   DragDropProvider,
   DragOverlay,
@@ -15,6 +16,7 @@ import {
 import { BusinessTypeGuard } from "@/components/dashboard/business-type-guard";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
 import { fetchStaffById } from "@/lib/staff-validation";
+import { readAvailableForSale, unavailableToastMessage } from "@/lib/product-availability";
 import {
   ArrowLeft,
   BadgePercent,
@@ -52,7 +54,7 @@ type FashionProduct = {
   price: number;
   stock: number | null;
   image?: string;
-  available?: boolean;
+  availableForSale: boolean;
 
   // Fashion variant fields
   variantId?: string;
@@ -403,7 +405,7 @@ function mapProductToFashionProduct(product: BackendProduct): FashionProduct {
     price,
     stock,
     image,
-    available: stock === null ? true : stock > 0,
+    availableForSale: readAvailableForSale(product),
 
     variantId,
     variantBarcode,
@@ -443,9 +445,9 @@ function DraggableProductCard({
       ref={ref}
       type="button"
       onClick={onClick}
-      disabled={disabled}
+      aria-disabled={disabled}
       className={`${className} touch-none select-none cursor-grab active:cursor-grabbing ${
-        isDragging ? "scale-[0.98] opacity-35" : ""
+        disabled ? "cursor-not-allowed opacity-50" : isDragging ? "scale-[0.98] opacity-35" : ""
       }`}
     >
       {children}
@@ -1008,10 +1010,10 @@ export default function FashionRegisterPage() {
     }
   }
 
-  async function fetchProducts() {
+  async function fetchProducts(options: { silent?: boolean } = {}) {
     try {
-      setProductsLoading(true);
-      setProductsError("");
+      if (!options.silent) setProductsLoading(true);
+      if (!options.silent) setProductsError("");
 
       if (!getAccessToken()) {
         throw new Error(MISSING_TOKEN_MESSAGE);
@@ -1039,18 +1041,30 @@ export default function FashionRegisterPage() {
         .filter((item) => item.id && item.name);
 
       setProducts(nextProducts);
+      return nextProducts;
     } catch (err) {
-      setProducts([]);
-      setProductsError(
+      if (!options.silent) setProducts([]);
+      if (!options.silent) setProductsError(
         err instanceof Error ? err.message : "Fashion products loading error",
       );
+      return [];
     } finally {
-      setProductsLoading(false);
+      if (!options.silent) setProductsLoading(false);
     }
   }
 
   useEffect(() => {
     fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => void fetchProducts({ silent: true });
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -1232,7 +1246,14 @@ export default function FashionRegisterPage() {
   }
 
   function addToCart(product: FashionProduct) {
-    if (!product.available || product.stock === 0) {
+    if (!product.availableForSale) {
+      const message = unavailableToastMessage(product.name);
+      setPaymentError(message);
+      toast.error(message);
+      return false;
+    }
+
+    if (product.stock === 0) {
       setPaymentError(`${product.name} stock မရှိပါ။`);
       return false;
     }
@@ -1399,6 +1420,21 @@ export default function FashionRegisterPage() {
     }
   }
 
+  function handleBarcodeSearchEnter() {
+    const code = search.trim().toLowerCase();
+    if (!code) return;
+    const product = products.find((item) =>
+      [item.variantBarcode, item.barcode, item.sku].some(
+        (value) => value?.trim().toLowerCase() === code,
+      ),
+    );
+    if (!product) return;
+    if (addToCart(product)) {
+      setSearch("");
+      showCartAddedFeedback();
+    }
+  }
+
   function beginCartResize(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     cartResizeStartRef.current = {
@@ -1481,6 +1517,25 @@ export default function FashionRegisterPage() {
     }
 
     if (cart.length === 0) return;
+
+    const latestProducts = await fetchProducts({ silent: true });
+    const unavailableItem = cart.find((item) => {
+      const latest = latestProducts.find(
+        (product) =>
+          (!!item.variantId && product.variantId === item.variantId) ||
+          (!!item.dbId && product.dbId === item.dbId) ||
+          (!!item.barcode && product.barcode === item.barcode) ||
+          product.id === item.id,
+      );
+      return !latest || !latest.availableForSale;
+    });
+
+    if (unavailableItem) {
+      const message = unavailableToastMessage(unavailableItem.name);
+      setPaymentError(message);
+      toast.error(message);
+      return;
+    }
 
     if (paymentMethod === "CASH" && cashNumber < total) {
       setPaymentError("Cash received မလုံလောက်သေးပါ");
@@ -1639,7 +1694,6 @@ export default function FashionRegisterPage() {
           return {
             ...product,
             stock: nextStock,
-            available: nextStock > 0,
           };
         }),
       );
@@ -1959,6 +2013,9 @@ export default function FashionRegisterPage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") handleBarcodeSearchEnter();
+                  }}
                   placeholder="Search product, barcode, color, size..."
                   className="w-full bg-transparent text-xs font-bold outline-none placeholder:text-slate-400 sm:text-sm"
                 />
@@ -2070,7 +2127,7 @@ export default function FashionRegisterPage() {
                   <DraggableProductCard
                     key={product.id}
                     productId={product.id}
-                    disabled={!product.available || product.stock === 0}
+                    disabled={!product.availableForSale || product.stock === 0}
                     onClick={(event) => handleProductClick(product, event)}
                     className={`group flex h-full min-h-[110px] w-full overflow-hidden rounded-[1.25rem] border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[128px] sm:rounded-[1.45rem] ${
                       (product.variantId || product.id) === lastAddedProductKey
@@ -2089,6 +2146,11 @@ export default function FashionRegisterPage() {
                           : "bg-gradient-to-br from-[var(--brand-soft)] via-[var(--background)] to-white ring-[var(--brand-border)]"
                       }`}
                     >
+                      {!product.availableForSale && (
+                        <span className="absolute left-1 top-1 z-10 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-black text-white">
+                          Out of Stock
+                        </span>
+                      )}
                       {product.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img

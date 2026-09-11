@@ -61,6 +61,10 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { code128SvgDataUri } from "@/lib/code128";
+import {
+  readAvailableForSale,
+  unavailableToastMessage,
+} from "@/lib/product-availability";
 
 type Product = {
   id: string;
@@ -74,6 +78,7 @@ type Product = {
   taxable?: boolean;
   stock?: number;
   imagePath?: string | null;
+  availableForSale: boolean;
 };
 
 type CartLine = {
@@ -481,6 +486,7 @@ function normalizeProductFromApi(item: any): Product {
     stock,
     imagePath,
     taxable: item?.taxable == null ? true : Boolean(item.taxable),
+    availableForSale: readAvailableForSale(item),
   };
 }
 
@@ -827,6 +833,17 @@ export default function RegisterPOSPage() {
   }, [cart]);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
+    const refresh = () => void loadOwnerProducts({ silent: true });
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
     if (!hasHydrated) return;
     localStorage.setItem("pos_staff_id", staffId.trim());
   }, [hasHydrated, staffId]);
@@ -1094,8 +1111,8 @@ export default function RegisterPOSPage() {
 
   latestReceiptLoadRef.current = loadReceiptSetting;
 
-  async function loadOwnerProducts() {
-    setProductsLoading(true);
+  async function loadOwnerProducts(options: { silent?: boolean } = {}) {
+    if (!options.silent) setProductsLoading(true);
 
     const endpoints = [
       "/api/pos/products",
@@ -1144,18 +1161,20 @@ export default function RegisterPOSPage() {
 
       if (loadedProducts.length === 0) {
         toast.error(lastError || "Products မရောက်သေးပါ။ API path/token စစ်ပါ။");
-        return;
+        return loadedProducts;
       }
 
-      toast.success(`${loadedProducts.length} products loaded`);
+      if (!options.silent) toast.success(`${loadedProducts.length} products loaded`);
+      return loadedProducts;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Products load failed.";
 
       setCatalog([]);
-      toast.error(message);
+      if (!options.silent) toast.error(message);
+      return [];
     } finally {
-      setProductsLoading(false);
+      if (!options.silent) setProductsLoading(false);
     }
   }
 
@@ -1241,6 +1260,11 @@ export default function RegisterPOSPage() {
 
   function addToCart(p: Product, qty = 1) {
     if (!requireStaff()) return false;
+
+    if (!p.availableForSale) {
+      toast.error(unavailableToastMessage(p.name));
+      return false;
+    }
 
     const availableStock = Number(p.stock ?? 0);
 
@@ -1470,6 +1494,23 @@ export default function RegisterPOSPage() {
       return;
     }
 
+    const latestProducts = await loadOwnerProducts({ silent: true });
+    const unavailableItem = cart.find((line) => {
+      const product = latestProducts.find(
+        (p) =>
+          p.id === line.id ||
+          (!!line.dbId && p.dbId === line.dbId) ||
+          (!!line.barcode && p.barcode === line.barcode) ||
+          (!!line.sku && p.sku === line.sku),
+      );
+      return !product || !product.availableForSale;
+    });
+
+    if (unavailableItem) {
+      toast.error(unavailableToastMessage(unavailableItem.name));
+      return;
+    }
+
     const invalidItem = cart.find((line) => !line.dbId && !/^\d+$/.test(line.id));
 
     if (invalidItem) {
@@ -1480,7 +1521,7 @@ export default function RegisterPOSPage() {
     }
 
     for (const line of cart) {
-      const product = catalog.find(
+      const product = latestProducts.find(
         (p) =>
           p.id === line.id ||
           (!!line.dbId && p.dbId === line.dbId) ||
@@ -2183,7 +2224,7 @@ export default function RegisterPOSPage() {
 
                         <Button
                           variant="outline"
-                          onClick={loadOwnerProducts}
+                          onClick={() => void loadOwnerProducts()}
                           disabled={productsLoading}
                           className="h-11 rounded-xl"
                         >
@@ -2240,12 +2281,13 @@ export default function RegisterPOSPage() {
                           {nameHints.map((product) => (
                             <button
                               key={`${product.id}-${product.dbId}`}
+                              aria-disabled={!product.availableForSale}
                               onClick={() => {
                                 addToCart(product);
                                 setQuery("");
                                 focusScanner();
                               }}
-                              className="flex w-full items-center justify-between border-b border-border px-4 py-3 text-left last:border-0 hover:bg-muted/50"
+                              className="flex w-full items-center justify-between border-b border-border px-4 py-3 text-left last:border-0 hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <span className="flex min-w-0 items-center gap-3">
                                 <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-border bg-muted">
@@ -2265,7 +2307,7 @@ export default function RegisterPOSPage() {
                               </span>
 
                               <span className="font-semibold tabular-nums text-sky-400">
-                                {money(product.price)}
+                                {!product.availableForSale ? "Out of Stock" : money(product.price)}
                               </span>
                             </button>
                           ))}
@@ -2825,7 +2867,7 @@ function BarcodeLessProductDialog({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {pageProducts.map((product) => {
                 const stock = Number(product.stock ?? 0);
-                const outOfStock = stock <= 0;
+                const outOfStock = !product.availableForSale || stock <= 0;
 
                 return (
                   <motion.div
@@ -2850,7 +2892,7 @@ function BarcodeLessProductDialog({
                             : "bg-emerald-500 text-white"
                         }`}
                       >
-                        Stock {stock}
+                        {!product.availableForSale ? "Out of Stock" : `Stock ${stock}`}
                       </Badge>
                     </div>
 
@@ -2877,7 +2919,7 @@ function BarcodeLessProductDialog({
 
                         <Button
                           onClick={() => addItem(product)}
-                          disabled={outOfStock}
+                          aria-disabled={outOfStock}
                           className="h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-400 px-3 font-black text-white shadow-[0_0_24px_-12px_rgba(16,185,129,0.9)] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Plus className="mr-2 h-4 w-4" />

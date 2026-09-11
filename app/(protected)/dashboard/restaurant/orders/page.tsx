@@ -127,6 +127,30 @@ const MISSING_TOKEN_MESSAGE = "Login token မရှိပါ။ အရင်ဆ
 const INVALID_TOKEN_MESSAGE = "Login token မမှန်ပါ။ ပြန် login ဝင်ပါ။";
 const FEATURE_DISABLED_MESSAGE =
   "ဒီဆိုင် plan မှာ Restaurant feature မဖွင့်ထားပါ။ Super Admin > Shop Feature Control မှာ Restaurant Feature Gate ကို ON လုပ်ပါ။";
+const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
+
+function applyStoredBrandColors() {
+  if (typeof window === "undefined") return;
+  const root = document.documentElement;
+  const styles = window.getComputedStyle(root);
+  let primary = styles.getPropertyValue("--dashboard-primary").trim() || "#2563eb";
+  let accent = styles.getPropertyValue("--dashboard-accent").trim() || "#60a5fa";
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null",
+    ) as { primary?: unknown; accent?: unknown } | null;
+    if (stored && typeof stored.primary === "string" && /^#[0-9a-f]{6}$/i.test(stored.primary)) primary = stored.primary;
+    if (stored && typeof stored.accent === "string" && /^#[0-9a-f]{6}$/i.test(stored.accent)) accent = stored.accent;
+  } catch {}
+  root.style.setProperty("--brand-primary", primary);
+  root.style.setProperty("--brand-accent", accent);
+  root.style.setProperty("--dashboard-primary", primary);
+  root.style.setProperty("--dashboard-accent", accent);
+  root.style.setProperty("--primary", primary);
+  root.style.setProperty("--ring", primary);
+  root.style.setProperty("--brand-soft", "color-mix(in srgb, var(--brand-primary) 10%, transparent)");
+  root.style.setProperty("--brand-border", "color-mix(in srgb, var(--brand-primary) 28%, transparent)");
+}
 
 const PAGE_SIZE = 10;
 
@@ -767,6 +791,20 @@ export default function RestaurantOrdersPage() {
   const [selectedOrder, setSelectedOrder] =
     useState<RestaurantOrder | null>(null);
 
+  useEffect(() => {
+    const sync = () => applyStoredBrandColors();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === BRAND_COLOR_STORAGE_KEY) sync();
+    };
+    sync();
+    window.addEventListener("brand-colors-changed", sync);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("brand-colors-changed", sync);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
   const filteredOrders = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
@@ -1048,20 +1086,20 @@ export default function RestaurantOrdersPage() {
   }, [page, totalPages]);
 
   return (
-    <main className="min-h-screen bg-[#f8f3ea] p-4 text-slate-950 sm:p-6 lg:p-8">
+    <main className="min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-slate-950 sm:p-6 lg:p-8">
       <BusinessTypeGuard allow="RESTAURANT" />
 
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <section className="rounded-[2rem] border border-orange-100 bg-white/90 p-5 shadow-sm">
+        <section className="rounded-[2rem] border border-[var(--brand-border)] bg-white/90 p-5 shadow-sm">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-600 ring-1 ring-orange-100">
+              <div className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs font-black text-[var(--brand-primary)] ring-1 ring-[var(--brand-border)]">
                 <ChefHat size={14} />
                 Restaurant Dashboard
               </div>
 
               <h1 className="mt-3 flex items-center gap-3 text-2xl font-black tracking-tight sm:text-3xl">
-                <Store className="text-orange-500" size={32} />
+                <Store className="text-[var(--brand-accent)]" size={32} />
                 Restaurant Orders
               </h1>
 
@@ -1074,7 +1112,7 @@ export default function RestaurantOrdersPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <button
                 onClick={resetFilters}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-soft)] px-4 py-3 text-sm font-black text-[var(--brand-primary)] transition hover:brightness-95"
               >
                 <Trash2 size={17} />
                 Reset
@@ -1083,7 +1121,7 @@ export default function RestaurantOrdersPage() {
               <button
                 onClick={fetchCanonicalOrders}
                 disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition hover:bg-slate-800 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)] transition hover:brightness-95 disabled:opacity-60"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -1130,10 +1168,10 @@ export default function RestaurantOrdersPage() {
           />
         </section>
 
-        <section className="rounded-[2rem] border border-orange-100 bg-white/90 p-4 shadow-sm">
+        <section className="rounded-[2rem] border border-[var(--brand-border)] bg-white/90 p-4 shadow-sm">
           <div className="grid gap-3 xl:grid-cols-[1.3fr_0.8fr_0.8fr_auto]">
             <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3">
-              <Search size={18} className="text-slate-400" />
+              <Search size={18} className="text-[var(--brand-accent)]" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -1161,7 +1199,7 @@ export default function RestaurantOrdersPage() {
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black outline-none"
             />
 
-            <div className="rounded-2xl bg-orange-50 px-4 py-3 text-center text-sm font-black text-orange-600 ring-1 ring-orange-100">
+            <div className="rounded-2xl bg-[var(--brand-soft)] px-4 py-3 text-center text-sm font-black text-[var(--brand-primary)] ring-1 ring-[var(--brand-border)]">
               {filteredOrders.length} orders
             </div>
           </div>
@@ -1178,8 +1216,8 @@ export default function RestaurantOrdersPage() {
                   onClick={() => setSelectedStatus(status)}
                   className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition ${
                     active
-                      ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20"
-                      : "bg-orange-50 text-slate-700 hover:bg-orange-100"
+                      ? "bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
+                      : "bg-[var(--brand-soft)] text-slate-700 hover:brightness-95"
                   }`}
                 >
                   <Icon size={17} />
@@ -1209,14 +1247,14 @@ export default function RestaurantOrdersPage() {
         {loading ? (
           <section className="grid min-h-[420px] place-items-center rounded-[2rem] border border-white/80 bg-white/85 shadow-sm">
             <div className="flex items-center gap-3 text-sm font-black text-slate-500">
-              <Loader2 className="animate-spin text-orange-500" size={24} />
+              <Loader2 className="animate-spin text-[var(--brand-accent)]" size={24} />
               Loading restaurant orders...
             </div>
           </section>
         ) : filteredOrders.length === 0 ? (
-          <section className="grid min-h-[420px] place-items-center rounded-[2rem] border border-dashed border-orange-200 bg-orange-50/70 p-8 text-center">
+          <section className="grid min-h-[420px] place-items-center rounded-[2rem] border border-dashed border-[var(--brand-border)] bg-[var(--brand-soft)] p-8 text-center">
             <div>
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-500 text-white">
+              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--brand-primary)] text-white">
                 <Store size={36} />
               </div>
 
@@ -1300,7 +1338,7 @@ export default function RestaurantOrdersPage() {
                             <OrderTypeIcon
                               orderType={order.orderType}
                               size={17}
-                              className="text-orange-500"
+                              className="text-[var(--brand-accent)]"
                             />
                             {normalizeOrderType(order.orderType) === "DINE_IN"
                               ? order.tableNo || "No table"
@@ -1346,7 +1384,7 @@ export default function RestaurantOrdersPage() {
                             </div>
                           )}
 
-                          <div className="mt-1 text-xs font-black text-orange-500">
+                          <div className="mt-1 text-xs font-black text-[var(--brand-accent)]">
                             {order.items?.reduce(
                               (sum, item) => sum + Number(item.quantity || 0),
                               0,
@@ -1402,7 +1440,7 @@ export default function RestaurantOrdersPage() {
                             </button>
                             <button
                               onClick={() => reprintOrder(order)}
-                              className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-sm font-black text-white transition hover:bg-orange-600"
+                              className="inline-flex items-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-black text-white transition hover:brightness-95"
                             >
                               <Printer size={16} />
                               Re-print
@@ -1441,7 +1479,7 @@ export default function RestaurantOrdersPage() {
                       onClick={() => setPage(pageNumber)}
                       className={`grid h-9 w-9 place-items-center rounded-xl text-sm font-black ${
                         active
-                          ? "bg-orange-500 text-white"
+                          ? "bg-[var(--brand-primary)] text-white"
                           : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
                     >
@@ -1481,7 +1519,7 @@ function SummaryCard({
   tone: "orange" | "blue" | "green" | "slate";
 }) {
   const toneClass = {
-    orange: "bg-orange-500 text-white shadow-orange-500/25",
+    orange: "bg-[var(--brand-primary)] text-white shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)]",
     blue: "bg-blue-500 text-white shadow-blue-500/25",
     green: "bg-emerald-500 text-white shadow-emerald-500/25",
     slate: "bg-slate-950 text-white shadow-slate-900/20",
@@ -1551,7 +1589,7 @@ function OrderDetailDialog({
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 24, scale: 0.96 }}
-        className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl"
+        className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[2rem] border border-[var(--brand-border)] bg-white shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-slate-100 p-5">
           <div>
@@ -1567,7 +1605,7 @@ function OrderDetailDialog({
           <div className="flex items-center gap-2">
             <button
               onClick={() => reprintOrder(order)}
-              className="inline-flex h-10 items-center gap-2 rounded-2xl bg-orange-500 px-4 text-sm font-black text-white transition hover:bg-orange-600"
+              className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 text-sm font-black text-white transition hover:brightness-95"
             >
               <Printer size={17} />
               Re-print
@@ -1583,15 +1621,15 @@ function OrderDetailDialog({
 
         <div className="max-h-[calc(90vh-90px)] overflow-y-auto p-5">
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-orange-50 p-4 ring-1 ring-orange-100">
-              <p className="text-xs font-black uppercase text-orange-600">
+            <div className="rounded-2xl bg-[var(--brand-soft)] p-4 ring-1 ring-[var(--brand-border)]">
+              <p className="text-xs font-black uppercase text-[var(--brand-primary)]">
                 Type
               </p>
               <div className="mt-2 flex items-center gap-2 font-black text-slate-900">
                 <OrderTypeIcon
                   orderType={order.orderType}
                   size={18}
-                  className="text-orange-500"
+                  className="text-[var(--brand-accent)]"
                 />
                 {normalizeOrderType(order.orderType)}
               </div>
@@ -1640,7 +1678,7 @@ function OrderDetailDialog({
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="grid h-8 w-8 place-items-center rounded-xl bg-orange-50 text-sm font-black text-orange-600">
+                        <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--brand-soft)] text-sm font-black text-[var(--brand-primary)]">
                           x{item.quantity || 1}
                         </span>
 

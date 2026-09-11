@@ -53,6 +53,40 @@ const TOKEN_KEYS = [
 const MISSING_TOKEN_MESSAGE = "Login token မရှိပါ။ အရင်ဆုံး login ပြန်ဝင်ပါ။";
 const FEATURE_DISABLED_MESSAGE =
   "ဒီဆိုင် plan မှာ Restaurant feature မဖွင့်ထားပါ။ Super Admin > Shop Feature Control မှာ Restaurant Feature Gate ကို ON လုပ်ပါ။";
+const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
+
+function applyStoredBrandColors() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null",
+    ) as { primary?: unknown; accent?: unknown } | null;
+    const isHexColor = (value: unknown): value is string =>
+      typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    const root = document.documentElement;
+    const styles = window.getComputedStyle(root);
+    const primary = stored && isHexColor(stored.primary)
+      ? stored.primary
+      : styles.getPropertyValue("--dashboard-primary").trim() || "#2563eb";
+    const accent = stored && isHexColor(stored.accent)
+      ? stored.accent
+      : styles.getPropertyValue("--dashboard-accent").trim() || "#60a5fa";
+
+    root.style.setProperty("--brand-primary", primary);
+    root.style.setProperty("--brand-accent", accent);
+    root.style.setProperty("--dashboard-primary", primary);
+    root.style.setProperty("--dashboard-accent", accent);
+    root.style.setProperty("--brand-soft", "color-mix(in srgb, var(--brand-primary) 10%, transparent)");
+    root.style.setProperty("--brand-border", "color-mix(in srgb, var(--brand-primary) 28%, transparent)");
+  } catch {
+    const root = document.documentElement;
+    root.style.setProperty("--brand-primary", "#2563eb");
+    root.style.setProperty("--brand-accent", "#60a5fa");
+    root.style.setProperty("--brand-soft", "color-mix(in srgb, var(--brand-primary) 10%, transparent)");
+    root.style.setProperty("--brand-border", "color-mix(in srgb, var(--brand-primary) 28%, transparent)");
+  }
+}
 
 const emptyForm: TableForm = {
   tableNo: "",
@@ -158,6 +192,22 @@ export default function RestaurantTablesPage() {
   );
   const [form, setForm] = useState<TableForm>(emptyForm);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const syncBrandColors = () => applyStoredBrandColors();
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === BRAND_COLOR_STORAGE_KEY) syncBrandColors();
+    };
+
+    syncBrandColors();
+    window.addEventListener("brand-colors-changed", syncBrandColors);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("brand-colors-changed", syncBrandColors);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   const filteredTables = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -374,13 +424,13 @@ export default function RestaurantTablesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 lg:p-6">
+    <main className="min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 lg:p-6">
       <div className="mx-auto max-w-7xl">
         <section className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-3">
-                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--brand-accent)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-accent)_24%,transparent)]">
                   <Armchair size={26} />
                 </div>
 
@@ -398,7 +448,7 @@ export default function RestaurantTablesPage() {
             <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 onClick={fetchTables}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-soft)] px-4 py-3 text-sm font-black text-[var(--brand-primary)] transition hover:brightness-95"
               >
                 <RefreshCcw size={18} />
                 Refresh
@@ -406,7 +456,7 @@ export default function RestaurantTablesPage() {
 
               <button
                 onClick={openCreateDialog}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95"
               >
                 <Plus size={18} />
                 Create Table
@@ -438,7 +488,7 @@ export default function RestaurantTablesPage() {
             </div>
 
             <div className="flex w-full items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 lg:w-[360px]">
-              <Search size={18} className="text-slate-400" />
+              <Search size={18} className="text-[var(--brand-accent)]" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -459,14 +509,14 @@ export default function RestaurantTablesPage() {
           {loading ? (
             <div className="grid min-h-[360px] place-items-center rounded-[2rem] border border-slate-100 bg-white">
               <div className="flex items-center gap-3 text-sm font-black text-slate-500">
-                <Loader2 className="animate-spin text-orange-500" size={22} />
+                <Loader2 className="animate-spin text-[var(--brand-accent)]" size={22} />
                 Loading restaurant tables...
               </div>
             </div>
           ) : filteredTables.length === 0 ? (
-            <div className="grid min-h-[360px] place-items-center rounded-[2rem] border border-dashed border-orange-200 bg-orange-50/60 p-8 text-center">
+            <div className="grid min-h-[360px] place-items-center rounded-[2rem] border border-dashed border-[var(--brand-border)] bg-[var(--brand-soft)] p-8 text-center">
               <div>
-                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-500 text-white">
+                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--brand-accent)] text-white">
                   <Armchair size={36} />
                 </div>
                 <h2 className="mt-4 text-xl font-black text-slate-950">
@@ -477,7 +527,7 @@ export default function RestaurantTablesPage() {
                 </p>
                 <button
                   onClick={openCreateDialog}
-                  className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25"
+                  className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)]"
                 >
                   <Plus size={18} />
                   Create First Table
@@ -494,7 +544,7 @@ export default function RestaurantTablesPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-14 w-14 place-items-center rounded-2xl bg-orange-50 text-orange-500">
+                      <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-accent)]">
                         <Armchair size={28} />
                       </div>
 
@@ -553,8 +603,8 @@ export default function RestaurantTablesPage() {
                           onClick={() => updateStatus(table, status)}
                           className={`rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${
                             table.status === status
-                              ? "bg-orange-500 text-white ring-orange-500"
-                              : "bg-white text-slate-500 ring-slate-100 hover:bg-orange-50 hover:text-orange-600"
+                              ? "bg-[var(--brand-primary)] text-white ring-[var(--brand-primary)]"
+                              : "bg-white text-slate-500 ring-slate-100 hover:bg-[var(--brand-soft)] hover:text-[var(--brand-primary)]"
                           }`}
                         >
                           {status}
@@ -643,7 +693,7 @@ export default function RestaurantTablesPage() {
                       }))
                     }
                     placeholder="T-01"
-                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-orange-400"
+                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-[var(--brand-accent)]"
                   />
                 </label>
 
@@ -660,7 +710,7 @@ export default function RestaurantTablesPage() {
                       }))
                     }
                     placeholder="Window Side"
-                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-orange-400"
+                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-[var(--brand-accent)]"
                   />
                 </label>
 
@@ -679,7 +729,7 @@ export default function RestaurantTablesPage() {
                     type="number"
                     min={1}
                     placeholder="2"
-                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-orange-400"
+                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-[var(--brand-accent)]"
                   />
                 </label>
 
@@ -695,7 +745,7 @@ export default function RestaurantTablesPage() {
                         status: e.target.value as TableStatus,
                       }))
                     }
-                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-orange-400"
+                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-[var(--brand-accent)]"
                   >
                     <option value="FREE">FREE</option>
                     <option value="BUSY">BUSY</option>
@@ -717,7 +767,7 @@ export default function RestaurantTablesPage() {
                       }))
                     }
                     placeholder="Ground Floor / VIP Room"
-                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-orange-400"
+                    className="mt-2 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-[var(--brand-accent)]"
                   />
                 </label>
 
@@ -735,7 +785,7 @@ export default function RestaurantTablesPage() {
                     }
                     placeholder="Special note..."
                     rows={3}
-                    className="mt-2 w-full resize-none rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-orange-400"
+                    className="mt-2 w-full resize-none rounded-2xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:ring-2 focus:ring-[var(--brand-accent)]"
                   />
                 </label>
               </div>
@@ -753,7 +803,7 @@ export default function RestaurantTablesPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600 disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-5 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-60"
                 >
                   {saving ? (
                     <Loader2 className="animate-spin" size={18} />

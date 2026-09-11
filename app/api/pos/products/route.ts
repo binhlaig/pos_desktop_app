@@ -164,6 +164,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { readAvailableForSale } from "@/lib/product-availability";
 
 type BackendProduct = Record<string, unknown>;
 
@@ -282,6 +283,7 @@ export async function GET() {
           category:
             getString(product, ["category"]) || "General",
           taxable: true,
+          availableForSale: readAvailableForSale(product),
           stock: getNumber(product, [
             "productQuantityAmount",
             "product_quantity_amount",

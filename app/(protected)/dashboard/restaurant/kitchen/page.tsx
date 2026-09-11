@@ -770,7 +770,7 @@ export default function RestaurantKitchenPage() {
               <button
                 onClick={fetchTickets}
                 disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-60"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -797,7 +797,7 @@ export default function RestaurantKitchenPage() {
                     active
                       ? completed
                         ? "bg-slate-950 text-white shadow-lg shadow-slate-900/15"
-                        : "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_22%,transparent)]"
+                        : "bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_22%,transparent)]"
                       : completed
                       ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       : "bg-[var(--brand-soft)] text-slate-700 hover:brightness-95"
@@ -853,7 +853,7 @@ export default function RestaurantKitchenPage() {
         ) : filteredTickets.length === 0 ? (
           <section className="grid min-h-[420px] place-items-center rounded-[2rem] border border-dashed border-[var(--brand-border)] bg-[var(--brand-soft)] p-8 text-center">
             <div>
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white">
+              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--brand-primary)] text-white">
                 <ChefHat size={36} />
               </div>
 
@@ -1039,7 +1039,7 @@ export default function RestaurantKitchenPage() {
                       onClick={() => setCompletedPage(page)}
                       className={`grid h-9 w-9 place-items-center rounded-xl text-sm font-black ${
                         active
-                          ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"
+                          ? "bg-[var(--brand-primary)] text-white"
                           : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
                     >
@@ -1071,7 +1071,7 @@ export default function RestaurantKitchenPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 py-1 text-xs font-black text-white">
+                            <span className="rounded-full bg-[var(--brand-primary)] px-3 py-1 text-xs font-black text-white">
                               {ticket.ticketNo || `KT-${ticket.id}`}
                             </span>
 
