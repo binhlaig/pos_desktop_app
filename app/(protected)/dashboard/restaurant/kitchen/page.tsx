@@ -77,6 +77,55 @@ const MISSING_TOKEN_MESSAGE = "Login token မရှိပါ။ အရင်ဆ
 const INVALID_TOKEN_MESSAGE = "Login token မမှန်ပါ။ ပြန် login ဝင်ပါ။";
 const FEATURE_DISABLED_MESSAGE =
   "ဒီဆိုင် plan မှာ Restaurant feature မဖွင့်ထားပါ။ Super Admin > Shop Feature Control မှာ Restaurant Feature Gate ကို ON လုပ်ပါ။";
+const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
+
+function applyStoredBrandColors() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null",
+    ) as { primary?: unknown; accent?: unknown } | null;
+    const isHexColor = (value: unknown): value is string =>
+      typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+
+    const root = document.documentElement;
+    const styles = window.getComputedStyle(root);
+    const primary =
+      stored && isHexColor(stored.primary)
+        ? stored.primary
+        : styles.getPropertyValue("--dashboard-primary").trim() || "#f97316";
+    const accent =
+      stored && isHexColor(stored.accent)
+        ? stored.accent
+        : styles.getPropertyValue("--dashboard-accent").trim() || "#fb923c";
+
+    root.style.setProperty("--brand-primary", primary);
+    root.style.setProperty("--brand-accent", accent);
+    root.style.setProperty("--dashboard-primary", primary);
+    root.style.setProperty("--dashboard-accent", accent);
+    root.style.setProperty(
+      "--brand-soft",
+      "color-mix(in srgb, var(--brand-primary) 10%, transparent)",
+    );
+    root.style.setProperty(
+      "--brand-border",
+      "color-mix(in srgb, var(--brand-primary) 28%, transparent)",
+    );
+  } catch {
+    const root = document.documentElement;
+    root.style.setProperty("--brand-primary", "#f97316");
+    root.style.setProperty("--brand-accent", "#fb923c");
+    root.style.setProperty(
+      "--brand-soft",
+      "color-mix(in srgb, var(--brand-primary) 10%, transparent)",
+    );
+    root.style.setProperty(
+      "--brand-border",
+      "color-mix(in srgb, var(--brand-primary) 28%, transparent)",
+    );
+  }
+}
 
 const activeStatuses: KitchenStatus[] = ["ALL", "NEW", "COOKING", "READY"];
 const completedStatuses: KitchenStatus[] = ["DONE", "CANCELLED"];
@@ -350,6 +399,22 @@ export default function RestaurantKitchenPage() {
     itemId: number;
     itemName: string;
   } | null>(null);
+
+  useEffect(() => {
+    const syncBrandColors = () => applyStoredBrandColors();
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === BRAND_COLOR_STORAGE_KEY) syncBrandColors();
+    };
+
+    syncBrandColors();
+    window.addEventListener("brand-colors-changed", syncBrandColors);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("brand-colors-changed", syncBrandColors);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
   const readyUndoTimerRef = useRef<number | null>(null);
 
   const filterButtons = [...activeStatuses, ...completedStatuses];
@@ -640,7 +705,7 @@ export default function RestaurantKitchenPage() {
     selectedStatus === "DONE" || selectedStatus === "CANCELLED";
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 text-slate-950 sm:p-6 lg:p-8">
+    <main className="min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_42%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-slate-950 sm:p-6 lg:p-8">
       <BusinessTypeGuard allow="RESTAURANT" />
 
       <AnimatePresence>
@@ -666,7 +731,7 @@ export default function RestaurantKitchenPage() {
               type="button"
               onClick={undoReadyItemStatus}
               disabled={updatingId === `item-${undoReadyItem.itemId}`}
-              className="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-950 transition hover:bg-orange-50 disabled:opacity-50"
+              className="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-950 transition hover:bg-[var(--brand-soft)] disabled:opacity-50"
             >
               {updatingId === `item-${undoReadyItem.itemId}`
                 ? "ပြန်ယူနေသည်..."
@@ -682,7 +747,7 @@ export default function RestaurantKitchenPage() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight">
-                <ChefHat className="text-orange-500" size={28} />
+                <ChefHat className="text-[var(--brand-accent)]" size={28} />
                 Restaurant Kitchen
               </h1>
               <p className="mt-1 text-sm font-semibold text-slate-500">
@@ -705,7 +770,7 @@ export default function RestaurantKitchenPage() {
               <button
                 onClick={fetchTickets}
                 disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition hover:bg-slate-800 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-60"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" size={18} />
@@ -732,10 +797,10 @@ export default function RestaurantKitchenPage() {
                     active
                       ? completed
                         ? "bg-slate-950 text-white shadow-lg shadow-slate-900/15"
-                        : "bg-orange-500 text-white shadow-lg shadow-orange-500/20"
+                        : "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_22%,transparent)]"
                       : completed
                       ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      : "bg-orange-50 text-slate-700 hover:bg-orange-100"
+                      : "bg-[var(--brand-soft)] text-slate-700 hover:brightness-95"
                   }`}
                 >
                   <Icon size={17} />
@@ -781,14 +846,14 @@ export default function RestaurantKitchenPage() {
         {loading ? (
           <section className="grid min-h-[420px] place-items-center rounded-[2rem] border border-white/80 bg-white/85 shadow-sm">
             <div className="flex items-center gap-3 text-sm font-black text-slate-500">
-              <Loader2 className="animate-spin text-orange-500" size={24} />
+              <Loader2 className="animate-spin text-[var(--brand-accent)]" size={24} />
               Loading kitchen tickets...
             </div>
           </section>
         ) : filteredTickets.length === 0 ? (
-          <section className="grid min-h-[420px] place-items-center rounded-[2rem] border border-dashed border-orange-200 bg-orange-50/70 p-8 text-center">
+          <section className="grid min-h-[420px] place-items-center rounded-[2rem] border border-dashed border-[var(--brand-border)] bg-[var(--brand-soft)] p-8 text-center">
             <div>
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-orange-500 text-white">
+              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white">
                 <ChefHat size={36} />
               </div>
 
@@ -883,11 +948,11 @@ export default function RestaurantKitchenPage() {
                         <td className="px-4 py-4 align-top">
                           <div className="inline-flex items-center gap-2 font-black text-slate-800">
                             {ticket.orderType === "DINE_IN" ? (
-                              <Table2 size={17} className="text-orange-500" />
+                              <Table2 size={17} className="text-[var(--brand-accent)]" />
                             ) : ticket.orderType === "TAKEAWAY" ? (
-                              <Coffee size={17} className="text-orange-500" />
+                              <Coffee size={17} className="text-[var(--brand-accent)]" />
                             ) : (
-                              <Utensils size={17} className="text-orange-500" />
+                              <Utensils size={17} className="text-[var(--brand-accent)]" />
                             )}
                             {ticket.orderType === "DINE_IN"
                               ? ticket.tableNo || "No table"
@@ -902,7 +967,7 @@ export default function RestaurantKitchenPage() {
                           <div className="text-sm font-bold text-slate-700">
                             {summarizeItems(ticket)}
                           </div>
-                          <div className="mt-1 text-xs font-black text-orange-500">
+                          <div className="mt-1 text-xs font-black text-[var(--brand-accent)]">
                             {countItems(ticket)} items
                           </div>
                         </td>
@@ -974,7 +1039,7 @@ export default function RestaurantKitchenPage() {
                       onClick={() => setCompletedPage(page)}
                       className={`grid h-9 w-9 place-items-center rounded-xl text-sm font-black ${
                         active
-                          ? "bg-orange-500 text-white"
+                          ? "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"
                           : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
                     >
@@ -1006,7 +1071,7 @@ export default function RestaurantKitchenPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                            <span className="rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 py-1 text-xs font-black text-white">
                               {ticket.ticketNo || `KT-${ticket.id}`}
                             </span>
 
@@ -1020,11 +1085,11 @@ export default function RestaurantKitchenPage() {
 
                           <h3 className="mt-3 flex items-center gap-2 text-xl font-black text-slate-950">
                             {ticket.orderType === "DINE_IN" ? (
-                              <Table2 size={22} className="text-orange-500" />
+                              <Table2 size={22} className="text-[var(--brand-accent)]" />
                             ) : ticket.orderType === "TAKEAWAY" ? (
-                              <Coffee size={22} className="text-orange-500" />
+                              <Coffee size={22} className="text-[var(--brand-accent)]" />
                             ) : (
-                              <Utensils size={22} className="text-orange-500" />
+                              <Utensils size={22} className="text-[var(--brand-accent)]" />
                             )}
 
                             {ticket.orderType === "DINE_IN"
@@ -1075,7 +1140,7 @@ export default function RestaurantKitchenPage() {
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-orange-50 text-sm font-black text-orange-600">
+                                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--brand-soft)] text-sm font-black text-[var(--brand-accent)]">
                                     x{item.quantity || 1}
                                   </span>
 

@@ -72,6 +72,54 @@ const TOKEN_KEYS = [
   "token",
   "jwt",
 ] as const;
+const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
+
+function applyStoredBrandColors() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null",
+    ) as { primary?: unknown; accent?: unknown } | null;
+    const isHexColor = (value: unknown): value is string =>
+      typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    const root = document.documentElement;
+    const styles = window.getComputedStyle(root);
+    const primary =
+      stored && isHexColor(stored.primary)
+        ? stored.primary
+        : styles.getPropertyValue("--dashboard-primary").trim() || "#2563eb";
+    const accent =
+      stored && isHexColor(stored.accent)
+        ? stored.accent
+        : styles.getPropertyValue("--dashboard-accent").trim() || "#60a5fa";
+
+    root.style.setProperty("--brand-primary", primary);
+    root.style.setProperty("--brand-accent", accent);
+    root.style.setProperty("--dashboard-primary", primary);
+    root.style.setProperty("--dashboard-accent", accent);
+    root.style.setProperty(
+      "--brand-soft",
+      "color-mix(in srgb, var(--brand-primary) 10%, transparent)",
+    );
+    root.style.setProperty(
+      "--brand-border",
+      "color-mix(in srgb, var(--brand-primary) 28%, transparent)",
+    );
+  } catch {
+    const root = document.documentElement;
+    root.style.setProperty("--brand-primary", "#2563eb");
+    root.style.setProperty("--brand-accent", "#60a5fa");
+    root.style.setProperty(
+      "--brand-soft",
+      "color-mix(in srgb, var(--brand-primary) 10%, transparent)",
+    );
+    root.style.setProperty(
+      "--brand-border",
+      "color-mix(in srgb, var(--brand-primary) 28%, transparent)",
+    );
+  }
+}
 
 /*
   Reuses the existing Kitchen backend contract:
@@ -209,6 +257,22 @@ export default function RestaurantServingPage() {
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    const syncBrandColors = () => applyStoredBrandColors();
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === BRAND_COLOR_STORAGE_KEY) syncBrandColors();
+    };
+
+    syncBrandColors();
+    window.addEventListener("brand-colors-changed", syncBrandColors);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("brand-colors-changed", syncBrandColors);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   const statusCounts = useMemo(() => {
     const counts: Record<ServingStatus, number> = {
@@ -474,21 +538,21 @@ export default function RestaurantServingPage() {
 
   if (!activeStaff) {
     return (
-      <main className={`min-h-screen p-4 sm:p-6 ${darkMode ? "bg-slate-950 text-white" : "bg-[#f8f3ea] text-slate-950"}`}>
+      <main className={`min-h-screen p-4 sm:p-6 ${darkMode ? "bg-slate-950 text-white" : "bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] text-slate-950"}`}>
         <BusinessTypeGuard allow="RESTAURANT" />
         <div className="mx-auto max-w-xl pt-8 sm:pt-16">
           <div className="mb-4 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => router.push("/dashboard")}
-              className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black ${darkMode ? "bg-white/10" : "bg-white ring-1 ring-orange-100"}`}
+              className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black ${darkMode ? "bg-white/10" : "bg-white ring-1 ring-[var(--brand-border)]"}`}
             >
               <ArrowLeft size={17} /> Dashboard
             </button>
             <button
               type="button"
               onClick={() => setDarkMode((current) => !current)}
-              className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10" : "bg-slate-950 text-white"}`}
+              className={`grid h-10 w-10 place-items-center rounded-2xl ${darkMode ? "bg-white/10" : "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"}`}
             >
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -498,10 +562,10 @@ export default function RestaurantServingPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             onSubmit={verifyStaff}
-            className={`rounded-[2rem] border p-5 shadow-xl sm:p-7 ${darkMode ? "border-white/10 bg-white/5" : "border-orange-100 bg-white"}`}
+            className={`rounded-[2rem] border p-5 shadow-xl sm:p-7 ${darkMode ? "border-white/10 bg-white/5" : "border-[var(--brand-border)] bg-white"}`}
           >
             <div className="flex items-start gap-3">
-              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-emerald-500/15 text-emerald-500">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-accent)]">
                 <Truck size={29} />
               </div>
               <div>
@@ -513,8 +577,8 @@ export default function RestaurantServingPage() {
             </div>
 
             <label className="mt-6 block text-sm font-black">Staff ID</label>
-            <div className={`mt-2 flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 ${darkMode ? "bg-slate-900 ring-white/10" : "bg-slate-50 ring-orange-100"}`}>
-              <IdCard size={19} className="text-emerald-500" />
+            <div className={`mt-2 flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 ${darkMode ? "bg-slate-900 ring-white/10" : "bg-slate-50 ring-[var(--brand-border)]"}`}>
+              <IdCard size={19} className="text-[var(--brand-accent)]" />
               <input
                 ref={staffInputRef}
                 value={staffIdDraft}
@@ -537,7 +601,7 @@ export default function RestaurantServingPage() {
             <button
               type="submit"
               disabled={staffLoading}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-4 text-sm font-black text-white shadow-lg shadow-emerald-500/25 disabled:opacity-50"
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-4 py-4 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-50"
             >
               {staffLoading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
               Open Serving Board
@@ -549,7 +613,7 @@ export default function RestaurantServingPage() {
   }
 
   return (
-    <main className={`min-h-screen p-2 pb-8 sm:p-4 lg:p-6 ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-950"}`}>
+    <main className={`min-h-screen p-2 pb-8 sm:p-4 lg:p-6 ${darkMode ? "bg-slate-950 text-white" : "bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] text-slate-950"}`}>
       <BusinessTypeGuard allow="RESTAURANT" />
 
       <div className="mx-auto flex max-w-[1600px] flex-col gap-4">
@@ -559,18 +623,18 @@ export default function RestaurantServingPage() {
               <button
                 type="button"
                 onClick={() => router.push("/dashboard")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)] text-[var(--brand-primary)]"}`}
               >
                 <ArrowLeft size={16} /> <span className="hidden sm:inline">Dashboard</span>
               </button>
               <button
                 type="button"
                 onClick={() => router.push("/dashboard/restaurant/kitchen")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${darkMode ? "bg-white/10" : "bg-orange-50 text-orange-700"}`}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)] text-[var(--brand-primary)]"}`}
               >
                 <ChefHat size={16} /> Kitchen
               </button>
-              <div className="inline-flex min-w-0 items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white">
+              <div className="inline-flex min-w-0 items-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 py-2 text-xs font-black text-white">
                 <UserCheck size={16} />
                 <span className="max-w-[130px] truncate">{activeStaff.staffName}</span>
                 <span className="opacity-75">{activeStaff.staffId}</span>
@@ -582,14 +646,14 @@ export default function RestaurantServingPage() {
                 type="button"
                 onClick={() => void fetchTickets({ silent: true })}
                 disabled={refreshing}
-                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50 ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)] text-[var(--brand-primary)]"}`}
               >
                 <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> Refresh
               </button>
               <button
                 type="button"
                 onClick={() => setDarkMode((current) => !current)}
-                className={`grid h-9 w-9 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-slate-950 text-white"}`}
+                className={`grid h-9 w-9 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] text-white"}`}
               >
                 {darkMode ? <Sun size={17} /> : <Moon size={17} />}
               </button>
@@ -605,8 +669,8 @@ export default function RestaurantServingPage() {
           </div>
 
           <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}>
-              <Search size={17} className="text-slate-400" />
+            <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"}`}>
+              <Search size={17} className={darkMode ? "text-slate-400" : "text-[var(--brand-accent)]"} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -705,7 +769,7 @@ export default function RestaurantServingPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                            <span className="rounded-full bg-[linear-gradient(135deg,var(--brand-primary),var(--brand-accent))] px-3 py-1 text-xs font-black text-white">
                               {ticket.ticketNo || `KT-${ticket.id}`}
                             </span>
                             <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${waitingMinutes >= 10 ? "bg-red-500 text-white" : "bg-emerald-500/15 text-emerald-600"}`}>
@@ -713,7 +777,7 @@ export default function RestaurantServingPage() {
                             </span>
                           </div>
                           <h2 className="mt-3 flex items-center gap-2 text-2xl font-black">
-                            {ticket.orderType === "DINE_IN" ? <Table2 size={24} className="text-orange-500" /> : ticket.orderType === "TAKEAWAY" ? <Coffee size={24} className="text-orange-500" /> : <Utensils size={24} className="text-orange-500" />}
+                            {ticket.orderType === "DINE_IN" ? <Table2 size={24} className="text-[var(--brand-accent)]" /> : ticket.orderType === "TAKEAWAY" ? <Coffee size={24} className="text-[var(--brand-accent)]" /> : <Utensils size={24} className="text-[var(--brand-accent)]" />}
                             {ticket.orderType === "DINE_IN" ? `Table ${ticket.tableNo || "-"}` : ticket.orderType || "Order"}
                           </h2>
                         </div>
@@ -734,7 +798,7 @@ export default function RestaurantServingPage() {
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-orange-500/10 text-sm font-black text-orange-600">×{item.quantity || 1}</span>
+                                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-sm font-black text-[var(--brand-accent)]">×{item.quantity || 1}</span>
                                   <h3 className="line-clamp-2 font-black">{item.itemName}</h3>
                                 </div>
                                 {modifiers.length > 0 && (
