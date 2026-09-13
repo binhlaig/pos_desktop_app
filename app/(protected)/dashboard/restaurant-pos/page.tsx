@@ -100,6 +100,8 @@ type RestaurantCartDraft = {
   serviceChargeRatePercent: number;
   taxRatePercent: number;
   items: CartItem[];
+  kitchenTicketIds?: string[];
+  takeawayNumber?: string;
 };
 
 type RestaurantTable = {
@@ -1196,6 +1198,7 @@ function RestaurantMobileCartBar({
   onPayment,
   kitchenSaving,
   canSendToKitchen,
+  canPayOrder,
   kitchenDisabledMessage,
   addedFeedbackVisible,
 }: {
@@ -1208,11 +1211,11 @@ function RestaurantMobileCartBar({
   onPayment: () => void;
   kitchenSaving: boolean;
   canSendToKitchen: boolean;
+  canPayOrder: boolean;
   kitchenDisabledMessage: string;
   addedFeedbackVisible: boolean;
 }) {
   const { ref, isDropTarget } = useDroppable({ id: MOBILE_CART_DROP_ID });
-  const hasItems = itemCount > 0;
 
   return (
     <div
@@ -1249,7 +1252,7 @@ function RestaurantMobileCartBar({
               View cart
             </span>
           </button>
-          <button
+          {canSendToKitchen && <button
             type="button"
             onClick={onKitchen}
             disabled={!canSendToKitchen || kitchenSaving}
@@ -1270,7 +1273,7 @@ function RestaurantMobileCartBar({
             ) : (
               <ChefHat size={18} />
             )}
-          </button>
+          </button>}
           <button
             type="button"
             onClick={onViewCart}
@@ -1281,7 +1284,7 @@ function RestaurantMobileCartBar({
           <button
             type="button"
             onClick={onPayment}
-            disabled={!hasItems}
+            disabled={!canPayOrder}
             className="rounded-xl bg-[var(--brand-primary)] px-3 py-3 text-xs font-black text-white disabled:opacity-40"
           >
             Pay
@@ -1303,6 +1306,9 @@ export default function RestaurantCashierPOSPage() {
   const [staffError, setStaffError] = useState("");
   const staffInputRef = useRef<HTMLInputElement | null>(null);
   const [orderType, setOrderType] = useState<OrderType>("DINE_IN");
+  const [orderTypeOpen, setOrderTypeOpen] = useState(false);
+  const [orderTypeChosen, setOrderTypeChosen] = useState(false);
+  const [pendingMenuItem, setPendingMenuItem] = useState<MenuItem | null>(null);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [tablesLoading, setTablesLoading] = useState(true);
   const [tablesError, setTablesError] = useState("");
@@ -1363,6 +1369,14 @@ export default function RestaurantCashierPOSPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [kitchenTicketIds, setKitchenTicketIds] = useState<string[]>([]);
+  const [takeawayNumber, setTakeawayNumber] = useState("");
+  const [takeawaySearchOpen, setTakeawaySearchOpen] = useState(false);
+  const [takeawayQuery, setTakeawayQuery] = useState("");
+  const [takeawaySearchError, setTakeawaySearchError] = useState("");
+  const [takeawaySearchLoading, setTakeawaySearchLoading] = useState(false);
+  const [allTicketsDone, setAllTicketsDone] = useState(false);
+  const [kitchenStatusError, setKitchenStatusError] = useState("");
   const [kitchenSaving, setKitchenSaving] = useState(false);
   const [kitchenError, setKitchenError] = useState("");
   const [kitchenSuccessOpen, setKitchenSuccessOpen] = useState(false);
@@ -1557,6 +1571,12 @@ export default function RestaurantCashierPOSPage() {
     [cart],
   );
   const hasPendingKitchenItems = pendingKitchenItemCount > 0;
+  const showKitchenAction = hasPendingKitchenItems && cart.length > 0;
+  const canPayOrder = cart.length > 0 &&
+    (orderType !== "DINE_IN" ||
+      (Boolean(selectedTable) && !hasPendingKitchenItems &&
+        kitchenTicketIds.length > 0 && allTicketsDone && !kitchenStatusError &&
+        cart.every((item) => item.kitchenSentQty >= item.qty)));
   const kitchenDisabledMessage =
     cart.length > 0 && !hasPendingKitchenItems
       ? NO_PENDING_KITCHEN_ITEMS_MESSAGE
@@ -1862,6 +1882,8 @@ export default function RestaurantCashierPOSPage() {
       if (authOrFeatureError) throw new Error(authOrFeatureError);
 
       if (res.status === 404 || res.status === 204) {
+        setKitchenTicketIds([]);
+        setAllTicketsDone(false);
         setCart([]);
         setDiscount(0);
         return;
@@ -1881,11 +1903,11 @@ export default function RestaurantCashierPOSPage() {
             ? openOrder.order_items
             : [];
 
-      setCart(
-        items
-          .map((item) => mapOpenOrderItemToCartItem(asRecord(item)))
-          .filter((item) => item.menuItemId && item.name),
-      );
+      const restoredItems = items
+        .map((item) => mapOpenOrderItemToCartItem(asRecord(item)))
+        .filter((item) => item.menuItemId && item.name);
+      setCart(restoredItems);
+
       setDiscount(
         pickNumber(openOrder, [
           "discount",
@@ -2025,6 +2047,9 @@ export default function RestaurantCashierPOSPage() {
         await saveOpenOrder();
       }
 
+      setKitchenTicketIds([]);
+      setAllTicketsDone(false);
+      setKitchenStatusError("");
       setSelectedTableId(table.id);
       await loadOpenOrderByTable(table.id);
       await fetchTables();
@@ -2123,12 +2148,18 @@ export default function RestaurantCashierPOSPage() {
               : "DINE_IN";
 
           setOrderType(restoredOrderType);
+          setOrderTypeChosen(true);
           setSelectedTableId(
             typeof draft.selectedTableId === "number"
               ? draft.selectedTableId
               : null,
           );
           setCart(validItems);
+          setTakeawayNumber(typeof draft.takeawayNumber === "string" ? draft.takeawayNumber : "");
+          setKitchenTicketIds(Array.isArray(draft.kitchenTicketIds)
+            ? draft.kitchenTicketIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+            : []);
+          setAllTicketsDone(false);
           setCartPage(1);
           setDiscount(Math.max(0, Number(draft.discount || 0)));
           setServiceChargeEnabled(draft.serviceChargeEnabled !== false);
@@ -2159,6 +2190,12 @@ export default function RestaurantCashierPOSPage() {
 
     setRestoredDraftKey(draftKey);
   }, [activeStaff, sessionAccessToken]);
+
+  useEffect(() => {
+    if (activeStaff && restoredDraftKey && !orderTypeChosen && cart.length === 0) {
+      setOrderTypeOpen(true);
+    }
+  }, [activeStaff, restoredDraftKey, orderTypeChosen, cart.length]);
 
   useEffect(() => {
     if (!draftRestoreMessage) return;
@@ -2192,6 +2229,8 @@ export default function RestaurantCashierPOSPage() {
       serviceChargeRatePercent,
       taxRatePercent,
       items: cart,
+      kitchenTicketIds,
+      takeawayNumber,
     };
 
     localStorage.setItem(draftKey, JSON.stringify(draft));
@@ -2199,6 +2238,8 @@ export default function RestaurantCashierPOSPage() {
     activeStaff,
     cart,
     discount,
+    kitchenTicketIds,
+    takeawayNumber,
     orderType,
     restoredDraftKey,
     selectedTableId,
@@ -2213,11 +2254,12 @@ export default function RestaurantCashierPOSPage() {
       activeStaff &&
       restoredDraftKey &&
       orderType === "DINE_IN" &&
-      !selectedTableId
+      !selectedTableId &&
+      (Boolean(pendingMenuItem) || cart.length > 0)
     ) {
       setTableDialogOpen(true);
     }
-  }, [activeStaff, orderType, restoredDraftKey, selectedTableId]);
+  }, [activeStaff, orderType, restoredDraftKey, selectedTableId, pendingMenuItem, cart.length]);
 
   useEffect(() => {
     setCartPage((currentPage) => {
@@ -2343,6 +2385,16 @@ export default function RestaurantCashierPOSPage() {
   };
 
   const addToCart = (item: MenuItem) => {
+    if (!orderTypeChosen) {
+      setPendingMenuItem(item);
+      setOrderTypeOpen(true);
+      return false;
+    }
+    if (orderType === "DINE_IN" && !selectedTableId) {
+      setPendingMenuItem(item);
+      setTableDialogOpen(true);
+      return false;
+    }
     if (!item.availableForSale) {
       const message = unavailableToastMessage(item.name);
       setKitchenError(message);
@@ -2381,6 +2433,7 @@ export default function RestaurantCashierPOSPage() {
 
     setKitchenError("");
     setPaymentError("");
+    setAllTicketsDone(false);
     setLastAddedMenuItemId(menuItemIdentity(item));
     setCartPage(1);
 
@@ -2494,6 +2547,16 @@ export default function RestaurantCashierPOSPage() {
     };
   }
 
+  useEffect(() => {
+    if (!pendingMenuItem || !orderTypeChosen || openOrderLoading ||
+        (orderType === "DINE_IN" && !selectedTableId)) return;
+    const item = pendingMenuItem;
+    setPendingMenuItem(null);
+    addToCart(item);
+  // addToCart reads the current cart after table restoration.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMenuItem, orderTypeChosen, orderType, selectedTableId, openOrderLoading]);
+
   function handleMenuDragStart(event: unknown) {
     const { sourceId } = getDndOperation(event);
 
@@ -2565,6 +2628,7 @@ export default function RestaurantCashierPOSPage() {
   }
 
   function openPaymentDialog() {
+    if (!canPayOrder) return;
     const stockError = validateCartStock();
 
     if (stockError) {
@@ -2584,6 +2648,7 @@ export default function RestaurantCashierPOSPage() {
     );
 
   const updateQty = (id: string, action: "plus" | "minus") => {
+    setAllTicketsDone(false);
     setCart((prev) =>
       prev
         .map((item) => {
@@ -2614,6 +2679,7 @@ export default function RestaurantCashierPOSPage() {
   };
 
   const removeItem = (id: string) => {
+    setAllTicketsDone(false);
     setCart((prev) => prev.filter((item) => item.id !== id));
   };
 
@@ -2641,6 +2707,10 @@ export default function RestaurantCashierPOSPage() {
   };
 
   const clearOrder = () => {
+    setTakeawayNumber("");
+    setKitchenTicketIds([]);
+    setAllTicketsDone(false);
+    setKitchenStatusError("");
     setCart([]);
     setCartPage(1);
     setLastAddedMenuItemId("");
@@ -2770,9 +2840,24 @@ export default function RestaurantCashierPOSPage() {
         "order_no",
       ]);
 
+      const pickupNumber = pickString(ticketRecord, ["pickupNumber", "pickup_number"]) || ticketNo;
+      const ticketId = pickString(ticketRecord, ["id", "ticketId", "ticket_id"]) || ticketNo;
+      if (orderType === "DINE_IN" || orderType === "TAKEAWAY") {
+        if (orderType === "TAKEAWAY") {
+          if (pickupNumber) setTakeawayNumber((previous) => previous || pickupNumber);
+          else setKitchenStatusError("Takeout ticket number ကို server က မပေးပါ။");
+        }
+        if (ticketId) setKitchenTicketIds((previous) => [...new Set([...previous, ticketId])]);
+        else {
+          setKitchenTicketIds((previous) => [...previous, `UNTRACKED-${crypto.randomUUID()}`]);
+          setKitchenStatusError("Kitchen ticket ID မရပါ။ Payment အတွက် server ticket status လိုအပ်ပါသည်။");
+        }
+        setAllTicketsDone(false);
+      }
+
       setKitchenSuccessMessage(
         ticketNo
-          ? `Kitchen order ပို့ပြီးပါပြီ။ Ticket No: ${ticketNo}`
+          ? `Kitchen order ပို့ပြီးပါပြီ။ ${orderType === "TAKEAWAY" ? "Takeout No" : "Ticket No"}: ${orderType === "TAKEAWAY" ? pickupNumber : ticketNo}`
           : "Kitchen order ပို့ပြီးပါပြီ။",
       );
       setKitchenSuccessItemCount(
@@ -2806,7 +2891,7 @@ export default function RestaurantCashierPOSPage() {
       return;
     }
 
-    if (cart.length === 0) return;
+    if (!canPayOrder) return;
 
     const latestMenuItems = await fetchMenuItems({ silent: true });
     const unavailableItem = cart.find((item) => {
@@ -3041,6 +3126,10 @@ export default function RestaurantCashierPOSPage() {
         }),
       );
       setCart([]);
+      setTakeawayNumber("");
+      setKitchenTicketIds([]);
+      setAllTicketsDone(false);
+      setKitchenStatusError("");
       setCartPage(1);
       setLastAddedMenuItemId("");
       setDiscount(0);
@@ -3062,6 +3151,115 @@ export default function RestaurantCashierPOSPage() {
       setPaymentSaving(false);
     }
   };
+
+  // A ticket is payable only after the kitchen API confirms every ticket
+  // created for this order as DONE. A missing ticket or failed request is locked.
+  useEffect(() => {
+    if ((orderType !== "DINE_IN" && orderType !== "TAKEAWAY") ||
+        (orderType === "DINE_IN" && !selectedTableId) ||
+        kitchenTicketIds.length === 0 || cart.length === 0) return;
+    let cancelled = false;
+    async function checkTickets() {
+      try {
+        const usableToken = ensurePageAccessToken(sessionAccessToken);
+        if (!usableToken) throw new Error(MISSING_TOKEN_MESSAGE);
+        const res = await fetch(`${API_BASE}/api/restaurant/kitchen/tickets`, {
+          headers: authHeaders(usableToken), cache: "no-store",
+        });
+        if (!res.ok) throw new Error(await getApiErrorMessage(res, "Kitchen status ကိုယူမရပါ"));
+        const payload = await res.json();
+        const record = asRecord(payload);
+        const list = Array.isArray(payload) ? payload :
+          Array.isArray(record.tickets) ? record.tickets :
+          Array.isArray(record.content) ? record.content :
+          Array.isArray(record.data) ? record.data :
+          Array.isArray(asRecord(record.data).content) ? asRecord(record.data).content as unknown[] : null;
+        if (!list) throw new Error("Kitchen ticket list format မမှန်ပါ။");
+        const tickets = list.map((value: unknown) => asRecord(value));
+        const allDone = kitchenTicketIds.every((ticketId) => {
+          const ticket = tickets.find((entry) =>
+            ["id", "ticketId", "ticket_id", "ticketNo", "ticket_no"].some((key) =>
+              pickString(entry, [key]) === ticketId));
+          const status = ticket ? pickString(ticket, ["status"]).toUpperCase() : "";
+          return Boolean(ticket) &&
+            (orderType === "TAKEAWAY" || Number(pickString(ticket!, ["tableId", "table_id"])) === selectedTableId) &&
+            (orderType === "TAKEAWAY" ? status === "READY" || status === "DONE" : status === "DONE");
+        });
+        if (!cancelled) { setAllTicketsDone(Boolean(allDone)); setKitchenStatusError(""); }
+      } catch (error) {
+        if (!cancelled) {
+          setAllTicketsDone(false);
+          setKitchenStatusError(error instanceof Error ? error.message : "Kitchen status error");
+        }
+      }
+    }
+    void checkTickets();
+    const timer = window.setInterval(() => { void checkTickets(); }, 5000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [orderType, selectedTableId, kitchenTicketIds, cart, sessionAccessToken]);
+
+  async function findReadyTakeaway(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const number = takeawayQuery.trim().toUpperCase();
+    if (!number) return;
+    if (cart.length > 0) {
+      setTakeawaySearchError("Current Order ကို အရင်ရှင်းပြီးမှ အခြား Takeout order ဖွင့်ပါ။");
+      return;
+    }
+    setTakeawaySearchLoading(true);
+    setTakeawaySearchError("");
+    try {
+      const usableToken = ensurePageAccessToken(sessionAccessToken);
+      if (!usableToken) throw new Error(MISSING_TOKEN_MESSAGE);
+      const res = await fetch(`${API_BASE}/api/restaurant/kitchen/tickets`, {
+        headers: authHeaders(usableToken), cache: "no-store",
+      });
+      if (!res.ok) throw new Error(await getApiErrorMessage(res, "Takeout orders ရှာမရပါ"));
+      const payload = await res.json();
+      const root = asRecord(payload);
+      const list = Array.isArray(payload) ? payload :
+        Array.isArray(root.tickets) ? root.tickets :
+        Array.isArray(root.content) ? root.content :
+        Array.isArray(root.data) ? root.data : null;
+      if (!list) throw new Error("Kitchen ticket list format မမှန်ပါ။");
+      const ticket = list.map((entry: unknown) => asRecord(entry)).find((entry: Record<string, unknown>) =>
+        ["pickupNumber", "pickup_number", "ticketNo", "ticket_no"].some((key) =>
+          pickString(entry, [key]).toUpperCase() === number) &&
+        pickString(entry, ["orderType", "order_type"]).toUpperCase() === "TAKEAWAY");
+      if (!ticket) throw new Error("ဒီ Takeout နံပါတ်ကို မတွေ့ပါ။");
+      const ticketStatus = pickString(ticket, ["status"]).toUpperCase();
+      if (ticketStatus !== "READY" && ticketStatus !== "DONE")
+        throw new Error("ဒီ Takeout order က Kitchen READY မဖြစ်သေးပါ။");
+      const orderId = pickString(ticket, ["orderId", "order_id"]);
+      let order = ticket;
+      if (orderId) {
+        const orderResponse = await fetch(`${API_BASE}/api/restaurant/orders/${encodeURIComponent(orderId)}`, {
+          headers: authHeaders(usableToken), cache: "no-store",
+        });
+        if (!orderResponse.ok) throw new Error(await getApiErrorMessage(orderResponse, "Takeout order ကိုယူမရပါ"));
+        order = unwrapOpenOrderPayload(await orderResponse.json());
+      }
+      const items = Array.isArray(order.items) ? order.items :
+        Array.isArray(order.orderItems) ? order.orderItems :
+        Array.isArray(order.order_items) ? order.order_items : [];
+      if (items.length === 0) throw new Error("ဒီနံပါတ်အတွက် order items မရပါ။ Backend မှ order items ကို ပြန်ပေးရန် လိုပါသည်။");
+      const restored = items.map((entry: unknown) => mapOpenOrderItemToCartItem(asRecord(entry)));
+      if (restored.some((item: CartItem) => !item.dbId))
+        throw new Error("Order items မှာ product ID မပါပါ။ Payment အတွက် backend မှ ID ပြန်ပေးရန် လိုပါသည်။");
+      setOrderType("TAKEAWAY");
+      setOrderTypeChosen(true);
+      setSelectedTableId(null);
+      setTakeawayNumber(number);
+      setKitchenTicketIds([pickString(ticket, ["id", "ticketId", "ticket_id"]) || number]);
+      setAllTicketsDone(true);
+      setKitchenStatusError("");
+      setDiscount(pickNumber(order, ["discount", "discountAmount", "discount_amount"]));
+      setCart(restored);
+      setTakeawaySearchOpen(false);
+    } catch (error) {
+      setTakeawaySearchError(error instanceof Error ? error.message : "Takeout order ရှာမရပါ");
+    } finally { setTakeawaySearchLoading(false); }
+  }
 
   const closePaymentReceiptDialog = () => {
     setPaymentReceiptOpen(false);
@@ -4038,9 +4236,9 @@ export default function RestaurantCashierPOSPage() {
                     </div>
                   </div>
 
-                  {(kitchenError || kitchenDisabledMessage) && (
+                  {(kitchenError || kitchenStatusError || (showKitchenAction && kitchenDisabledMessage)) && (
                     <div
-                      title={kitchenError || kitchenDisabledMessage}
+                      title={kitchenError || kitchenStatusError || kitchenDisabledMessage}
                       className={`mt-2 flex min-h-8 items-center rounded-xl border px-2.5 py-1.5 text-[11px] font-bold ${kitchenError
                           ? darkMode
                             ? "border-red-400/30 bg-red-500/10 text-red-200"
@@ -4051,15 +4249,15 @@ export default function RestaurantCashierPOSPage() {
                         }`}
                     >
                       <span
-                        className={kitchenError ? "line-clamp-2" : "truncate"}
+                        className={kitchenError || kitchenStatusError ? "line-clamp-2" : "truncate"}
                       >
-                        {kitchenError || kitchenDisabledMessage}
+                        {kitchenError || kitchenStatusError || kitchenDisabledMessage}
                       </span>
                     </div>
                   )}
 
                   <div className="mt-2 grid grid-cols-2 gap-2">
-                    <button
+                    {showKitchenAction && <button
                       onClick={sendToKitchen}
                       disabled={!hasPendingKitchenItems || kitchenSaving}
                       title={
@@ -4075,11 +4273,11 @@ export default function RestaurantCashierPOSPage() {
                         <ChefHat size={18} />
                       )}
                       {kitchenSaving ? "Sending..." : "Kitchen"}
-                    </button>
+                    </button>}
 
                     <button
                       onClick={openPaymentDialog}
-                      disabled={cart.length === 0}
+                      disabled={!canPayOrder}
                       className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Payment
@@ -4203,6 +4401,20 @@ export default function RestaurantCashierPOSPage() {
                     Stay in POS
                   </button>
 
+                  {orderType === "TAKEAWAY" && takeawayNumber && (
+                    <div className="mt-3 rounded-xl bg-amber-100 p-4 text-center text-slate-950">
+                      <div className="text-2xl font-black">Takeout #{takeawayNumber}</div>
+                      <button type="button" className="mt-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-black text-white"
+                        onClick={() => {
+                          const printable = window.open("", "_blank", "width=360,height=450");
+                          if (!printable) return;
+                          printable.document.write(`<html><head><title>Takeout Number</title></head><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>TAKEOUT</h2><strong style="font-size:48px">${escapeHtml(takeawayNumber)}</strong><p>Please keep this number for pickup.</p></body></html>`);
+                          printable.document.close();
+                          printable.focus();
+                          printable.print();
+                        }}>Print Number</button>
+                    </div>
+                  )}
                   {orderType === "DINE_IN" && selectedTable && (
                     <button
                       type="button"
@@ -4442,11 +4654,10 @@ export default function RestaurantCashierPOSPage() {
                           key={type.key}
                           type="button"
                           onClick={() => {
+                            if (cart.length > 0 && type.key !== orderType) return;
                             setOrderType(type.key);
-                            if (type.key === "DINE_IN" && !selectedTable) {
-                              setHeaderControlsOpen(false);
-                              setTableDialogOpen(true);
-                            }
+                            setOrderTypeChosen(true);
+                            if (type.key !== "DINE_IN") setSelectedTableId(null);
                           }}
                           className={`inline-flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-3 text-xs font-black transition ${orderType === type.key
                               ? "bg-[var(--brand-primary)] text-white shadow-md shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)]"
@@ -4462,6 +4673,10 @@ export default function RestaurantCashierPOSPage() {
                     </div>
 
                     <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => { setHeaderControlsOpen(false); setTakeawaySearchOpen(true); }}
+                        className={`col-span-2 inline-flex items-center gap-2 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/10" : "bg-slate-100"}`}>
+                        <Search size={18} /> Find Ready Takeout by Number
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -4538,7 +4753,7 @@ export default function RestaurantCashierPOSPage() {
                       >
                         <Receipt size={18} /> View Cart
                       </button>
-                      <button
+                      {showKitchenAction && <button
                         type="button"
                         onClick={() => {
                           setHeaderControlsOpen(false);
@@ -4553,14 +4768,14 @@ export default function RestaurantCashierPOSPage() {
                           <ChefHat size={18} />
                         )}{" "}
                         Kitchen
-                      </button>
+                      </button>}
                       <button
                         type="button"
                         onClick={() => {
                           setHeaderControlsOpen(false);
                           openPaymentDialog();
                         }}
-                        disabled={cart.length === 0}
+                        disabled={!canPayOrder}
                         className="inline-flex items-center gap-2 rounded-2xl bg-[var(--brand-primary)] p-3 text-sm font-black text-white disabled:opacity-40"
                       >
                         <Wallet size={18} /> Payment
@@ -4728,6 +4943,55 @@ export default function RestaurantCashierPOSPage() {
                   </div>
                 </div>
               </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {takeawaySearchOpen && (
+            <motion.div className="fixed inset-0 z-[85] grid place-items-center bg-slate-950/70 p-4"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <form onSubmit={findReadyTakeaway} role="dialog" aria-modal="true" aria-label="Find ready takeout"
+                className="w-full max-w-md rounded-3xl bg-white p-6 text-slate-950 shadow-2xl">
+                <h2 className="text-xl font-black">Find Ready Takeout</h2>
+                <p className="mt-1 text-sm">Kitchen ticket နံပါတ်ရိုက်ပြီး order ကိုရှာပါ။</p>
+                <input autoFocus value={takeawayQuery} onChange={(event) => setTakeawayQuery(event.target.value)}
+                  placeholder="Ticket number" className="mt-4 w-full rounded-xl border p-3 text-lg font-bold" />
+                {takeawaySearchError && <p role="alert" className="mt-2 text-sm font-bold text-red-600">{takeawaySearchError}</p>}
+                <div className="mt-4 flex gap-2">
+                  <button type="button" onClick={() => setTakeawaySearchOpen(false)} className="rounded-xl bg-slate-100 px-4 py-3 font-bold">Close</button>
+                  <button type="submit" disabled={takeawaySearchLoading} className="rounded-xl bg-[var(--brand-primary)] px-4 py-3 font-bold text-white disabled:opacity-50">
+                    {takeawaySearchLoading ? "Searching..." : "Find Order"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Choose order type before entering a new order. */}
+        <AnimatePresence>
+          {orderTypeOpen && activeStaff && (
+            <motion.div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/70 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div role="dialog" aria-modal="true" aria-label="Choose order type" className="w-full max-w-md rounded-3xl bg-white p-6 text-slate-950 shadow-2xl">
+                <h2 className="mb-4 text-xl font-black">Choose Order Type</h2>
+                <div className="grid gap-3">
+                  {([ ["DINE_IN", "Dine In"], ["TAKEAWAY", "Takeout"], ["DELIVERY", "Delivery"] ] as const).map(([value, label]) => (
+                    <button key={value} type="button" className="rounded-2xl bg-[var(--brand-soft)] p-4 text-left font-black hover:bg-[var(--brand-primary)] hover:text-white" onClick={() => {
+                      setOrderType(value);
+                      setOrderTypeChosen(true);
+                      setOrderTypeOpen(false);
+                      if (value === "DINE_IN") {
+                        setSelectedTableId(null);
+                        if (pendingMenuItem) setTableDialogOpen(true);
+                      } else {
+                        setSelectedTableId(null);
+
+                      }
+                    }}>{label}</button>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -5581,7 +5845,8 @@ export default function RestaurantCashierPOSPage() {
         onKitchen={sendToKitchen}
         onPayment={openPaymentDialog}
         kitchenSaving={kitchenSaving}
-        canSendToKitchen={hasPendingKitchenItems}
+        canSendToKitchen={showKitchenAction}
+        canPayOrder={canPayOrder}
         kitchenDisabledMessage={kitchenDisabledMessage}
         addedFeedbackVisible={addedFeedbackVisible}
       />
@@ -5682,3 +5947,8 @@ export default function RestaurantCashierPOSPage() {
     </DragDropProvider>
   );
 }
+
+
+
+
+
