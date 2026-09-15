@@ -1,7 +1,7 @@
 
 "use client"
-// UPDATED: Staff-friendly payment dialog with amount due, received cash,
-// remaining balance, and change calculation.
+// UPDATED: iPad compact header controls, staff/product info popover,
+// viewport-locked cart, and the original Fashion POS checkout workflow.
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -29,6 +29,7 @@ import {
   Loader2,
   Minus,
   Moon,
+  MoreHorizontal,
   Package,
   Plus,
   Printer,
@@ -813,6 +814,7 @@ export default function FashionRegisterPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartPage, setCartPage] = useState(1);
   const [cartDialogOpen, setCartDialogOpen] = useState(false);
+  const [headerControlsOpen, setHeaderControlsOpen] = useState(false);
   const [lastAddedProductKey, setLastAddedProductKey] = useState("");
   const [addedFeedbackVisible, setAddedFeedbackVisible] = useState(false);
   const [flyingProduct, setFlyingProduct] = useState<{
@@ -1901,7 +1903,7 @@ export default function FashionRegisterPage() {
                 </button>
 
                 <div
-                  className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm ${
+                  className={`hidden min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm xl:inline-flex ${
                     darkMode
                       ? "bg-white/10 text-white ring-white/10"
                       : "bg-white text-slate-900 ring-[var(--brand-border)]"
@@ -1923,7 +1925,7 @@ export default function FashionRegisterPage() {
                 </div>
 
                 <div
-                  className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm ${
+                  className={`hidden min-w-0 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-black ring-1 sm:px-3 sm:py-1.5 sm:text-sm xl:inline-flex ${
                     darkMode
                       ? "bg-white/10 text-white ring-white/10"
                       : "bg-white text-slate-900 ring-[var(--brand-border)]"
@@ -1948,7 +1950,27 @@ export default function FashionRegisterPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <button
+                type="button"
+                onClick={() => setHeaderControlsOpen(true)}
+                aria-haspopup="dialog"
+                aria-label="Open Fashion POS controls"
+                className={`relative inline-flex h-9 w-fit shrink-0 self-end items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition xl:hidden ${
+                  darkMode
+                    ? "bg-white/10 text-white hover:bg-white/15"
+                    : "bg-slate-900 text-white hover:bg-slate-800"
+                }`}
+              >
+                <MoreHorizontal size={18} />
+                <span>Controls</span>
+                {cart.length > 0 && (
+                  <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[var(--brand-primary)] px-1 text-[10px] text-white">
+                    {cart.reduce((sum, item) => sum + item.qty, 0)}
+                  </span>
+                )}
+              </button>
+
+              <div className="hidden grid-cols-4 gap-2 xl:flex xl:flex-wrap xl:items-center">
                 <button
                   onClick={() => {
                     setPaymentError("");
@@ -2248,7 +2270,12 @@ export default function FashionRegisterPage() {
             )}
           </div>
 
-          <div className="relative hidden min-w-0 lg:landscape:sticky lg:landscape:top-[118px] lg:landscape:block lg:landscape:h-[calc(100vh-132px)]">
+          {/* Keep the grid column as a spacer while the cart stays locked to the viewport. */}
+          <div className="relative hidden min-w-0 lg:landscape:block lg:landscape:h-[calc(100vh-132px)]">
+            <div
+              className="fixed right-3 top-[118px] z-20 h-[calc(100vh-132px)] w-[380px] sm:right-4 lg:right-5 xl:landscape:w-[var(--cart-width)]"
+              style={{ "--cart-width": `${cartWidth}px` } as React.CSSProperties}
+            >
             <button
               type="button"
               onPointerDown={beginCartResize}
@@ -2612,6 +2639,7 @@ export default function FashionRegisterPage() {
               </div>
             </div>
             </CartDropSurface>
+            </div>
           </div>
         </section>
       </div>
@@ -2625,6 +2653,158 @@ export default function FashionRegisterPage() {
             className="fixed left-1/2 top-4 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-emerald-500/25"
           >
             <Check size={17} /> {draftRestoreMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Compact iPad header controls; all actions reuse Fashion POS handlers. */}
+      <AnimatePresence>
+        {headerControlsOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            className="fixed right-3 top-16 z-[80] w-[min(24rem,calc(100vw-1.5rem))] sm:right-4 sm:top-20"
+          >
+            <motion.div
+              role="dialog"
+              aria-label="Fashion POS controls"
+              className={`max-h-[calc(100vh-5.5rem)] w-full overflow-y-auto rounded-2xl border p-4 shadow-2xl ${
+                darkMode
+                  ? "border-white/10 bg-slate-950/98 text-white"
+                  : "border-[var(--brand-border)] bg-white/98 text-slate-950"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black">Fashion POS Controls</h2>
+                  <p className={`mt-1 text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)} Ks
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHeaderControlsOpen(false)}
+                  aria-label="Close controls"
+                  className={`grid h-10 w-10 place-items-center rounded-xl ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <section className="mt-5">
+                <p className={`mb-2 text-[11px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
+                  Product Controls
+                </p>
+                <div className="space-y-2">
+                  <div className={`flex items-center justify-between gap-3 rounded-2xl px-3 py-3 ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"}`}>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Package size={19} className="shrink-0 text-[var(--brand-primary)]" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-black">Products Info</p>
+                        <p className="truncate text-xs font-bold opacity-60">
+                          {selectedCategory === "all" ? "All Categories" : selectedCategory}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-black text-white">
+                      {filteredProducts.length} products
+                    </span>
+                  </div>
+                  <div className={`flex items-center gap-2 rounded-2xl px-3 py-3 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}>
+                    <Search size={18} className="text-[var(--brand-primary)]" />
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleBarcodeSearchEnter();
+                          setHeaderControlsOpen(false);
+                        }
+                      }}
+                      placeholder="Search product, barcode, color, size..."
+                      className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none"
+                    />
+                    {search && (
+                      <button type="button" onClick={() => setSearch("")} aria-label="Clear search">
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={selectedCategory}
+                    onChange={(event) => setSelectedCategory(event.target.value)}
+                    className={`w-full rounded-2xl px-3 py-3 text-sm font-black outline-none ${darkMode ? "bg-white/10 text-white" : "bg-slate-100 text-slate-900"}`}
+                  >
+                    {categories.map((category) => (
+                      <option key={category} value={category}>
+                        {category === "all" ? "All Categories" : category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </section>
+
+              <section className="mt-5">
+                <p className={`mb-2 text-[11px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
+                  Cart Controls
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setHeaderControlsOpen(false); setCartDialogOpen(true); }}
+                    disabled={cart.length === 0}
+                    className={`inline-flex items-center justify-center gap-2 rounded-2xl p-3 text-sm font-black disabled:opacity-40 ${darkMode ? "bg-white/10" : "bg-slate-100"}`}
+                  >
+                    <Receipt size={18} /> View Cart
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setHeaderControlsOpen(false); setPaymentError(""); setPaymentOpen(true); }}
+                    disabled={cart.length === 0}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] p-3 text-sm font-black text-white disabled:opacity-40"
+                  >
+                    <Wallet size={18} /> Payment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { clearCart(); setHeaderControlsOpen(false); }}
+                    disabled={cart.length === 0}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-500/10 p-3 text-sm font-black text-red-500 disabled:opacity-40"
+                  >
+                    <Trash2 size={18} /> Clear Cart
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDarkMode((value) => !value)}
+                    className={`inline-flex items-center justify-center gap-2 rounded-2xl p-3 text-sm font-black ${darkMode ? "bg-white/10" : "bg-slate-900 text-white"}`}
+                  >
+                    {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                    {darkMode ? "Day Mode" : "Night Mode"}
+                  </button>
+                </div>
+              </section>
+
+              <section className="mt-5">
+                <p className={`mb-2 text-[11px] font-black uppercase tracking-[0.16em] ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
+                  Staff & Navigation
+                </p>
+                <div className={`flex items-center gap-3 rounded-2xl p-3 ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"}`}>
+                  <IdCard size={20} className="text-[var(--brand-primary)]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black">{activeStaff.staffName}</p>
+                    <p className="text-xs font-bold opacity-60">Staff ID: {activeStaff.staffId}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setHeaderControlsOpen(false); handleGoToDashboard(); }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 py-2 text-xs font-black text-white"
+                  >
+                    <ArrowLeft size={16} /> Dashboard
+                  </button>
+                </div>
+              </section>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
