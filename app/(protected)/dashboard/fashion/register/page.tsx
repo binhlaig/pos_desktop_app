@@ -2391,15 +2391,15 @@ export default function FashionRegisterPage() {
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-3">
               {paginatedCart.length === 0 ? (
                 <div
-                  className={`grid h-full min-h-[280px] place-items-center rounded-[1.5rem] border border-dashed px-4 text-center sm:min-h-[360px] sm:px-5 ${
+                  className={`grid min-h-[110px] place-items-center rounded-[1.5rem] border border-dashed px-4 py-4 text-center sm:px-5 ${
                     darkMode
                       ? "border-white/10 bg-white/5 text-slate-400"
                       : "border-[var(--brand-border)] bg-[var(--brand-soft)] text-slate-500"
                   }`}
                 >
                   <div>
-                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-primary)]">
-                      <ShoppingBag size={28} />
+                    <div className="mx-auto grid h-9 w-9 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-primary)]">
+                      <ShoppingBag size={20} />
                     </div>
                     <p className="mt-3 text-sm font-black">
                       Product ကိုရွေးပြီး cart ထဲထည့်ပါ။
@@ -2567,6 +2567,14 @@ export default function FashionRegisterPage() {
                     : "border-[var(--brand-border)] bg-[var(--brand-soft)]"
                 }`}
               >
+                <details className="group/cart-totals">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-1 py-2 text-xs font-black [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-1.5">
+                      <ChevronRight size={16} className="transition-transform group-open/cart-totals:rotate-90" />
+                      Totals / Discount / Tax
+                    </span>
+                    <span className="whitespace-nowrap text-sm text-[var(--brand-primary)]">{formatMoney(total)} Ks</span>
+                  </summary>
                 <div className="grid grid-cols-2 gap-1.5 text-xs font-black">
                   <div
                     className={`rounded-xl p-2 ${
@@ -2632,6 +2640,8 @@ export default function FashionRegisterPage() {
                     />
                   </label>
                 </div>
+
+                </details>
 
                 {paymentError && (
                   <div
