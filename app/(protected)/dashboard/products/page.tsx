@@ -324,7 +324,57 @@ export default function ProductDashboardPage() {
   }, [safePage, totalPages]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-foreground sm:p-6 lg:p-8">
+    <main className="products-dashboard min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-foreground sm:p-6 lg:p-8">
+      <style jsx global>{`
+        @media (min-width: 768px) and (max-width: 1279px) and (orientation: landscape) {
+          .products-dashboard { padding: 16px; }
+          .products-dashboard .products-table-scroll {
+            max-height: 42dvh;
+            overflow: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+          }
+          .products-dashboard .products-table {
+            min-width: 0;
+            table-layout: fixed;
+            font-size: 12px;
+          }
+          .products-dashboard .products-table col:nth-child(1) { width: 24%; }
+          .products-dashboard .products-table col:nth-child(2) { width: 17%; }
+          .products-dashboard .products-table col:nth-child(3) { width: 11%; }
+          .products-dashboard .products-table col:nth-child(4) { width: 10%; }
+          .products-dashboard .products-table col:nth-child(5) { width: 6%; }
+          .products-dashboard .products-table col:nth-child(6) { width: 13%; }
+          .products-dashboard .products-table col:nth-child(7) { width: 9%; }
+          .products-dashboard .products-table col:nth-child(8) { width: 10%; }
+          .products-dashboard .products-table th,
+          .products-dashboard .products-table td {
+            padding: 10px 8px;
+            overflow-wrap: anywhere;
+          }
+          .products-dashboard .products-table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: var(--card);
+            font-size: 10px;
+            letter-spacing: 0;
+          }
+          .products-dashboard .product-identity { gap: 8px; }
+          .products-dashboard .product-thumbnail { width: 36px; height: 36px; }
+          .products-dashboard .product-name { white-space: normal; }
+          .products-dashboard .product-code { font-size: 11px; }
+          .products-dashboard .product-category { white-space: normal; font-size: 10px; padding: 2px 6px; }
+          .products-dashboard .product-stock-status {
+            white-space: nowrap;
+            overflow-wrap: normal;
+            font-size: 9px;
+            line-height: 14px;
+            padding: 3px 6px;
+          }
+          .products-dashboard .product-view { height: 44px; padding: 0 8px; font-size: 11px; }
+        }
+      `}</style>
       <div className="mx-auto max-w-[1600px] space-y-5">
         <header className="flex flex-col gap-4 rounded-[2rem] border border-[var(--brand-border)] bg-card/95 p-5 shadow-sm backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
@@ -477,8 +527,12 @@ export default function ProductDashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1180px] border-collapse text-left">
+              <div className="products-table-scroll overflow-x-auto" role="region" aria-label="Products table" tabIndex={0}>
+                <table className="products-table w-full min-w-[1180px] border-collapse text-left">
+                  <colgroup>
+                    <col /><col /><col /><col />
+                    <col /><col /><col /><col />
+                  </colgroup>
                   <thead className="bg-[var(--brand-soft)] text-xs font-black uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="px-5 py-4">Product</th>
@@ -498,8 +552,8 @@ export default function ProductDashboardPage() {
                       return (
                         <tr key={product.id} className="transition hover:bg-[var(--brand-soft)]">
                           <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)]">
+                            <div className="product-identity flex items-center gap-3">
+                              <div className="product-thumbnail grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)]">
                                 {product.imagePath ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img src={resolveImage(product.imagePath)} alt={product.name} className="h-full w-full object-cover" />
@@ -508,19 +562,19 @@ export default function ProductDashboardPage() {
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className="max-w-[260px] truncate font-black">{product.name}</div>
+                                <div className="product-name max-w-[260px] truncate font-black" title={product.name}>{product.name}</div>
                                 {product.discount > 0 && (
                                   <div className="mt-1 text-xs font-bold text-amber-600">{product.discount}% discount</div>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-sm">
+                          <td className="product-code px-4 py-4 text-sm">
                             <div className="font-bold">{product.sku || "-"}</div>
                             <div className="mt-1 text-xs text-muted-foreground">{product.barcode || "No barcode"}</div>
                           </td>
                           <td className="px-4 py-4">
-                            <Badge variant="secondary" className="rounded-full">{product.category}</Badge>
+                            <Badge variant="secondary" className="product-category rounded-full">{product.category}</Badge>
                           </td>
                           <td className="px-4 py-4 text-right font-bold tabular-nums">{currency(product.price)}</td>
                           <td className="px-4 py-4 text-right font-black tabular-nums">{product.quantity}</td>
@@ -535,7 +589,7 @@ export default function ProductDashboardPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => router.push(`/dashboard/products/${product.id}`)}
-                              className="rounded-xl border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand-primary)] hover:brightness-95"
+                              className="product-view rounded-xl border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand-primary)] hover:brightness-95"
                             >
                               <Eye className="mr-1.5 h-4 w-4 text-[var(--brand-accent)]" />
                               View
@@ -625,5 +679,5 @@ function StockBadge({ status }: { status: "OUT" | "LOW" | "IN STOCK" }) {
     "IN STOCK": "bg-emerald-50 text-emerald-700 ring-emerald-100",
   }[status];
 
-  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ring-1 ${style}`}>{status}</span>;
+  return <span className={`product-stock-status inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-black ring-1 ${style}`}>{status}</span>;
 }

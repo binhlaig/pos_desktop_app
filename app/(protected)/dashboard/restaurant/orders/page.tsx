@@ -1610,17 +1610,26 @@ function OrderDetailDialog({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-3 backdrop-blur-sm sm:p-4"
     >
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 24, scale: 0.96 }}
-        className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[2rem] border border-[var(--brand-border)] bg-white shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Order details and reprint"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[1000px] flex-col overflow-hidden rounded-2xl border border-[var(--brand-border)] bg-white shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-slate-100 p-5">
-          <div>
-            <h2 className="text-xl font-black text-slate-950">
+        <style jsx global>{`
+          .order-reprint-layout { display: grid; gap: 12px; }
+          @media (min-width: 768px) and (orientation: landscape) {
+            .order-reprint-layout { grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr); align-items: start; }
+          }
+        `}</style>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 p-4">
+          <div className="min-w-0">
+            <h2 className="break-words text-lg font-black text-slate-950">
               {order.orderNo || order.ticketNo || `ORD-${order.id}`}
             </h2>
 
@@ -1631,13 +1640,8 @@ function OrderDetailDialog({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => reprintOrder(order)}
-              className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 text-sm font-black text-white transition hover:brightness-95"
-            >
-              <Printer size={17} />
-              Re-print
-            </button>
-            <button
+              type="button"
+              aria-label="Close order details"
               onClick={onClose}
               className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-100 text-slate-700 transition hover:bg-slate-200"
             >
@@ -1646,7 +1650,7 @@ function OrderDetailDialog({
           </div>
         </div>
 
-        <div className="max-h-[calc(90vh-90px)] overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl bg-[var(--brand-soft)] p-4 ring-1 ring-[var(--brand-border)]">
               <p className="text-xs font-black uppercase text-[var(--brand-primary)]">
@@ -1683,7 +1687,8 @@ function OrderDetailDialog({
             </div>
           </div>
 
-          <div className="mt-4 rounded-[1.5rem] border border-slate-100">
+          <div className="order-reprint-layout mt-3">
+          <div className="min-w-0 rounded-2xl border border-slate-100">
             <div className="border-b border-slate-100 p-4">
               <h3 className="font-black text-slate-950">Order Items</h3>
             </div>
@@ -1701,7 +1706,7 @@ function OrderDetailDialog({
                 return (
                   <div
                     key={`${item.id || index}`}
-                    className="flex items-start justify-between gap-4 p-4"
+                    className="flex items-start justify-between gap-3 p-3"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -1709,7 +1714,7 @@ function OrderDetailDialog({
                           x{item.quantity || 1}
                         </span>
 
-                        <p className="font-black text-slate-950">
+                        <p className="break-words text-sm font-black text-slate-950">
                           {item.itemName}
                         </p>
                       </div>
@@ -1748,7 +1753,7 @@ function OrderDetailDialog({
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="grid min-w-0 gap-3">
             <div className="rounded-[1.5rem] bg-slate-50 p-4 ring-1 ring-slate-100">
               <h3 className="font-black text-slate-950">Staff / Note</h3>
 
@@ -1821,6 +1826,13 @@ function OrderDetailDialog({
               </div>
             </div>
           </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 p-3">
+          <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-200">Close</button>
+          <button type="button" onClick={() => reprintOrder(order)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white">
+            <Printer size={17} /> Re-print
+          </button>
         </div>
       </motion.div>
     </motion.div>

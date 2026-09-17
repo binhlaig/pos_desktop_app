@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
-  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -19,8 +18,6 @@ import {
   RefreshCcw,
   Search,
   ShieldCheck,
-  Store,
-  User,
   Wallet,
 } from "lucide-react";
 
@@ -32,7 +29,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { code128SvgDataUri } from "@/lib/code128";
@@ -465,7 +461,7 @@ export default function ReceiptsPage() {
   );
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(5);
 
   useEffect(() => {
     const syncBrandColors = () => applyStoredBrandColors();
@@ -970,30 +966,11 @@ export default function ReceiptsPage() {
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-[-140px] top-20 h-96 w-96 rounded-full bg-[var(--brand-soft)] blur-3xl" />
-        <div className="absolute right-[-120px] top-32 h-96 w-96 rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] blur-3xl" />
-        <div className="absolute bottom-[-120px] left-1/2 h-96 w-[720px] -translate-x-1/2 rounded-full bg-[var(--brand-soft)] blur-3xl" />
-      </div>
+      <main className="relative z-10 mx-auto max-w-[1500px] px-3 py-4 md:px-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h1 className="flex items-center gap-2 text-xl font-black"><Receipt className="h-5 w-5 text-[var(--brand-accent)]" /> Receipts</h1>
 
-      <main className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 md:px-6">
-        <div className="mb-7 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-[var(--brand-soft)] px-4 py-2 text-sm font-semibold text-[var(--brand-accent)]">
-              <Receipt className="h-4 w-4" />
-              Receipts
-            </div>
-
-            <h1 className="mt-4 text-3xl font-black tracking-tight md:text-4xl">
-              My POS Receipts
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Login ဝင်ထားတဲ့ user က save လုပ်ထားသော receipt များကို DB မှ
-              ပြထားပါတယ်။
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => router.push("/dashboard")}
@@ -1007,7 +984,7 @@ export default function ReceiptsPage() {
               variant="outline"
               onClick={loadReceipts}
               disabled={loading}
-              className="h-11 rounded-xl"
+              className="h-10 rounded-xl px-3 text-xs font-bold"
             >
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin text-[var(--brand-accent)]" />
@@ -1021,7 +998,7 @@ export default function ReceiptsPage() {
               variant="outline"
               onClick={exportReceiptsCSV}
               disabled={!filteredReceipts.length}
-              className="h-11 rounded-xl"
+              className="h-10 rounded-xl px-3 text-xs font-bold"
             >
               <Download className="mr-2 h-4 w-4 text-[var(--brand-accent)]" />
               Export CSV
@@ -1029,7 +1006,9 @@ export default function ReceiptsPage() {
           </div>
         </div>
 
-        <div className="mb-4 rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-soft)] p-4 text-sm leading-6 text-muted-foreground">
+        <details className="mb-3 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-semibold">Print shop information</summary>
+          <div className="mt-2 leading-5">
           <b className="text-[var(--brand-accent)]">Print Shop Info:</b>{" "}
           {shopPrintInfo.shopName}
           {shopPrintInfo.address ? ` · ${shopPrintInfo.address}` : ""}
@@ -1037,7 +1016,9 @@ export default function ReceiptsPage() {
           {shopPrintInfo.secondPhone ? ` / ${shopPrintInfo.secondPhone}` : ""}
         </div>
 
-        <div className="mb-6 grid gap-4 md:grid-cols-3">
+        </details>
+
+        <div className="mb-3 grid grid-cols-3 gap-2">
           <StatCard
             icon={<Receipt className="h-5 w-5" />}
             label="Total Receipts"
@@ -1060,22 +1041,19 @@ export default function ReceiptsPage() {
           />
         </div>
 
-        <Card className="overflow-hidden rounded-[28px] border border-black/10 bg-card/90 shadow-[0_0_0_1px_rgba(255,255,255,0.05)] backdrop-blur-xl dark:border-white/10">
-          <CardHeader className="border-b border-border">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <Card className="overflow-hidden rounded-2xl border border-border bg-card">
+          <CardHeader className="border-b border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-[var(--brand-accent)]" />
                   Receipt History
                 </CardTitle>
-                <CardDescription>
-                  Receipt No, staff, payment, product name တို့နဲ့ search
-                  လုပ်နိုင်ပါတယ်။
-                </CardDescription>
+                <CardDescription className="sr-only">Search receipt number, staff, payment or product.</CardDescription>
               </div>
 
-              <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-                <div className="relative w-full lg:w-[360px]">
+              <div className="flex w-full gap-2 md:w-auto">
+                <div className="relative min-w-0 flex-1 md:w-[320px]">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-accent)]" />
                   <Input
                     value={query}
@@ -1314,18 +1292,18 @@ function StatCard({
   }[tone];
 
   return (
-    <Card className="rounded-3xl border border-black/10 bg-card/90 dark:border-white/10">
-      <CardContent className="flex items-center gap-4 p-5">
+    <Card className="rounded-xl border border-border bg-card">
+      <CardContent className="flex items-center gap-2 p-3">
         <div
-          className={`grid h-12 w-12 place-items-center rounded-2xl border ${styles}`}
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${styles}`}
         >
           {icon}
         </div>
         <div>
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="text-[11px] font-semibold text-muted-foreground">
             {label}
           </div>
-          <div className="mt-1 text-2xl font-black tracking-tight">{value}</div>
+          <div className="mt-1 break-words text-lg font-black tabular-nums">{value}</div>
         </div>
       </CardContent>
     </Card>
@@ -1334,7 +1312,7 @@ function StatCard({
 
 function ReceiptCard({
   receipt,
-  index,
+  index: _index,
   expanded,
   onToggle,
   onPrint,
@@ -1349,100 +1327,39 @@ function ReceiptCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.025 }}
-      className="bg-background/20 p-4 transition hover:bg-muted/25 md:p-5"
+      initial={false}
+      className="bg-card px-3 py-3 hover:bg-muted/20"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <button onClick={onToggle} className="min-w-0 flex-1 text-left">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-soft)]">
-              <Receipt className="h-5 w-5 text-[var(--brand-accent)]" />
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-base font-black">
-                  {receipt.receiptNo}
-                </h3>
-
-                <Badge className="rounded-full bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/15">
-                  {receipt.status || "COMPLETED"}
-                </Badge>
-
-                <Badge variant="secondary" className="rounded-full capitalize">
-                  {receipt.paymentMethod}
-                </Badge>
-              </div>
-
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {formatDate(receipt.createdAt)}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <User className="h-3.5 w-3.5" />
-                  {receipt.staffName || receipt.staffId || "-"}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Store className="h-3.5 w-3.5" />
-                  {receipt.shopName || receipt.shopCode || "-"}
-                </span>
-              </div>
-            </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_150px_90px]">
+        <button type="button" onClick={onToggle} aria-expanded={expanded} className="min-w-0 text-left">
+          <h3 className="break-words text-sm font-bold">{receipt.receiptNo}</h3>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>{formatDate(receipt.createdAt)}</span>
+            <span>{receipt.staffName || receipt.staffId || "-"}</span>
+            <span className="capitalize">{receipt.paymentMethod}</span>
+            <span>{receipt.status || "COMPLETED"}</span>
           </div>
         </button>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 lg:justify-end">
-          <div className="text-left lg:text-right">
-            <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
-              Grand Total
-            </div>
-            <div className="text-2xl font-black text-[var(--brand-accent)]">
-              {jpy(receipt.grandTotal)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {itemCount} items
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onPrint}
-              className="rounded-xl"
-            >
-              <Printer className="h-4 w-4 text-[var(--brand-accent)]" />
-            </Button>
-
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onToggle}
-              className="rounded-xl"
-            >
-              {expanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
+        <div className="text-right">
+          <p className="text-base font-black tabular-nums text-[var(--brand-accent)]">{jpy(receipt.grandTotal)}</p>
+          <p className="text-xs text-muted-foreground">{itemCount} items</p>
+        </div>
+        <div className="col-span-2 flex justify-end gap-1.5 md:col-span-1">
+          <Button type="button" variant="outline" size="icon" onClick={onPrint} aria-label={`Print receipt ${receipt.receiptNo}`} title="Print receipt" className="h-11 w-10 rounded-lg"><Printer className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="icon" onClick={onToggle} aria-expanded={expanded} aria-label={expanded ? "Hide receipt details" : "View receipt details"} title="Receipt details" className="h-11 w-10 rounded-lg">
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
 
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={false}
             className="overflow-hidden"
           >
-            <div className="mt-5 rounded-3xl border border-border bg-card/70 p-4">
-              <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+            <div className="mt-3 rounded-xl border border-border bg-muted/15 p-3">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="overflow-hidden rounded-2xl border border-border">
                   <div className="hidden grid-cols-[1.4fr_80px_120px_120px] border-b border-border bg-muted/35 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground md:grid">
                     <div>Product</div>

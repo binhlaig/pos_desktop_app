@@ -290,7 +290,41 @@ export default function ProductSalesHistoryPage() {
   const pageNumbers = Array.from({ length: Math.min(5, totalPages) }, (_, index) => startPage + index);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-foreground sm:p-6 lg:p-8">
+    <main className="product-sales-page min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-foreground sm:p-6 lg:p-8">
+      <style jsx global>{`
+        @media (min-width: 768px) and (max-width: 1279px) and (orientation: landscape) {
+          .product-sales-page { padding: 16px; }
+          .product-sales-page > .space-y-5 > :not(:first-child) { margin-top: 12px; }
+          .product-sales-page header { padding: 14px; border-radius: 20px; }
+          .product-sales-page header > div:first-child > div:first-child { min-width: 0; flex: 1; }
+          .product-sales-page header h1 { font-size: 22px; white-space: normal; }
+          .product-sales-page header p { overflow-wrap: anywhere; }
+          .product-sales-page header button { min-height: 44px; font-size: 11px; padding-left: 10px; padding-right: 10px; }
+          .product-sales-page .sales-toolbar { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+          .product-sales-page .sales-filters { grid-template-columns: minmax(180px,1fr) 142px 142px; }
+          .product-sales-page .sales-table-scroll { max-height: 46dvh; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+          .product-sales-page .sales-table { min-width: 0; table-layout: fixed; font-size: 11px; }
+          .product-sales-page .sales-table col:nth-child(1) { width: 17%; }
+          .product-sales-page .sales-table col:nth-child(2) { width: 14%; }
+          .product-sales-page .sales-table col:nth-child(3) { width: 17%; }
+          .product-sales-page .sales-table col:nth-child(4) { width: 13%; }
+          .product-sales-page .sales-table col:nth-child(5) { width: 8%; }
+          .product-sales-page .sales-table col:nth-child(6) { width: 4%; }
+          .product-sales-page .sales-table col:nth-child(7) { width: 10%; }
+          .product-sales-page .sales-table col:nth-child(8) { width: 6%; }
+          .product-sales-page .sales-table col:nth-child(9) { width: 11%; }
+          .product-sales-page .sales-table th,
+          .product-sales-page .sales-table td { padding: 10px 7px; overflow-wrap: anywhere; }
+          .product-sales-page .sales-table th { position: sticky; top: 0; z-index: 1; background: var(--card); font-size: 9px; letter-spacing: 0; }
+          .product-sales-page .sales-table td .text-xs { font-size: 10px; }
+          .product-sales-page .sales-table td .flex { gap: 4px; }
+          .product-sales-page .sales-table td svg { flex-shrink: 0; width: 12px; height: 12px; }
+          .product-sales-page .sales-payment { white-space: nowrap; overflow-wrap: normal; font-size: 9px; padding: 2px 5px; }
+          @media (max-width: 1023px) {
+            .product-sales-page .sales-toolbar { flex-direction: column; align-items: stretch; }
+          }
+        }
+      `}</style>
       <div className="mx-auto max-w-[1500px] space-y-5">
         <header className="rounded-[2rem] border border-[var(--brand-border)] bg-card/95 p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -366,9 +400,9 @@ export default function ProductSalesHistoryPage() {
 
         <Card className="overflow-hidden rounded-[2rem] border-[var(--brand-border)] bg-card/95 shadow-sm">
           <CardHeader className="border-b border-border">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="sales-toolbar flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div><CardTitle className="flex items-center gap-2"><ReceiptText className="h-5 w-5 text-[var(--brand-accent)]" />Sale Transactions</CardTitle><p className="mt-1 text-sm text-muted-foreground">Receipt items matching Product ID {productId}</p></div>
-              <div className="grid gap-2 sm:grid-cols-[minmax(240px,1fr)_150px_150px]">
+              <div className="sales-filters grid gap-2 sm:grid-cols-[minmax(240px,1fr)_150px_150px]">
                 <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-accent)]" /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Receipt, staff or shop..." className="rounded-xl pl-9" /></div>
                 <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-xl" aria-label="From date" />
                 <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-xl" aria-label="To date" />
@@ -379,8 +413,9 @@ export default function ProductSalesHistoryPage() {
           <CardContent className="p-0">
             {loading ? <div className="grid min-h-[360px] place-items-center"><Loader2 className="h-9 w-9 animate-spin text-[var(--brand-accent)]" /></div> :
              visibleSales.length === 0 ? <EmptyState /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1320px] border-collapse text-left">
+              <div className="sales-table-scroll overflow-x-auto" role="region" aria-label="Product sale transactions" tabIndex={0}>
+                <table className="sales-table w-full min-w-[1320px] border-collapse text-left">
+                  <colgroup><col /><col /><col /><col /><col /><col /><col /><col /><col /></colgroup>
                   <thead className="bg-[var(--brand-soft)] text-xs font-black uppercase tracking-wide text-muted-foreground"><tr>
                     <th className="px-5 py-4">Receipt</th><th className="px-4 py-4">Sold Date &amp; Time</th><th className="px-4 py-4">Sold Location</th><th className="px-4 py-4">Cashier</th><th className="px-4 py-4">Payment</th><th className="px-4 py-4 text-right">Qty</th><th className="px-4 py-4 text-right">Unit Price</th><th className="px-4 py-4 text-right">Discount</th><th className="px-5 py-4 text-right">Sold Total</th>
                   </tr></thead>
@@ -390,7 +425,7 @@ export default function ProductSalesHistoryPage() {
                       <td className="px-4 py-4"><div className="flex items-center gap-2 font-bold"><CalendarDays className="h-4 w-4 text-[var(--brand-accent)]" />{formatDateTime(sale.soldAt)}</div></td>
                       <td className="px-4 py-4"><div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand-accent)]" /><div><b>{sale.shopName || sale.shopCode || "-"}</b><div className="max-w-[240px] text-xs text-muted-foreground">{sale.shopAddress || sale.shopCode || "No address"}</div></div></div></td>
                       <td className="px-4 py-4"><div className="flex items-center gap-2"><User className="h-4 w-4 text-[var(--brand-accent)]" /><div><b>{sale.staffName || "-"}</b><div className="text-xs text-muted-foreground">{sale.staffId || "No staff ID"}</div></div></div></td>
-                      <td className="px-4 py-4"><Badge variant="secondary" className="rounded-full uppercase">{sale.paymentMethod}</Badge></td>
+                      <td className="px-4 py-4"><Badge variant="secondary" className="sales-payment rounded-full uppercase">{sale.paymentMethod}</Badge></td>
                       <td className="px-4 py-4 text-right font-black">{sale.quantity}</td><td className="px-4 py-4 text-right font-bold">{currency(sale.unitPrice)}</td><td className="px-4 py-4 text-right font-bold text-amber-600">{sale.discountPercent}%</td><td className="px-5 py-4 text-right font-black text-[var(--brand-primary)]">{currency(sale.lineTotal)}</td>
                     </tr>
                   ))}</tbody>
