@@ -3907,16 +3907,16 @@ export default function RestaurantCashierPOSPage() {
                         key="empty"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`grid h-full min-h-[360px] place-items-center rounded-[1.75rem] border border-dashed p-8 text-center ${darkMode
+                        className={`grid min-h-[110px] place-items-center rounded-[1.75rem] border border-dashed p-4 text-center ${darkMode
                             ? "border-white/10 bg-white/5"
                             : "border-[var(--brand-border)] bg-[var(--brand-soft)]"
                           }`}
                       >
                         <div>
-                          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]">
-                            <Coffee size={36} />
+                          <div className="mx-auto grid h-9 w-9 place-items-center rounded-xl bg-[var(--brand-primary)] text-white">
+                            <Coffee size={20} />
                           </div>
-                          <h3 className="mt-4 text-lg font-black">
+                          <h3 className="mt-2 text-sm font-black">
                             Menu item ရွေးပါ
                           </h3>
                           <p
@@ -4157,6 +4157,15 @@ export default function RestaurantCashierPOSPage() {
                 </div>
 
                 <div className="shrink-0 border-t border-slate-200/20 px-3 pb-3 pt-2.5">
+                  <details className="group/order-totals">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl bg-[var(--brand-soft)] px-3 py-2 text-xs font-black [&::-webkit-details-marker]:hidden">
+                      <span className="inline-flex items-center gap-1.5">
+                        <ChevronRight size={16} className="transition-transform group-open/order-totals:rotate-90" />
+                        Totals / Discount / Tax
+                      </span>
+                      <span className="whitespace-nowrap text-base text-[var(--brand-primary)]">{formatMoney(total)} Ks</span>
+                    </summary>
+                    <div className="pt-2">
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-bold">
                     <div className="flex items-center justify-between gap-2">
                       <span
@@ -4235,6 +4244,9 @@ export default function RestaurantCashierPOSPage() {
                       </span>
                     </div>
                   </div>
+
+                    </div>
+                  </details>
 
                   {(kitchenError || kitchenStatusError || (showKitchenAction && kitchenDisabledMessage)) && (
                     <div
@@ -5199,12 +5211,15 @@ export default function RestaurantCashierPOSPage() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 20, scale: 0.96 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`my-auto w-full max-w-xl rounded-[2rem] border p-4 shadow-2xl sm:p-6 ${darkMode
+                role="dialog"
+                aria-modal="true"
+                aria-label="Payment"
+                className={`my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-[2rem] border p-4 shadow-2xl sm:p-5 lg:landscape:max-w-4xl ${darkMode
                     ? "border-white/10 bg-slate-950 text-white"
                     : "border-[var(--brand-border)] bg-white text-slate-950"
                   }`}
               >
-                <div className="flex items-start justify-between">
+                <div className="flex shrink-0 items-start justify-between pb-3">
                   <div>
                     <h2 className="flex items-center gap-2 text-2xl font-black">
                       <Wallet className="text-[var(--brand-accent)]" />
@@ -5231,8 +5246,10 @@ export default function RestaurantCashierPOSPage() {
                   </button>
                 </div>
 
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <div className="lg:landscape:grid lg:landscape:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:landscape:items-start lg:landscape:gap-5">
                 <div
-                  className={`mt-4 overflow-hidden rounded-3xl border ${darkMode
+                  className={`mt-4 overflow-hidden rounded-3xl border lg:landscape:mt-0 ${darkMode
                       ? "border-[var(--brand-border)] bg-gradient-to-br from-[var(--brand-soft)] to-transparent"
                       : "border-[var(--brand-border)] bg-gradient-to-br from-[var(--brand-soft)] to-[var(--brand-soft)]"
                     }`}
@@ -5287,7 +5304,8 @@ export default function RestaurantCashierPOSPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="min-w-0">
+                <div className="mt-4 grid grid-cols-3 gap-2 lg:landscape:mt-0">
                   {[
                     {
                       key: "CASH" as PaymentMethod,
@@ -5442,6 +5460,9 @@ export default function RestaurantCashierPOSPage() {
                   )}
                 </div>
 
+                </div>
+                </div>
+
                 {paymentError && (
                   <div
                     className={`mt-4 rounded-2xl border p-4 text-sm font-black ${darkMode
@@ -5453,7 +5474,8 @@ export default function RestaurantCashierPOSPage() {
                   </div>
                 )}
 
-                <div className="mt-5 grid grid-cols-2 gap-2">
+                </div>
+                <div className="mt-3 grid shrink-0 grid-cols-2 gap-2 border-t border-slate-200/20 pt-3">
                   <button
                     onClick={() => setPaymentOpen(false)}
                     disabled={paymentSaving}
@@ -5504,12 +5526,15 @@ export default function RestaurantCashierPOSPage() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 20, scale: 0.96 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-md overflow-hidden rounded-[2rem] border shadow-2xl ${darkMode
+                role="dialog"
+                aria-modal="true"
+                aria-label="Payment complete"
+                className={`flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-[2rem] border shadow-2xl lg:landscape:max-w-2xl ${darkMode
                     ? "border-white/10 bg-slate-950 text-white"
                     : "border-[var(--brand-border)] bg-white text-slate-950"
                   }`}
               >
-                <div className="flex items-center justify-between border-b border-slate-200/20 p-5">
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/20 p-4">
                   <div className="flex items-center gap-3">
                     <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/25">
                       <Receipt size={24} />
@@ -5537,7 +5562,7 @@ export default function RestaurantCashierPOSPage() {
                   </button>
                 </div>
 
-                <div className="p-5">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
                   <div
                     className={`rounded-[1.5rem] border p-4 ${darkMode
                         ? "border-white/10 bg-white/5"
@@ -5719,7 +5744,8 @@ export default function RestaurantCashierPOSPage() {
                     </div>
                   )}
 
-                  <div className="mt-5 grid grid-cols-2 gap-3">
+                </div>
+                  <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-slate-200/20 p-4">
                     <button
                       onClick={closePaymentReceiptDialog}
                       className={`rounded-2xl px-4 py-3 text-sm font-black transition ${darkMode
@@ -5738,7 +5764,6 @@ export default function RestaurantCashierPOSPage() {
                       Print Receipt
                     </button>
                   </div>
-                </div>
               </motion.div>
             </motion.div>
           )}

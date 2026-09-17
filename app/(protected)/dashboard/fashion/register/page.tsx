@@ -3203,13 +3203,13 @@ export default function FashionRegisterPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
               onClick={(event) => event.stopPropagation()}
-              className={`my-auto w-full max-w-lg rounded-[2rem] border p-4 shadow-2xl sm:p-6 ${
+              className={`my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[2rem] border p-4 shadow-2xl sm:p-6 lg:landscape:max-w-4xl ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
                   : "border-[var(--brand-border)] bg-white text-slate-950"
               }`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex shrink-0 items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-black sm:text-2xl">Payment</h2>
                   <p
@@ -3232,8 +3232,10 @@ export default function FashionRegisterPage() {
                 </button>
               </div>
 
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="mt-4 grid gap-4 lg:landscape:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:landscape:items-start">
               <div
-                className={`mt-4 overflow-hidden rounded-3xl border ${
+                className={`overflow-hidden rounded-3xl border ${
                   darkMode
                     ? "border-[var(--brand-border)] bg-gradient-to-br from-[var(--brand-soft)] to-transparent"
                     : "border-[var(--brand-border)] bg-gradient-to-br from-[var(--brand-soft)] to-[var(--brand-soft)]"
@@ -3275,7 +3277,8 @@ export default function FashionRegisterPage() {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="min-w-0">
+              <div className="grid grid-cols-3 gap-2">
                 {[
                   {
                     key: "CASH" as PaymentMethod,
@@ -3411,6 +3414,8 @@ export default function FashionRegisterPage() {
                 </div>
               )}
 
+              </div>
+              </div>
               {paymentError && (
                 <div
                   className={`mt-4 rounded-2xl border p-4 text-sm font-black ${
@@ -3423,7 +3428,8 @@ export default function FashionRegisterPage() {
                 </div>
               )}
 
-              <div className="mt-5 grid grid-cols-2 gap-2">
+              </div>
+              <div className="mt-4 grid shrink-0 grid-cols-2 gap-2 border-t border-slate-200/20 pt-4">
                 <button
                   onClick={() => setPaymentOpen(false)}
                   disabled={paymentSaving}
@@ -3472,13 +3478,13 @@ export default function FashionRegisterPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
               onClick={(event) => event.stopPropagation()}
-              className={`w-full max-w-md overflow-hidden rounded-[2rem] border shadow-2xl ${
+              className={`flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-[2rem] border shadow-2xl lg:landscape:max-w-2xl ${
                 darkMode
                   ? "border-white/10 bg-slate-950 text-white"
                   : "border-[var(--brand-border)] bg-white text-slate-950"
               }`}
             >
-              <div className="flex items-center justify-between border-b border-slate-200/20 p-5">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/20 p-4">
                 <div className="flex items-center gap-3">
                   <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/25">
                     <Receipt size={24} />
@@ -3508,7 +3514,7 @@ export default function FashionRegisterPage() {
                 </button>
               </div>
 
-              <div className="p-5">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
                 <div
                   className={`rounded-[1.5rem] border p-4 ${
                     darkMode
@@ -3574,7 +3580,8 @@ export default function FashionRegisterPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-2">
+              </div>
+                <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-200/20 p-4">
                   <button
                     onClick={() => setReceiptOpen(false)}
                     className={`rounded-2xl px-4 py-4 text-sm font-black ${
@@ -3594,7 +3601,6 @@ export default function FashionRegisterPage() {
                     Print
                   </button>
                 </div>
-              </div>
             </motion.div>
           </motion.div>
         )}
