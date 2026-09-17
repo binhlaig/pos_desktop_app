@@ -1316,6 +1316,10 @@ export default function RestaurantCashierPOSPage() {
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
   const [tableStatusFilter, setTableStatusFilter] = useState("ALL");
+  const [tableStatusSavingId, setTableStatusSavingId] = useState<number | null>(null);
+  const tableStatusLockRef = useRef(false);
+  const [tableStatusError, setTableStatusError] = useState("");
+  const [pendingReservedTableId, setPendingReservedTableId] = useState<number | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [exitSaving, setExitSaving] = useState(false);
@@ -1370,6 +1374,16 @@ export default function RestaurantCashierPOSPage() {
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [kitchenTicketIds, setKitchenTicketIds] = useState<string[]>([]);
+  // Switching tables must not lose the ticket IDs needed to verify DONE.
+  // Keep sent quantities too: unsent additions must still block payment.
+  const tableKitchenOrdersRef = useRef(new Map<number, {
+    ticketIds: string[];
+    items: CartItem[];
+  }>());
+
+  useEffect(() => {
+    tableKitchenOrdersRef.current.clear();
+  }, [sessionAccessToken, activeStaff?.staffId]);
   const [takeawayNumber, setTakeawayNumber] = useState("");
   const [takeawaySearchOpen, setTakeawaySearchOpen] = useState(false);
   const [takeawayQuery, setTakeawayQuery] = useState("");
@@ -1572,7 +1586,7 @@ export default function RestaurantCashierPOSPage() {
   );
   const hasPendingKitchenItems = pendingKitchenItemCount > 0;
   const showKitchenAction = hasPendingKitchenItems && cart.length > 0;
-  const canPayOrder = cart.length > 0 &&
+  const canPayOrder = !openOrderLoading && cart.length > 0 &&
     (orderType !== "DINE_IN" ||
       (Boolean(selectedTable) && !hasPendingKitchenItems &&
         kitchenTicketIds.length > 0 && allTicketsDone && !kitchenStatusError &&
@@ -1662,7 +1676,7 @@ export default function RestaurantCashierPOSPage() {
           return currentId;
         }
 
-        return nextTables[0]?.id ?? null;
+        return null;
       });
     } catch (err) {
       setTables([]);
@@ -1672,6 +1686,41 @@ export default function RestaurantCashierPOSPage() {
       );
     } finally {
       setTablesLoading(false);
+    }
+  }
+
+  async function persistTableStatus(tableId: number, status: "RESERVED" | "CLEANING" | "FREE") {
+    const usableToken = ensurePageAccessToken(sessionAccessToken);
+    if (!usableToken) throw new Error(MISSING_TOKEN_MESSAGE);
+    const res = await fetch(`${API_BASE}/api/restaurant/tables/${tableId}/status`, {
+      method: "PATCH",
+      headers: authHeaders(usableToken),
+      body: JSON.stringify({ status }),
+    });
+    const authError = await getAuthOrFeatureError(res);
+    if (authError) throw new Error(authError);
+    if (!res.ok) throw new Error(await getApiErrorMessage(res, "Table status update မလုပ်နိုင်ပါ"));
+    setTables((previous) => previous.map((table) =>
+      table.id === tableId ? { ...table, status } : table));
+  }
+
+  async function advanceTableStatus(table: RestaurantTable) {
+    if (tableStatusLockRef.current || paymentSaving || openOrderLoading) return;
+    const status = (table.status || "FREE").toUpperCase();
+    const nextStatus = pendingReservedTableId === table.id ? "RESERVED" :
+      status === "RESERVED" ? "CLEANING" : status === "CLEANING" ? "FREE" : null;
+    if (!nextStatus) return;
+    tableStatusLockRef.current = true;
+    setTableStatusSavingId(table.id);
+    setTableStatusError("");
+    try {
+      await persistTableStatus(table.id, nextStatus);
+      if (pendingReservedTableId === table.id) setPendingReservedTableId(null);
+    } catch (error) {
+      setTableStatusError(error instanceof Error ? error.message : "Table status update error");
+    } finally {
+      tableStatusLockRef.current = false;
+      setTableStatusSavingId(null);
     }
   }
 
@@ -1882,6 +1931,7 @@ export default function RestaurantCashierPOSPage() {
       if (authOrFeatureError) throw new Error(authOrFeatureError);
 
       if (res.status === 404 || res.status === 204) {
+        tableKitchenOrdersRef.current.delete(tableId);
         setKitchenTicketIds([]);
         setAllTicketsDone(false);
         setCart([]);
@@ -1906,7 +1956,20 @@ export default function RestaurantCashierPOSPage() {
       const restoredItems = items
         .map((item) => mapOpenOrderItemToCartItem(asRecord(item)))
         .filter((item) => item.menuItemId && item.name);
-      setCart(restoredItems);
+      const cachedOrder = tableKitchenOrdersRef.current.get(tableId);
+      setKitchenTicketIds(cachedOrder?.ticketIds ?? []);
+      setAllTicketsDone(false);
+      setKitchenStatusError("");
+      setCart(restoredItems.map((item) => {
+        const previousItem = cachedOrder?.items.find((previous) =>
+          previous.menuItemId === item.menuItemId &&
+          previous.price === item.price &&
+          (previous.note || "") === (item.note || "") &&
+          JSON.stringify(previous.modifiers) === JSON.stringify(item.modifiers));
+        return previousItem
+          ? { ...item, kitchenSentQty: Math.min(item.qty, previousItem.kitchenSentQty) }
+          : item;
+      }));
 
       setDiscount(
         pickNumber(openOrder, [
@@ -2033,6 +2096,13 @@ export default function RestaurantCashierPOSPage() {
   }
 
   async function handleSelectTable(table: RestaurantTable) {
+    if (["RESERVED", "CLEANING"].includes((table.status || "FREE").toUpperCase()) ||
+        pendingReservedTableId === table.id || tableStatusLockRef.current || paymentSaving) return;
+    if (openOrderLoading) return;
+    if (selectedTableId === table.id) {
+      setTableDialogOpen(false);
+      return;
+    }
     setOpenOrderLoading(true);
     setOpenOrderError("");
 
@@ -2045,6 +2115,10 @@ export default function RestaurantCashierPOSPage() {
 
       if (selectedTableId && cart.length > 0) {
         await saveOpenOrder();
+        tableKitchenOrdersRef.current.set(selectedTableId, {
+          ticketIds: [...kitchenTicketIds],
+          items: cart.map((item) => ({ ...item, modifiers: [...item.modifiers] })),
+        });
       }
 
       setKitchenTicketIds([]);
@@ -3100,6 +3174,20 @@ export default function RestaurantCashierPOSPage() {
           }`;
       }
 
+      // Payment is already committed. A table update failure must never retry payment.
+      if (orderType === "DINE_IN" && selectedTableId) {
+        setPendingReservedTableId(selectedTableId);
+        try {
+          await persistTableStatus(selectedTableId, "RESERVED");
+          setPendingReservedTableId(null);
+        } catch (tableError) {
+          const warning = `Payment သိမ်းပြီးပါပြီ။ Table ကို RESERVED ပြောင်းမရပါ။ Select Table မှ Retry RESERVED နှိပ်ပါ။ ${tableError instanceof Error ? tableError.message : "Table status error"}`;
+          setTableStatusError(warning);
+          receiptSaveWarning = [receiptSaveWarning, warning].filter(Boolean).join(" ");
+        }
+        setSelectedTableId(null);
+      }
+
       setPaymentReceiptData({
         ...paymentOrder,
         paymentNo,
@@ -3111,6 +3199,9 @@ export default function RestaurantCashierPOSPage() {
       });
       setPaymentReceiptOpen(true);
       setPaymentOpen(false);
+      if (orderType === "DINE_IN" && selectedTableId) {
+        tableKitchenOrdersRef.current.delete(selectedTableId);
+      }
       setMenuItems((prev) =>
         prev.map((menuItem) => {
           const cartItem = cart.find((item) => isSameMenuItem(item, menuItem));
@@ -3157,7 +3248,7 @@ export default function RestaurantCashierPOSPage() {
   useEffect(() => {
     if ((orderType !== "DINE_IN" && orderType !== "TAKEAWAY") ||
         (orderType === "DINE_IN" && !selectedTableId) ||
-        kitchenTicketIds.length === 0 || cart.length === 0) return;
+        openOrderLoading || kitchenTicketIds.length === 0 || cart.length === 0) return;
     let cancelled = false;
     async function checkTickets() {
       try {
@@ -3196,7 +3287,7 @@ export default function RestaurantCashierPOSPage() {
     void checkTickets();
     const timer = window.setInterval(() => { void checkTickets(); }, 5000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [orderType, selectedTableId, kitchenTicketIds, cart, sessionAccessToken]);
+  }, [orderType, selectedTableId, kitchenTicketIds, cart, sessionAccessToken, openOrderLoading]);
 
   async function findReadyTakeaway(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5078,7 +5169,7 @@ export default function RestaurantCashierPOSPage() {
                     </div>
 
                     <div className="flex gap-1.5 overflow-x-auto">
-                      {["ALL", "FREE", "BUSY", "RESERVED"].map((statusKey) => (
+                      {["ALL", "FREE", "BUSY", "RESERVED", "CLEANING"].map((statusKey) => (
                         <button
                           key={statusKey}
                           type="button"
@@ -5098,6 +5189,11 @@ export default function RestaurantCashierPOSPage() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                  {tableStatusError && (
+                    <div role="alert" className="mb-3 rounded-2xl bg-red-500/10 p-4 text-sm font-bold text-red-500">
+                      {tableStatusError}
+                    </div>
+                  )}
                   {openOrderLoading || tablesLoading ? (
                     <div className="grid min-h-[280px] place-items-center text-center">
                       <div>
@@ -5133,24 +5229,17 @@ export default function RestaurantCashierPOSPage() {
                           table.status || "FREE"
                         ).toUpperCase();
 
+                        const turnover = statusKey === "RESERVED" || statusKey === "CLEANING" || pendingReservedTableId === table.id;
                         return (
-                          <button
+                          <div
                             key={table.id}
-                            type="button"
-                            onClick={() => {
-                              if (active) {
-                                setTableDialogOpen(false);
-                              } else {
-                                void handleSelectTable(table);
-                              }
-                            }}
                             className={`rounded-2xl border p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${active
                                 ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_25%,transparent)]"
                                 : statusKey === "BUSY"
                                   ? darkMode
                                     ? "border-red-400/30 bg-red-500/10 text-red-200"
                                     : "border-red-100 bg-red-50 text-red-700"
-                                  : statusKey === "RESERVED"
+                                  : statusKey === "RESERVED" || statusKey === "CLEANING"
                                     ? darkMode
                                       ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
                                       : "border-amber-100 bg-amber-50 text-amber-700"
@@ -5159,6 +5248,12 @@ export default function RestaurantCashierPOSPage() {
                                       : "border-slate-100 bg-white text-slate-700 hover:border-[var(--brand-border)]"
                               }`}
                           >
+                            <button
+                              type="button"
+                              disabled={turnover || tableStatusSavingId !== null || paymentSaving}
+                              onClick={() => void handleSelectTable(table)}
+                              className="w-full text-left disabled:cursor-not-allowed"
+                            >
                             <div className="flex items-center justify-between gap-2">
                               <Armchair size={19} />
                               <span
@@ -5169,7 +5264,7 @@ export default function RestaurantCashierPOSPage() {
                                       : "bg-slate-950/5"
                                   }`}
                               >
-                                {active ? "SELECTED" : statusKey}
+                                {turnover ? statusKey : active ? "SELECTED" : statusKey}
                               </span>
                             </div>
                             <div className="mt-3 text-lg font-black">
@@ -5183,7 +5278,19 @@ export default function RestaurantCashierPOSPage() {
                             <div className="mt-1 text-xs font-bold opacity-75">
                               {table.seats || 0} seats
                             </div>
-                          </button>
+                            </button>
+                            {turnover && (
+                              <button
+                                type="button"
+                                onClick={() => void advanceTableStatus(table)}
+                                disabled={tableStatusSavingId !== null || paymentSaving || openOrderLoading}
+                                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 py-2.5 text-xs font-black text-white disabled:opacity-50"
+                              >
+                                {tableStatusSavingId === table.id && <Loader2 size={16} className="animate-spin" />}
+                                {pendingReservedTableId === table.id ? "Retry RESERVED" : statusKey === "RESERVED" ? "RESERVED → CLEANING" : "CLEANING → FREE"}
+                              </button>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
