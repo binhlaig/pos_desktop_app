@@ -815,6 +815,18 @@ export default function FashionRegisterPage() {
   const [cartPage, setCartPage] = useState(1);
   const [cartDialogOpen, setCartDialogOpen] = useState(false);
   const [headerControlsOpen, setHeaderControlsOpen] = useState(false);
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(118);
+
+  useEffect(() => {
+    if (!activeStaff || !headerRef.current) return;
+    const header = headerRef.current;
+    const measure = () => setHeaderHeight(Math.ceil(header.getBoundingClientRect().height));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [activeStaff]);
   const [lastAddedProductKey, setLastAddedProductKey] = useState("");
   const [addedFeedbackVisible, setAddedFeedbackVisible] = useState(false);
   const [flyingProduct, setFlyingProduct] = useState<{
@@ -1879,6 +1891,7 @@ export default function FashionRegisterPage() {
 
       <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-3 p-2 pb-24 sm:p-3 sm:pb-24 lg:landscape:gap-4 lg:landscape:p-5">
         <header
+          ref={headerRef}
           className={`sticky top-0 z-30 -mx-2 -mt-2 border-b px-2 py-2.5 backdrop-blur-xl sm:-mx-3 sm:-mt-3 sm:px-3 lg:-mx-5 lg:-mt-5 lg:px-5 ${
             darkMode
               ? "border-white/10 bg-slate-950/92"
@@ -1886,7 +1899,7 @@ export default function FashionRegisterPage() {
           }`}
         >
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-row items-center justify-between gap-2.5">
               <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                 <button
                   type="button"
@@ -1955,7 +1968,7 @@ export default function FashionRegisterPage() {
                 onClick={() => setHeaderControlsOpen(true)}
                 aria-haspopup="dialog"
                 aria-label="Open Fashion POS controls"
-                className={`relative inline-flex h-9 w-fit shrink-0 self-end items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition xl:hidden ${
+                className={`relative inline-flex h-9 w-fit shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition xl:hidden ${
                   darkMode
                     ? "bg-white/10 text-white hover:bg-white/15"
                     : "bg-slate-900 text-white hover:bg-slate-800"
@@ -2273,8 +2286,12 @@ export default function FashionRegisterPage() {
           {/* Keep the grid column as a spacer while the cart stays locked to the viewport. */}
           <div className="relative hidden min-w-0 lg:landscape:block lg:landscape:h-[calc(100vh-132px)]">
             <div
-              className="fixed right-3 top-[118px] z-20 h-[calc(100vh-132px)] w-[380px] sm:right-4 lg:right-5 xl:landscape:w-[var(--cart-width)]"
-              style={{ "--cart-width": `${cartWidth}px` } as React.CSSProperties}
+              className="fixed right-3 z-20 w-[380px] sm:right-4 lg:right-5 xl:landscape:w-[var(--cart-width)]"
+              style={{
+                "--cart-width": `${cartWidth}px`,
+                top: headerHeight + 12,
+                height: `calc(100dvh - ${headerHeight + 24}px)`,
+              } as React.CSSProperties}
             >
             <button
               type="button"
@@ -2371,7 +2388,7 @@ export default function FashionRegisterPage() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-hidden p-2.5 sm:p-3">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-3">
               {paginatedCart.length === 0 ? (
                 <div
                   className={`grid h-full min-h-[280px] place-items-center rounded-[1.5rem] border border-dashed px-4 text-center sm:min-h-[360px] sm:px-5 ${
@@ -2507,7 +2524,7 @@ export default function FashionRegisterPage() {
             </div>
 
             <div
-              className={`border-t p-2 sm:p-2.5 ${
+              className={`shrink-0 border-t p-2 sm:p-2.5 ${
                 darkMode ? "border-white/10" : "border-[var(--brand-border)]"
               }`}
             >
@@ -2664,7 +2681,8 @@ export default function FashionRegisterPage() {
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            className="fixed right-3 top-16 z-[80] w-[min(24rem,calc(100vw-1.5rem))] sm:right-4 sm:top-20"
+            className="fixed right-3 z-[80] w-[min(24rem,calc(100vw-1.5rem))] sm:right-4"
+            style={{ top: headerHeight + 8 }}
           >
             <motion.div
               role="dialog"
