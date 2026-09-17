@@ -390,6 +390,14 @@ export default function RestaurantKitchenPage() {
   const [selectedStatus, setSelectedStatus] = useState<KitchenStatus>("ALL");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const fetchLockRef = useRef(false);
+  const mutationRef = useRef(false);
+  const requestEpochRef = useRef(0);
+  const ticketsLoadedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const requestAbortRef = useRef<AbortController | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [completedPage, setCompletedPage] = useState(1);
@@ -498,8 +506,13 @@ export default function RestaurantKitchenPage() {
   }, [tickets]);
 
   async function fetchTickets() {
-    setLoading(true);
-    setError("");
+    if (fetchLockRef.current || mutationRef.current) return;
+    fetchLockRef.current = true;
+    const epoch = requestEpochRef.current;
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+    if (!ticketsLoadedRef.current) setLoading(true);
+    setRefreshing(true);
 
     try {
       const token = getAccessToken();
@@ -512,6 +525,7 @@ export default function RestaurantKitchenPage() {
         method: "GET",
         headers: authHeaders(),
         cache: "no-store",
+        signal: controller.signal,
       });
 
       const authOrFeatureError = await getAuthOrFeatureError(res);
@@ -523,15 +537,33 @@ export default function RestaurantKitchenPage() {
         );
       }
 
-      const data = await res.json().catch(() => []);
-      setTickets(Array.isArray(data) ? data : []);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("Kitchen ticket response format မမှန်ပါ။");
+      if (!mountedRef.current || controller.signal.aborted || requestEpochRef.current !== epoch) return;
+      // Preserve positions on polling; new tickets are appended, not shuffled.
+      setTickets((current) => {
+        const incoming = new Map<number, KitchenTicket>(data.map((ticket: KitchenTicket) => [ticket.id, ticket]));
+        const next = current.filter((ticket) => incoming.has(ticket.id)).map((ticket) => {
+          const updated = incoming.get(ticket.id)!;
+          incoming.delete(ticket.id);
+          return JSON.stringify(ticket) === JSON.stringify(updated) ? ticket : updated;
+        });
+        next.push(...incoming.values());
+        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+      });
+      ticketsLoadedRef.current = true;
+      setError("");
     } catch (err) {
-      setTickets([]);
+      if (!mountedRef.current || controller.signal.aborted || requestEpochRef.current !== epoch) return;
       setError(
         err instanceof Error ? err.message : "Kitchen tickets loading error"
       );
     } finally {
-      setLoading(false);
+      fetchLockRef.current = false;
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }
 
@@ -540,6 +572,9 @@ export default function RestaurantKitchenPage() {
     item: KitchenTicketItem,
     nextStatus: "COOKING" | "READY"
   ) {
+    if (mutationRef.current) return;
+    mutationRef.current = true;
+    requestEpochRef.current += 1;
     setUpdatingId(`item-${item.id}`);
     setError("");
 
@@ -645,8 +680,8 @@ export default function RestaurantKitchenPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Item update error");
-      await fetchTickets();
     } finally {
+      mutationRef.current = false;
       setUpdatingId(null);
     }
   }
@@ -677,14 +712,21 @@ export default function RestaurantKitchenPage() {
   }
 
   useEffect(() => {
-    fetchTickets();
-
-    const interval = window.setInterval(() => {
-      fetchTickets();
-    }, 5000);
-
-    return () => window.clearInterval(interval);
+    mountedRef.current = true;
+    void fetchTickets();
+    return () => {
+      mountedRef.current = false;
+      requestAbortRef.current?.abort();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchTickets();
+    }, 10000);
+    return () => window.clearInterval(interval);
+  }, [autoRefresh]);
 
   useEffect(() => {
     return () => {
@@ -705,15 +747,34 @@ export default function RestaurantKitchenPage() {
     selectedStatus === "DONE" || selectedStatus === "CANCELLED";
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_42%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-slate-950 sm:p-6 lg:p-8">
+    <main className="min-h-screen bg-slate-100 p-3 text-slate-950 sm:p-4 motion-reduce:scroll-auto">
       <BusinessTypeGuard allow="RESTAURANT" />
+      <style jsx>{`
+        .kitchen-ticket-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          align-items: start;
+          gap: 8px;
+        }
+        @media (min-width: 640px) {
+          .kitchen-ticket-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (min-width: 1024px) {
+          .kitchen-ticket-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        }
+        /* Landscape tablets can expose a CSS viewport below 1024px. */
+        @media (min-width: 768px) and (max-width: 1279px) and (orientation: landscape) {
+          .kitchen-ticket-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+          }
+        }
+      `}</style>
 
       <AnimatePresence>
         {undoReadyItem && (
           <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 18, scale: 0.96 }}
+            initial={false}
             className="fixed bottom-5 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-950 p-3 text-white shadow-2xl"
           >
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500">
@@ -741,48 +802,34 @@ export default function RestaurantKitchenPage() {
         )}
       </AnimatePresence>
 
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-3">
         {/* Top toolbar */}
-        <section className="sticky top-4 z-20 rounded-[1.5rem] border border-white/80 bg-white/95 p-4 shadow-sm backdrop-blur-xl">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight">
-                <ChefHat className="text-[var(--brand-accent)]" size={28} />
-                Restaurant Kitchen
-              </h1>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                Active orders ကိုအဓိကကြည့်ရန်။ DONE / CANCELLED ကို filter
-                နှိပ်မှသာ table ဖြင့်ပြပါမယ်။
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3">
+        <section aria-label="Kitchen controls" className="sticky top-0 z-20 bg-slate-100 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
                 <Search size={18} className="text-slate-400" />
                 <input
                   value={search}
                   onChange={(event) => handleSearchChange(event.target.value)}
                   placeholder="Search ticket, table, staff, item..."
-                  className="w-full bg-transparent text-sm font-bold outline-none placeholder:text-slate-400 sm:w-[320px]"
+                  className="min-w-0 w-full bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
                 />
               </div>
 
               <button
-                onClick={fetchTickets}
-                disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_24%,transparent)] transition hover:brightness-95 disabled:opacity-60"
+                onClick={() => void fetchTickets()}
+                disabled={refreshing || updatingId !== null}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
               >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  <RefreshCcw size={18} />
-                )}
-                Refresh
+                <RefreshCcw size={15} />
+                {refreshing ? "Updating…" : "Refresh"}
+              </button>
+              <button type="button" aria-pressed={autoRefresh} onClick={() => setAutoRefresh((value) => !value)} className="min-h-10 rounded-xl bg-white px-3 py-2 text-xs font-bold ring-1 ring-slate-200">
+                Auto {autoRefresh ? "ON · 10s" : "OFF"}
               </button>
             </div>
-          </div>
 
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
             {filterButtons.map((status) => {
               const meta = statusMeta[status];
               const Icon = meta.icon;
@@ -793,7 +840,7 @@ export default function RestaurantKitchenPage() {
                 <button
                   key={status}
                   onClick={() => handleStatusFilter(status)}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition ${
+                  className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${
                     active
                       ? completed
                         ? "bg-slate-950 text-white shadow-lg shadow-slate-900/15"
@@ -829,10 +876,10 @@ export default function RestaurantKitchenPage() {
 
         {/* Ticket title row */}
         <section className="flex flex-col gap-1 px-1">
-          <h2 className="text-xl font-black text-slate-950">
-            {selectedMeta.label} Tickets
+          <h2 className="text-sm font-bold text-slate-950">
+            {selectedMeta.label} · {filteredTickets.length} Tickets
           </h2>
-          <p className="text-sm font-semibold text-slate-500">
+          <p className="sr-only">
             {selectedStatus === "ALL"
               ? "ALL မှာ NEW, COOKING, READY tickets ပဲပြပါမယ်။"
               : selectedStatus === "DONE"
@@ -1051,27 +1098,23 @@ export default function RestaurantKitchenPage() {
             </div>
           </section>
         ) : (
-          <section className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-            <AnimatePresence initial={false}>
+          <section className="kitchen-ticket-grid">
               {filteredTickets.map((ticket) => {
                 const status = normalizeStatus(ticket.status);
                 const meta = statusMeta[status];
                 const StatusIcon = meta.icon;
 
                 return (
-                  <motion.article
+                  <article
                     key={ticket.id}
-                    layout
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -14 }}
-                    className={`overflow-hidden rounded-[2rem] border shadow-sm ${meta.card}`}
+                    className="min-w-0 overflow-hidden rounded-xl border border-slate-200 border-t-4 bg-white"
+                    style={{ borderTopColor: status === "COOKING" ? "#d97706" : status === "READY" ? "#059669" : "#64748b" }}
                   >
-                    <div className="border-b border-slate-200/60 bg-white/80 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
+                    <div className="border-b border-slate-200 bg-slate-50 p-2">
+                      <div className="flex flex-wrap items-start justify-between gap-1.5">
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-[var(--brand-primary)] px-3 py-1 text-xs font-black text-white">
+                            <span className="break-all rounded-md bg-[var(--brand-primary)] px-2 py-1 text-[11px] font-bold text-white">
                               {ticket.ticketNo || `KT-${ticket.id}`}
                             </span>
 
@@ -1083,7 +1126,7 @@ export default function RestaurantKitchenPage() {
                             </span>
                           </div>
 
-                          <h3 className="mt-3 flex items-center gap-2 text-xl font-black text-slate-950">
+                          <h3 className="mt-2 flex items-center gap-2 text-base font-bold text-slate-950">
                             {ticket.orderType === "DINE_IN" ? (
                               <Table2 size={22} className="text-[var(--brand-accent)]" />
                             ) : ticket.orderType === "TAKEAWAY" ? (
@@ -1109,11 +1152,8 @@ export default function RestaurantKitchenPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl bg-white px-3 py-2 text-center shadow-sm ring-1 ring-slate-100">
-                          <div className="text-xs font-black text-slate-400">
-                            Priority
-                          </div>
-                          <div className="text-sm font-black text-slate-800">
+                        <div className="text-right">
+                          <div className="text-[10px] font-bold text-slate-500">
                             {ticket.priority || "NORMAL"}
                           </div>
                         </div>
@@ -1126,124 +1166,61 @@ export default function RestaurantKitchenPage() {
                       )}
                     </div>
 
-                    <div className="space-y-3 p-4">
+                    <div className="divide-y divide-slate-100 px-2">
                       {(ticket.items || []).map((item) => {
                         const itemStatus = normalizeStatus(item.status);
-                        const itemMeta = statusMeta[itemStatus];
                         const itemModifiers = parseModifiers(item.modifiers);
+                        const denseTicket = (ticket.items || []).length > 5;
+                        const nextStatus = itemStatus === "NEW" || itemStatus === "READY"
+                          ? "COOKING" : itemStatus === "COOKING" ? "READY" : null;
+                        const isUpdating = updatingId === `item-${item.id}`;
 
                         return (
                           <div
                             key={item.id}
-                            className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm"
+                            className={`py-2.5 ${denseTicket ? "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2" : ""}`}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--brand-soft)] text-sm font-black text-[var(--brand-accent)]">
-                                    x{item.quantity || 1}
-                                  </span>
-
-                                  <h4 className="font-black text-slate-950">
-                                    {item.itemName}
-                                  </h4>
-                                </div>
-
-                                {itemModifiers.length > 0 && (
-                                  <div className="mt-2 flex flex-wrap gap-1.5">
-                                    {itemModifiers.map((modifier) => (
-                                      <span
-                                        key={modifier}
-                                        className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600"
-                                      >
-                                        {modifier}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {item.kitchenNote && (
-                                  <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
-                                    Note: {item.kitchenNote}
-                                  </div>
-                                )}
-                              </div>
-
-                              <span
-                                className={`rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${itemMeta.pill}`}
-                              >
-                                {itemStatus}
-                              </span>
-                            </div>
-
-                            <div className="mt-3 grid grid-cols-2 gap-2">
-                              {(["COOKING", "READY"] as const).map(
-                                (nextStatus) => {
-                                  const isUpdating =
-                                    updatingId === `item-${item.id}`;
-                                  const isCurrent = itemStatus === nextStatus;
-                                  const canUpdate =
-                                    (nextStatus === "COOKING" &&
-                                      (itemStatus === "NEW" ||
-                                        itemStatus === "READY")) ||
-                                    (nextStatus === "READY" &&
-                                      itemStatus === "COOKING");
-
-                                  return (
-                                    <button
-                                      key={nextStatus}
-                                      type="button"
-                                      onClick={() =>
-                                        void updateItemStatus(
-                                          ticket,
-                                          item,
-                                          nextStatus
-                                        )
-                                      }
-                                      disabled={updatingId !== null || !canUpdate}
-                                      className={`rounded-xl px-3 py-2.5 text-xs font-black transition ${
-                                        isCurrent
-                                          ? nextStatus === "READY"
-                                            ? "bg-emerald-500 text-white"
-                                            : "bg-orange-500 text-white"
-                                          : canUpdate
-                                            ? nextStatus === "READY"
-                                              ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                                              : "bg-orange-500 text-white hover:bg-orange-600"
-                                            : "cursor-not-allowed bg-slate-100 text-slate-400"
-                                      }`}
-                                    >
-                                      {isUpdating && canUpdate ? (
-                                        <Loader2
-                                          size={15}
-                                          className="mx-auto animate-spin"
-                                        />
-                                      ) : (
-                                        <span className="inline-flex items-center justify-center gap-1.5">
-                                          {nextStatus === "COOKING" ? (
-                                            <Flame size={14} />
-                                          ) : (
-                                            <PackageCheck size={14} />
-                                          )}
-                                          {nextStatus === "COOKING" &&
-                                          itemStatus === "READY"
-                                            ? "BACK TO COOKING"
-                                            : nextStatus}
-                                        </span>
-                                      )}
-                                    </button>
-                                  );
-                                }
+                            <div className="min-w-0">
+                              <h4 className="break-words text-sm font-bold leading-snug text-slate-950">
+                                <span className="mr-2 tabular-nums text-slate-500">×{item.quantity || 1}</span>
+                                {item.itemName}
+                              </h4>
+                              {itemModifiers.length > 0 && (
+                                <p className="mt-1 break-words text-xs font-semibold text-slate-500">
+                                  {itemModifiers.join(" · ")}
+                                </p>
+                              )}
+                              {item.kitchenNote && (
+                                <p className="mt-1 break-words text-xs font-bold text-amber-700">
+                                  Note: {item.kitchenNote}
+                                </p>
                               )}
                             </div>
+                            {nextStatus && (
+                              <button
+                                type="button"
+                                onClick={() => void updateItemStatus(ticket, item, nextStatus)}
+                                disabled={updatingId !== null}
+                                aria-label={`${item.itemName}: ${itemStatus === "READY" ? "Back to cooking" : nextStatus}`}
+                                className={`flex min-h-11 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[10px] font-bold leading-tight disabled:opacity-50 ${denseTicket ? "w-[88px]" : "mt-2 w-full"} ${nextStatus === "READY" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-amber-600 text-white hover:bg-amber-700"}`}
+                              >
+                                {isUpdating ? (
+                                  <span>Updating…</span>
+                                ) : (
+                                  <>
+                                    {nextStatus === "READY" ? <PackageCheck size={14} className="shrink-0" /> : <Flame size={14} className="shrink-0" />}
+                                    <span>{itemStatus === "READY" ? "BACK TO COOKING" : nextStatus}</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
                         );
                       })}
                     </div>
-                  </motion.article>
+                  </article>
                 );
               })}
-            </AnimatePresence>
           </section>
         )}
       </div>

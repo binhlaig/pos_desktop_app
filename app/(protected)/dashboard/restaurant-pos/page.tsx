@@ -97,6 +97,7 @@ type RestaurantCartDraft = {
   selectedTableId: number | null;
   discount: number;
   serviceChargeEnabled: boolean;
+  serviceChargeOptIn?: boolean;
   serviceChargeRatePercent: number;
   taxRatePercent: number;
   items: CartItem[];
@@ -1199,6 +1200,7 @@ function RestaurantMobileCartBar({
   kitchenSaving,
   canSendToKitchen,
   canPayOrder,
+  showPaymentAction,
   kitchenDisabledMessage,
   addedFeedbackVisible,
 }: {
@@ -1212,6 +1214,7 @@ function RestaurantMobileCartBar({
   kitchenSaving: boolean;
   canSendToKitchen: boolean;
   canPayOrder: boolean;
+  showPaymentAction: boolean;
   kitchenDisabledMessage: string;
   addedFeedbackVisible: boolean;
 }) {
@@ -1281,14 +1284,14 @@ function RestaurantMobileCartBar({
           >
             Cart
           </button>
-          <button
+          {showPaymentAction && <button
             type="button"
             onClick={onPayment}
             disabled={!canPayOrder}
             className="rounded-xl bg-[var(--brand-primary)] px-3 py-3 text-xs font-black text-white disabled:opacity-40"
           >
             Pay
-          </button>
+          </button>}
         </div>
       )}
     </div>
@@ -1354,7 +1357,7 @@ export default function RestaurantCashierPOSPage() {
   const suppressMenuClickRef = useRef(false);
   const [menuPage, setMenuPage] = useState(1);
   const [discount, setDiscount] = useState(0);
-  const [serviceChargeEnabled, setServiceChargeEnabled] = useState(true);
+  const [serviceChargeEnabled, setServiceChargeEnabled] = useState(false);
   const [serviceChargeRatePercent, setServiceChargeRatePercent] = useState(
     DEFAULT_SERVICE_CHARGE_RATE_PERCENT,
   );
@@ -1392,6 +1395,7 @@ export default function RestaurantCashierPOSPage() {
   const [allTicketsDone, setAllTicketsDone] = useState(false);
   const [kitchenStatusError, setKitchenStatusError] = useState("");
   const [kitchenSaving, setKitchenSaving] = useState(false);
+  const kitchenSendLockRef = useRef(false);
   const [kitchenError, setKitchenError] = useState("");
   const [kitchenSuccessOpen, setKitchenSuccessOpen] = useState(false);
   const [kitchenSuccessMessage, setKitchenSuccessMessage] = useState("");
@@ -1585,12 +1589,13 @@ export default function RestaurantCashierPOSPage() {
     [cart],
   );
   const hasPendingKitchenItems = pendingKitchenItemCount > 0;
-  const showKitchenAction = hasPendingKitchenItems && cart.length > 0;
-  const canPayOrder = !openOrderLoading && cart.length > 0 &&
+  const showKitchenAction = !kitchenSaving && !openOrderLoading && hasPendingKitchenItems && cart.length > 0;
+  const canPayOrder = !kitchenSaving && !paymentSaving && !openOrderLoading && cart.length > 0 &&
     (orderType !== "DINE_IN" ||
       (Boolean(selectedTable) && !hasPendingKitchenItems &&
         kitchenTicketIds.length > 0 && allTicketsDone && !kitchenStatusError &&
         cart.every((item) => item.kitchenSentQty >= item.qty)));
+  const showPaymentAction = orderType !== "DINE_IN" || canPayOrder;
   const kitchenDisabledMessage =
     cart.length > 0 && !hasPendingKitchenItems
       ? NO_PENDING_KITCHEN_ITEMS_MESSAGE
@@ -2236,7 +2241,8 @@ export default function RestaurantCashierPOSPage() {
           setAllTicketsDone(false);
           setCartPage(1);
           setDiscount(Math.max(0, Number(draft.discount || 0)));
-          setServiceChargeEnabled(draft.serviceChargeEnabled !== false);
+          // Old drafts enabled service automatically; require an explicit opt-in.
+          setServiceChargeEnabled(draft.serviceChargeOptIn === true && draft.serviceChargeEnabled === true);
           if (
             typeof draft.serviceChargeRatePercent === "number" &&
             Number.isFinite(draft.serviceChargeRatePercent)
@@ -2300,6 +2306,7 @@ export default function RestaurantCashierPOSPage() {
       selectedTableId,
       discount,
       serviceChargeEnabled,
+      serviceChargeOptIn: serviceChargeEnabled,
       serviceChargeRatePercent,
       taxRatePercent,
       items: cart,
@@ -2804,6 +2811,7 @@ export default function RestaurantCashierPOSPage() {
   };
 
   const sendToKitchen = async () => {
+    if (kitchenSendLockRef.current || paymentSaving || openOrderLoading) return;
     if (!activeStaff) {
       setStaffError("Staff ID ထည့်ပါ။");
       return;
@@ -2867,7 +2875,9 @@ export default function RestaurantCashierPOSPage() {
     };
 
     try {
+      kitchenSendLockRef.current = true;
       setKitchenSaving(true);
+      setAllTicketsDone(false);
       setKitchenError("");
 
       // A dine-in kitchen ticket must always belong to a persisted OPEN order.
@@ -2942,10 +2952,13 @@ export default function RestaurantCashierPOSPage() {
       // Mark the current quantities as sent only after the ticket API succeeds.
       // Further additions to the same item will therefore send only the delta.
       setCart((currentCart) =>
-        currentCart.map((item) => ({
-          ...item,
-          kitchenSentQty: item.qty,
-        })),
+        currentCart.map((item) => {
+          const submitted = pendingKitchenItems.find((entry) => entry.id === item.id);
+          return submitted ? {
+            ...item,
+            kitchenSentQty: Math.min(item.qty, submitted.kitchenSentQty + submitted.pendingQty),
+          } : item;
+        }),
       );
 
       await fetchTables();
@@ -2954,6 +2967,7 @@ export default function RestaurantCashierPOSPage() {
         err instanceof Error ? err.message : "Kitchen order save failed.",
       );
     } finally {
+      kitchenSendLockRef.current = false;
       setKitchenSaving(false);
     }
   };
@@ -3228,7 +3242,7 @@ export default function RestaurantCashierPOSPage() {
       setPaymentMethod("CASH");
       setPaymentError(receiptSaveWarning);
       setKitchenError("");
-      setServiceChargeEnabled(true);
+      setServiceChargeEnabled(false);
       await fetchMenuItems();
       await fetchTables();
       router.refresh();
@@ -3248,7 +3262,7 @@ export default function RestaurantCashierPOSPage() {
   useEffect(() => {
     if ((orderType !== "DINE_IN" && orderType !== "TAKEAWAY") ||
         (orderType === "DINE_IN" && !selectedTableId) ||
-        openOrderLoading || kitchenTicketIds.length === 0 || cart.length === 0) return;
+        kitchenSaving || openOrderLoading || kitchenTicketIds.length === 0 || cart.length === 0) return;
     let cancelled = false;
     async function checkTickets() {
       try {
@@ -3287,7 +3301,7 @@ export default function RestaurantCashierPOSPage() {
     void checkTickets();
     const timer = window.setInterval(() => { void checkTickets(); }, 5000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [orderType, selectedTableId, kitchenTicketIds, cart, sessionAccessToken, openOrderLoading]);
+  }, [orderType, selectedTableId, kitchenTicketIds, cart, sessionAccessToken, openOrderLoading, kitchenSaving]);
 
   async function findReadyTakeaway(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4359,7 +4373,7 @@ export default function RestaurantCashierPOSPage() {
                     </div>
                   )}
 
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className={`mt-2 grid gap-2 ${showKitchenAction && showPaymentAction ? "grid-cols-2" : "grid-cols-1"}`}>
                     {showKitchenAction && <button
                       onClick={sendToKitchen}
                       disabled={!hasPendingKitchenItems || kitchenSaving}
@@ -4378,14 +4392,19 @@ export default function RestaurantCashierPOSPage() {
                       {kitchenSaving ? "Sending..." : "Kitchen"}
                     </button>}
 
-                    <button
+                    {showPaymentAction && <button
                       onClick={openPaymentDialog}
                       disabled={!canPayOrder}
                       className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-3 text-xs font-black text-white shadow-lg shadow-[color-mix(in_srgb,var(--brand-primary)_20%,transparent)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Payment
                       <ChevronRight size={18} />
-                    </button>
+                    </button>}
+                    {!showKitchenAction && !showPaymentAction && cart.length > 0 && (
+                      <div className="rounded-xl bg-amber-500/10 px-3 py-3 text-center text-xs font-bold text-amber-600">
+                        {kitchenSaving ? "Kitchen သို့ ပို့နေပါသည်…" : "Kitchen order အားလုံး DONE ဖြစ်မှ Payment ဖွင့်ပါမည်။"}
+                      </div>
+                    )}
                   </div>
                 </div>
               </RestaurantCartDropSurface>
@@ -4872,7 +4891,7 @@ export default function RestaurantCashierPOSPage() {
                         )}{" "}
                         Kitchen
                       </button>}
-                      <button
+                      {showPaymentAction && <button
                         type="button"
                         onClick={() => {
                           setHeaderControlsOpen(false);
@@ -4882,7 +4901,7 @@ export default function RestaurantCashierPOSPage() {
                         className="inline-flex items-center gap-2 rounded-2xl bg-[var(--brand-primary)] p-3 text-sm font-black text-white disabled:opacity-40"
                       >
                         <Wallet size={18} /> Payment
-                      </button>
+                      </button>}
                       <button
                         type="button"
                         onClick={() => {
@@ -5979,6 +5998,7 @@ export default function RestaurantCashierPOSPage() {
         kitchenSaving={kitchenSaving}
         canSendToKitchen={showKitchenAction}
         canPayOrder={canPayOrder}
+        showPaymentAction={showPaymentAction}
         kitchenDisabledMessage={kitchenDisabledMessage}
         addedFeedbackVisible={addedFeedbackVisible}
       />
@@ -6079,8 +6099,6 @@ export default function RestaurantCashierPOSPage() {
     </DragDropProvider>
   );
 }
-
-
 
 
 

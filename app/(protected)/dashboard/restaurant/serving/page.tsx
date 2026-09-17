@@ -254,6 +254,13 @@ export default function RestaurantServingPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const autoRefreshRef = useRef(true);
+  const fetchLockRef = useRef(false);
+  const mutationRef = useRef(false);
+  const epochRef = useRef(0);
+  const loadedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -375,10 +382,15 @@ export default function RestaurantServingPage() {
     }
   }
 
-  async function fetchTickets(options?: { silent?: boolean }) {
-    if (!activeStaff) return;
+  async function fetchTickets(_options?: { silent?: boolean }) {
+    if (!activeStaff || fetchLockRef.current || mutationRef.current) return;
+    fetchLockRef.current = true;
+    const epoch = epochRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    options?.silent ? setRefreshing(true) : setLoading(true);
+    if (!loadedRef.current) setLoading(true);
+    setRefreshing(true);
 
     try {
       const token = getAccessToken();
@@ -386,7 +398,7 @@ export default function RestaurantServingPage() {
 
       const response = await fetch(
         `${API_BASE}/api/restaurant/kitchen/tickets`,
-        { method: "GET", headers: authHeaders(), cache: "no-store" },
+        { method: "GET", headers: authHeaders(), cache: "no-store", signal: controller.signal },
       );
 
       if (!response.ok) {
@@ -395,15 +407,29 @@ export default function RestaurantServingPage() {
         );
       }
 
-      setTickets(unwrapList(await response.json().catch(() => [])));
+      const incoming = unwrapList(await response.json());
+      if (controller.signal.aborted || epoch !== epochRef.current) return;
+      setTickets((current) => {
+        const byId = new Map(incoming.map((ticket) => [ticket.id, ticket]));
+        const next = current.filter((ticket) => byId.has(ticket.id)).map((ticket) => {
+          const updated = byId.get(ticket.id)!;
+          byId.delete(ticket.id);
+          return JSON.stringify(ticket) === JSON.stringify(updated) ? ticket : updated;
+        });
+        next.push(...byId.values());
+        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+      });
+      loadedRef.current = true;
       setError("");
     } catch (caughtError) {
+      if (controller.signal.aborted || epoch !== epochRef.current) return;
       setError(
         caughtError instanceof Error
           ? caughtError.message
           : "Serving orders loading error",
       );
     } finally {
+      fetchLockRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -414,7 +440,9 @@ export default function RestaurantServingPage() {
     item: ServingTicketItem,
     nextStatus: "DONE",
   ) {
-    if (!activeStaff) return;
+    if (!activeStaff || mutationRef.current) return;
+    mutationRef.current = true;
+    epochRef.current += 1;
 
     try {
       setUpdatingItemId(item.id);
@@ -503,9 +531,9 @@ export default function RestaurantServingPage() {
         caughtError instanceof Error
           ? caughtError.message
           : "Serving status update error";
-      await fetchTickets({ silent: true });
       setError(message);
     } finally {
+      mutationRef.current = false;
       setUpdatingItemId(null);
     }
   }
@@ -518,17 +546,19 @@ export default function RestaurantServingPage() {
 
     void fetchTickets();
     const interval = window.setInterval(() => {
-      void fetchTickets({ silent: true });
-    }, 5000);
+      if (autoRefreshRef.current && document.visibilityState === "visible") void fetchTickets({ silent: true });
+    }, 10000);
 
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
+      if (autoRefreshRef.current && document.visibilityState === "visible") {
         void fetchTickets({ silent: true });
       }
     };
 
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
+      epochRef.current += 1;
+      abortRef.current?.abort();
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
@@ -538,7 +568,7 @@ export default function RestaurantServingPage() {
 
   if (!activeStaff) {
     return (
-      <main className={`min-h-screen p-4 sm:p-6 ${darkMode ? "bg-slate-950 text-white" : "bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] text-slate-950"}`}>
+      <main className={`min-h-screen p-4 sm:p-6 ${darkMode ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-950"}`}>
         <BusinessTypeGuard allow="RESTAURANT" />
         <div className="mx-auto max-w-xl pt-8 sm:pt-16">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -613,12 +643,20 @@ export default function RestaurantServingPage() {
   }
 
   return (
-    <main className={`min-h-screen p-2 pb-8 sm:p-4 lg:p-6 ${darkMode ? "bg-slate-950 text-white" : "bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] text-slate-950"}`}>
+    <main className={`min-h-screen p-3 pb-8 sm:p-4 ${darkMode ? "bg-slate-950 text-white" : "bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] text-slate-950"}`}>
       <BusinessTypeGuard allow="RESTAURANT" />
 
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-4">
-        <header className={`sticky top-2 z-30 rounded-[1.5rem] border p-3 shadow-lg backdrop-blur-xl sm:p-4 ${darkMode ? "border-white/10 bg-slate-950/95" : "border-white bg-white/95"}`}>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <style jsx>{`
+        .serving-ticket-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: start; }
+        @media (min-width: 640px) { .serving-ticket-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .serving-ticket-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+        @media (min-width: 768px) and (max-width: 1279px) and (orientation: landscape) {
+          .serving-ticket-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        }
+      `}</style>
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-3">
+        <header className={`sticky top-0 z-30 py-2 ${darkMode ? "border-white/10 bg-slate-950/95" : "border-white bg-white/95"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -645,11 +683,15 @@ export default function RestaurantServingPage() {
               <button
                 type="button"
                 onClick={() => void fetchTickets({ silent: true })}
-                disabled={refreshing}
+                disabled={refreshing || updatingItemId !== null}
                 className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50 ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)] text-[var(--brand-primary)]"}`}
               >
-                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> Refresh
+                <RefreshCw size={15} /> {refreshing ? "Updating…" : "Refresh"}
               </button>
+              <button type="button" aria-pressed={autoRefresh} onClick={() => {
+                autoRefreshRef.current = !autoRefreshRef.current;
+                setAutoRefresh(autoRefreshRef.current);
+              }} className={`min-h-10 rounded-xl px-3 py-2 text-xs font-bold ${darkMode ? "bg-white/10" : "bg-white ring-1 ring-slate-200"}`}>Auto {autoRefresh ? "ON · 10s" : "OFF"}</button>
               <button
                 type="button"
                 onClick={() => setDarkMode((current) => !current)}
@@ -668,7 +710,7 @@ export default function RestaurantServingPage() {
             </div>
           </div>
 
-          <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${darkMode ? "bg-white/10" : "bg-[var(--brand-soft)]"}`}>
               <Search size={17} className={darkMode ? "text-slate-400" : "text-[var(--brand-accent)]"} />
               <input
@@ -710,9 +752,7 @@ export default function RestaurantServingPage() {
         <AnimatePresence>
           {successMessage && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={false}
               className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl"
             >
               {successMessage}
@@ -746,37 +786,32 @@ export default function RestaurantServingPage() {
             </div>
           </section>
         ) : (
-          <section className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <AnimatePresence initial={false}>
+          <section className="serving-ticket-grid">
               {visibleTickets.map((ticket) => {
                 const readySince = ticket.readyAt || ticket.items?.[0]?.readyAt || ticket.createdAt;
                 const waitingMinutes = elapsedMinutes(readySince);
 
                 return (
-                  <motion.article
+                  <article
                     key={ticket.id}
-                    layout
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    className={`overflow-hidden rounded-[1.75rem] border shadow-sm ${
+                    className={`min-w-0 overflow-hidden rounded-xl border ${
                       selectedStatus === "READY"
                         ? darkMode ? "border-emerald-400/25 bg-emerald-500/10" : "border-emerald-100 bg-emerald-50/60"
                         : darkMode ? "border-white/10 bg-white/5" : "border-slate-100 bg-white"
                     }`}
                   >
-                    <div className={`border-b p-4 ${darkMode ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-white/90"}`}>
-                      <div className="flex items-start justify-between gap-3">
+                    <div className={`border-b p-2 ${darkMode ? "border-white/10 bg-slate-900/70" : "border-slate-100 bg-white/90"}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-1.5">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-[var(--brand-primary)] px-3 py-1 text-xs font-black text-white">
+                            <span className="break-all rounded-md bg-[var(--brand-primary)] px-2 py-1 text-[11px] font-bold text-white">
                               {ticket.ticketNo || `KT-${ticket.id}`}
                             </span>
                             <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${waitingMinutes >= 10 ? "bg-red-500 text-white" : "bg-emerald-500/15 text-emerald-600"}`}>
                               {waitingMinutes} min wait
                             </span>
                           </div>
-                          <h2 className="mt-3 flex items-center gap-2 text-2xl font-black">
+                          <h2 className="mt-2 flex items-center gap-1.5 text-base font-bold">
                             {ticket.orderType === "DINE_IN" ? <Table2 size={24} className="text-[var(--brand-accent)]" /> : ticket.orderType === "TAKEAWAY" ? <Coffee size={24} className="text-[var(--brand-accent)]" /> : <Utensils size={24} className="text-[var(--brand-accent)]" />}
                             {ticket.orderType === "DINE_IN" ? `Table ${ticket.tableNo || "-"}` : ticket.orderType || "Order"}
                           </h2>
@@ -788,23 +823,22 @@ export default function RestaurantServingPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 p-3">
+                    <div className="divide-y divide-slate-200/30 px-2">
                       {(ticket.items || []).map((item) => {
                         const modifiers = parseModifiers(item.modifiers);
                         const isUpdating = updatingItemId === item.id;
+                        const denseTicket = (tickets.find((fullTicket) => fullTicket.id === ticket.id)?.items || ticket.items || []).length > 5;
 
                         return (
-                          <div key={item.id} className={`rounded-2xl border p-3 ${darkMode ? "border-white/10 bg-slate-900/75" : "border-slate-100 bg-white"}`}>
+                          <div key={item.id} className={`py-2.5 ${denseTicket ? "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2" : ""}`}>
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-sm font-black text-[var(--brand-accent)]">×{item.quantity || 1}</span>
-                                  <h3 className="line-clamp-2 font-black">{item.itemName}</h3>
+                                  <span className="shrink-0 text-sm font-bold text-slate-500">×{item.quantity || 1}</span>
+                                  <h3 className="break-words text-sm font-bold leading-snug">{item.itemName}</h3>
                                 </div>
                                 {modifiers.length > 0 && (
-                                  <div className="mt-2 flex flex-wrap gap-1">
-                                    {modifiers.map((modifier) => <span key={modifier} className={`rounded-full px-2 py-1 text-[10px] font-black ${darkMode ? "bg-white/10 text-slate-300" : "bg-slate-100 text-slate-600"}`}>{modifier}</span>)}
-                                  </div>
+                                  <p className="mt-1 break-words text-xs font-semibold text-slate-500">{modifiers.join(" · ")}</p>
                                 )}
                                 {item.kitchenNote && <p className="mt-2 rounded-xl bg-amber-500/10 px-2.5 py-2 text-xs font-bold text-amber-600">Note: {item.kitchenNote}</p>}
                                 {item.runnerStaffName && <p className="mt-2 text-[11px] font-bold text-slate-400">Runner: {item.runnerStaffName}</p>}
@@ -817,21 +851,20 @@ export default function RestaurantServingPage() {
                                 onClick={() =>
                                   void updateItemStatus(ticket.id, item, "DONE")
                                 }
-                                disabled={isUpdating}
-                                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                                disabled={updatingItemId !== null}
+                                className={`flex min-h-11 items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 py-2 text-[11px] font-bold text-white disabled:opacity-50 ${denseTicket ? "w-[76px]" : "mt-2 w-full"}`}
                               >
-                                {isUpdating ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
-                                {isUpdating ? "Updating..." : "Customer ဆီပို့ပြီး · DONE"}
+                                {!isUpdating && <CheckCircle2 size={15} className="shrink-0" />}
+                                {isUpdating ? "Updating..." : "DONE"}
                               </button>
                             )}
                           </div>
                         );
                       })}
                     </div>
-                  </motion.article>
+                  </article>
                 );
               })}
-            </AnimatePresence>
           </section>
         )}
       </div>
