@@ -1324,6 +1324,9 @@ export default function RestaurantCashierPOSPage() {
   const [tableStatusError, setTableStatusError] = useState("");
   const [pendingReservedTableId, setPendingReservedTableId] = useState<number | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [cancelSaving, setCancelSaving] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [pendingCancelItemId, setPendingCancelItemId] = useState<string | null>(null);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [exitSaving, setExitSaving] = useState(false);
   const [exitError, setExitError] = useState("");
@@ -2760,6 +2763,13 @@ export default function RestaurantCashierPOSPage() {
   };
 
   const removeItem = (id: string) => {
+    const sentItem = cart.find((item) => item.id === id);
+    if (sentItem && sentItem.kitchenSentQty > 0) {
+      setCancelError("");
+      setPendingCancelItemId(id);
+      setClearConfirmOpen(true);
+      return;
+    }
     setAllTicketsDone(false);
     setCart((prev) => prev.filter((item) => item.id !== id));
   };
@@ -2803,11 +2813,81 @@ export default function RestaurantCashierPOSPage() {
 
   const requestClearOrder = () => {
     if (cart.length === 0) return;
+    setCancelError("");
+    setPendingCancelItemId(null);
     setClearConfirmOpen(true);
   };
 
-  const confirmClearOrder = () => {
-    clearOrder();
+  const confirmClearOrder = async () => {
+    if (cancelSaving || kitchenSaving || paymentSaving) return;
+    if (!pendingCancelItemId) {
+      if (cart.some((item) => item.kitchenSentQty > 0) || kitchenTicketIds.length > 0) {
+        setCancelError("Kitchen ပို့ပြီးသား items ကို တစ်ခုချင်းစီ cancel လုပ်ပါ။");
+        return;
+      }
+      clearOrder();
+      return;
+    }
+    const item = cart.find((entry) => entry.id === pendingCancelItemId);
+    if (!item || item.kitchenSentQty <= 0) {
+      setCancelError("Cancel လုပ်မည့် item ကို ပြန်ရွေးပါ။");
+      return;
+    }
+    const sentTicketIds = kitchenTicketIds.filter((id) => /^\d+$/.test(id));
+    if (sentTicketIds.length !== kitchenTicketIds.length || sentTicketIds.length === 0) {
+      setCancelError("Kitchen ticket ID မပြည့်စုံပါ။ Item ကို server မှာ cancel မလုပ်နိုင်သေးပါ။");
+      return;
+    }
+    const token = ensurePageAccessToken(sessionAccessToken);
+    if (!token) {
+      setCancelError("Login ပြန်ဝင်ပြီး cancel လုပ်ပါ။");
+      return;
+    }
+    setCancelSaving(true);
+    setCancelError("");
+    try {
+      // Server atomically cancels only matching sent quantities, adjusts the
+      // open order totals, and returns ticket IDs still requiring kitchen work.
+      const response = await fetch(`${API_BASE}/api/restaurant/orders/items/cancel`, {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify({
+          ticketIds: sentTicketIds.map(Number),
+          tableId: orderType === "DINE_IN" ? selectedTableId : null,
+          productId: item.menuItemId,
+          unitPrice: item.price,
+          modifiers: item.modifiers,
+          kitchenNote: item.note || "",
+          quantity: item.kitchenSentQty,
+          reason: "CUSTOMER_REQUEST",
+        }),
+      });
+      const authOrFeatureError = await getAuthOrFeatureError(response);
+      if (authOrFeatureError) throw new Error(authOrFeatureError);
+      if (response.status === 404 || response.status === 405) {
+        throw new Error("Item cancel API ကို server တွင် မထည့်ရသေးပါ။ Backend ကို update လုပ်ပြီးမှ Kitchen ပို့ထားသော item ကို cancel လုပ်နိုင်ပါမည်။");
+      }
+      if (!response.ok) throw new Error(await getApiErrorMessage(response, "Server မှာ item cancel မလုပ်နိုင်သေးပါ။"));
+      const result = asRecord(await response.json().catch(() => null));
+      if (!Array.isArray(result.activeTicketIds)) throw new Error("Cancel အောင်မြင်ပေမယ့် activeTicketIds response မရပါ။ Refresh လုပ်ပြီး order ကို ပြန်စစ်ပါ။");
+      const activeIds = result.activeTicketIds.map(String);
+      setKitchenTicketIds(activeIds);
+      if (orderType === "DINE_IN" && selectedTableId) {
+        tableKitchenOrdersRef.current.set(selectedTableId, {
+          ticketIds: activeIds,
+          items: cart.filter((entry) => entry.id !== item.id),
+        });
+      }
+      setAllTicketsDone(false);
+      setCart((current) => current.filter((entry) => entry.id !== item.id));
+      setPendingCancelItemId(null);
+      setClearConfirmOpen(false);
+      if (orderType === "DINE_IN") void fetchTables();
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "Order cancel မအောင်မြင်ပါ။");
+    } finally {
+      setCancelSaving(false);
+    }
   };
 
   const sendToKitchen = async () => {
@@ -4610,18 +4690,22 @@ export default function RestaurantCashierPOSPage() {
                   id="clear-cart-dialog-title"
                   className="mt-4 text-xl font-black"
                 >
-                  Cart ကို ရှင်းမှာ သေချာပါသလား?
+                  {pendingCancelItemId ? "ဒီ item ကို cancel လုပ်မှာ သေချာပါသလား?" : "Cart ကို ရှင်းမှာ သေချာပါသလား?"}
                 </h2>
                 <p
                   id="clear-cart-dialog-description"
                   className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"
                     }`}
                 >
-                  Cart ထဲရှိ item အားလုံး၊ discount နှင့် လက်ရှိပြင်ဆင်ထားသော
-                  အချက်အလက်များကို ဖျက်ပါမယ်။ ဒီလုပ်ဆောင်ချက်ကို ပြန်ယူ၍မရပါ။
+                  {pendingCancelItemId
+                    ? `${cart.find((item) => item.id === pendingCancelItemId)?.name || "Item"} ကိုသာ Kitchen တွင် CANCELLED ပြပြီး cart မှ ဖယ်ပါမည်။ ကျန် items များ ဆက်ရှိပါမည်။`
+                    : cart.some((item) => item.kitchenSentQty > 0) || kitchenTicketIds.length > 0
+                      ? "Kitchen ပို့ပြီးသား items ကို တစ်ခုချင်းစီ cancel လုပ်ပါ။ Cart တစ်ခုလုံးကို ရှင်း၍မရပါ။"
+                      : "Cart ထဲရှိ item အားလုံးနှင့် discount ကို ဖျက်ပါမည်။"}
+                  {cancelError && <span role="alert" className="mt-2 block text-red-500">{cancelError}</span>}
                 </p>
 
-                <div
+                {!pendingCancelItemId && <div
                   className={`mt-4 rounded-2xl p-4 ${darkMode ? "bg-white/5" : "bg-red-50"
                     }`}
                 >
@@ -4637,7 +4721,7 @@ export default function RestaurantCashierPOSPage() {
                       {formatMoney(total)} Ks
                     </span>
                   </div>
-                </div>
+                </div>}
 
                 <div className="mt-5 grid grid-cols-2 gap-3">
                   <button
@@ -4653,10 +4737,11 @@ export default function RestaurantCashierPOSPage() {
                   <button
                     type="button"
                     onClick={confirmClearOrder}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-red-500/20 transition hover:bg-red-600"
+                    disabled={cancelSaving || kitchenSaving || paymentSaving}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-red-500/20 transition hover:bg-red-600 disabled:opacity-50"
                   >
-                    <Trash2 size={17} />
-                    Cart ရှင်းရန်
+                    {cancelSaving ? <Loader2 size={17} className="animate-spin" /> : <Trash2 size={17} />}
+                    {cancelSaving ? "Cancelling..." : pendingCancelItemId ? "Item Cancel" : "Cart ရှင်းရန်"}
                   </button>
                 </div>
               </motion.div>
@@ -6099,6 +6184,3 @@ export default function RestaurantCashierPOSPage() {
     </DragDropProvider>
   );
 }
-
-
-

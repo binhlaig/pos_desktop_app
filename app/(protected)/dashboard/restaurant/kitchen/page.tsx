@@ -400,6 +400,7 @@ export default function RestaurantKitchenPage() {
   const requestAbortRef = useRef<AbortController | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [acknowledgedCancellations, setAcknowledgedCancellations] = useState<string[]>([]);
   const [completedPage, setCompletedPage] = useState(1);
   const [undoReadyItem, setUndoReadyItem] = useState<{
     ticketId: number;
@@ -426,6 +427,26 @@ export default function RestaurantKitchenPage() {
   const readyUndoTimerRef = useRef<number | null>(null);
 
   const filterButtons = [...activeStatuses, ...completedStatuses];
+  const cancellationKey = (ticket: KitchenTicket, item: KitchenTicketItem) => `${ticket.shopId ?? ticket.shopCode ?? "shop"}:${ticket.id}:${item.id}`;
+  const hasUnacknowledgedCancellation = (ticket: KitchenTicket) =>
+    (ticket.items || []).some((item) => normalizeStatus(item.status) === "CANCELLED" &&
+      !acknowledgedCancellations.includes(cancellationKey(ticket, item)));
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kitchen-item-cancel-ack-v2") || "[]");
+      if (Array.isArray(saved)) setAcknowledgedCancellations(saved.filter((key): key is string => typeof key === "string"));
+    } catch { /* Ignore invalid local acknowledgment data. */ }
+  }, []);
+
+  function acknowledgeCancellation(ticket: KitchenTicket, item: KitchenTicketItem) {
+    const key = cancellationKey(ticket, item);
+    setAcknowledgedCancellations((current) => {
+      const next = [...new Set([...current, key])];
+      localStorage.setItem("kitchen-item-cancel-ack-v2", JSON.stringify(next));
+      return next;
+    });
+  }
 
   const filteredTickets = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -435,7 +456,7 @@ export default function RestaurantKitchenPage() {
 
       const matchStatus =
         selectedStatus === "ALL"
-          ? isActiveKitchenStatus(status)
+          ? isActiveKitchenStatus(status) || hasUnacknowledgedCancellation(ticket)
           : selectedStatus === status;
 
       // DONE tab မှာ today date orders ပဲပြရန်။
@@ -454,7 +475,7 @@ export default function RestaurantKitchenPage() {
 
       return matchStatus && matchTodayDone && matchSearch;
     });
-  }, [tickets, selectedStatus, search]);
+  }, [tickets, selectedStatus, search, acknowledgedCancellations]);
 
   const completedTableTickets = useMemo(() => {
     return filteredTickets.filter((ticket) =>
@@ -1108,7 +1129,7 @@ export default function RestaurantKitchenPage() {
                   <article
                     key={ticket.id}
                     className="min-w-0 overflow-hidden rounded-xl border border-slate-200 border-t-4 bg-white"
-                    style={{ borderTopColor: status === "COOKING" ? "#d97706" : status === "READY" ? "#059669" : "#64748b" }}
+                    style={{ borderTopColor: status === "CANCELLED" ? "#dc2626" : status === "COOKING" ? "#d97706" : status === "READY" ? "#059669" : "#64748b" }}
                   >
                     <div className="border-b border-slate-200 bg-slate-50 p-2">
                       <div className="flex flex-wrap items-start justify-between gap-1.5">
@@ -1171,7 +1192,7 @@ export default function RestaurantKitchenPage() {
                         const itemStatus = normalizeStatus(item.status);
                         const itemModifiers = parseModifiers(item.modifiers);
                         const denseTicket = (ticket.items || []).length > 5;
-                        const nextStatus = itemStatus === "NEW" || itemStatus === "READY"
+                        const nextStatus = status === "CANCELLED" ? null : itemStatus === "NEW" || itemStatus === "READY"
                           ? "COOKING" : itemStatus === "COOKING" ? "READY" : null;
                         const isUpdating = updatingId === `item-${item.id}`;
 
@@ -1196,6 +1217,14 @@ export default function RestaurantKitchenPage() {
                                 </p>
                               )}
                             </div>
+                            {itemStatus === "CANCELLED" && (
+                              <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-1.5 text-xs font-bold text-red-700">
+                                <p>Item CANCELLED — မချက်ပါနှင့်။</p>
+                                <button type="button" onClick={() => acknowledgeCancellation(ticket, item)} disabled={acknowledgedCancellations.includes(cancellationKey(ticket, item))} className="mt-1 min-h-11 w-full rounded-lg bg-red-600 px-2 text-white disabled:bg-slate-400">
+                                  {acknowledgedCancellations.includes(cancellationKey(ticket, item)) ? "Cancel လက်ခံပြီး" : "Cancel လက်ခံရန်"}
+                                </button>
+                              </div>
+                            )}
                             {nextStatus && (
                               <button
                                 type="button"
