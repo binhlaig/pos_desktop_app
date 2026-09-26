@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useZxing } from "react-zxing";
 import { fetchStaffById } from "@/lib/staff-validation";
 
 import {
@@ -36,6 +37,9 @@ import {
   GlassWater,
   Apple,
   Paperclip,
+  Camera,
+  Keyboard,
+  ScanLine,
 } from "lucide-react";
 
 import {
@@ -97,6 +101,7 @@ type CartLine = {
 type StaffRole = "staff" | "supervise";
 type PaymentMethod = "cash" | "card";
 type CurrencyPosition = "BEFORE" | "AFTER";
+type ScanSource = "manual" | "hardware" | "camera";
 
 type SaveReceiptPayload = {
   staffId: string;
@@ -659,12 +664,22 @@ export default function RegisterPOSPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [quickViewOpen, setQuickViewOpen] = useState(false);
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
+  const [lastScan, setLastScan] = useState<{
+    code: string;
+    source: ScanSource;
+  } | null>(null);
   const [quickItemGroup, setQuickItemGroup] = useState(QUICK_ITEM_GROUPS[0]?.id || "fried");
 
   const [taxRatePercent, setTaxRatePercent] = useState(DEFAULT_TAX_RATE_PERCENT);
   const [globalDiscount, setGlobalDiscount] = useState(0);
   const [page, setPage] = useState(1);
   const lastAutoScanRef = useRef("");
+  const scanInFlightRef = useRef(false);
+  const scannerBufferRef = useRef("");
+  const scannerLastKeyAtRef = useRef(0);
+  const scannerResetTimerRef = useRef<number | null>(null);
+  const hardwareScanHandlerRef = useRef<(barcode: string) => void>(() => {});
 
   const canEditDiscount = staffRole === "supervise";
   const isLoggedIn = !!staffId.trim();
@@ -869,6 +884,7 @@ export default function RegisterPOSPage() {
       }
 
       if (isTyping) return;
+      if (scannerBufferRef.current) return;
 
       if (e.key.toLowerCase() === "p") openPayment();
       if (e.key === "Delete" && cart.length) clearCart();
@@ -877,6 +893,75 @@ export default function RegisterPOSPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [cart, staffId, staffRole]);
+
+  /**
+   * USB/Bluetooth barcode scanners on iPad and Android tablets normally act
+   * like a very fast keyboard and finish the value with Enter. This listener
+   * keeps scanning available even when the barcode input has lost focus.
+   */
+  useEffect(() => {
+    if (!isLoggedIn || cameraScannerOpen) return;
+
+    const resetBuffer = () => {
+      scannerBufferRef.current = "";
+      scannerLastKeyAtRef.current = 0;
+
+      if (scannerResetTimerRef.current !== null) {
+        window.clearTimeout(scannerResetTimerRef.current);
+        scannerResetTimerRef.current = null;
+      }
+    };
+
+    const onHardwareScannerKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+
+      const target = event.target as HTMLElement | null;
+      const isEditable =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+
+      // The main scan input already handles scanner input and Enter itself.
+      if (isEditable) return;
+
+      if (event.key === "Enter") {
+        const barcode = scannerBufferRef.current.trim();
+        resetBuffer();
+
+        if (barcode.length >= 4) {
+          event.preventDefault();
+          hardwareScanHandlerRef.current(barcode);
+        }
+        return;
+      }
+
+      if (event.key.length !== 1) return;
+
+      const now = performance.now();
+      const elapsed = now - scannerLastKeyAtRef.current;
+
+      // A pause means this is normal typing, so start a fresh scanner packet.
+      if (scannerLastKeyAtRef.current && elapsed > 100) {
+        scannerBufferRef.current = "";
+      }
+
+      scannerBufferRef.current += event.key;
+      scannerLastKeyAtRef.current = now;
+
+      if (scannerResetTimerRef.current !== null) {
+        window.clearTimeout(scannerResetTimerRef.current);
+      }
+
+      scannerResetTimerRef.current = window.setTimeout(resetBuffer, 180);
+    };
+
+    window.addEventListener("keydown", onHardwareScannerKey, true);
+    return () => {
+      window.removeEventListener("keydown", onHardwareScannerKey, true);
+      resetBuffer();
+    };
+  }, [isLoggedIn, cameraScannerOpen]);
 
   useEffect(() => {
     const raw = query.trim();
@@ -1338,13 +1423,20 @@ export default function RegisterPOSPage() {
     return false;
   }
 
-  async function handleScanOrSearch() {
+  async function processProductCode(
+    rawValue: string,
+    source: ScanSource,
+    allowNameSearch = false
+  ) {
     if (!requireStaff()) return;
 
-    const raw = query.trim();
+    const raw = rawValue.trim();
     if (!raw) return;
+    if (scanInFlightRef.current) return;
 
+    scanInFlightRef.current = true;
     setScanLoading(true);
+    setLastScan({ code: raw, source });
 
     try {
       const normalizedRaw = raw.toLowerCase();
@@ -1366,7 +1458,7 @@ export default function RegisterPOSPage() {
       if (byBarcodeOrSku) {
         if (addToCart(byBarcodeOrSku)) {
           setQuery("");
-          focusScanner();
+          window.setTimeout(focusScanner, 80);
         }
         return;
       }
@@ -1388,35 +1480,55 @@ export default function RegisterPOSPage() {
 
         if (addToCart(productFromServer)) {
           setQuery("");
-          focusScanner();
+          window.setTimeout(focusScanner, 80);
         }
 
         return;
       }
 
-      const byName = catalog.find((p) => p.name.toLowerCase() === normalizedRaw);
+      if (!allowNameSearch) {
+        toast.error(`Barcode not found: ${raw}`);
+        return;
+      }
+
+      const byName = catalog.find(
+        (p) => p.name.toLowerCase() === normalizedRaw
+      );
 
       if (byName) {
         if (addToCart(byName)) {
           setQuery("");
-          focusScanner();
+          window.setTimeout(focusScanner, 80);
         }
         return;
       }
 
-      if (nameHints[0]) {
-        if (addToCart(nameHints[0])) {
+      const firstNameHint = catalog.find((p) =>
+        p.name.toLowerCase().includes(normalizedRaw)
+      );
+
+      if (firstNameHint) {
+        if (addToCart(firstNameHint)) {
           setQuery("");
-          focusScanner();
+          window.setTimeout(focusScanner, 80);
         }
         return;
       }
 
       toast.error(`Barcode not found: ${raw}`);
     } finally {
+      scanInFlightRef.current = false;
       setScanLoading(false);
     }
   }
+
+  async function handleScanOrSearch() {
+    await processProductCode(query, "manual", true);
+  }
+
+  hardwareScanHandlerRef.current = (barcode: string) => {
+    void processProductCode(barcode, "hardware");
+  };
 
   function addQuickItem(product: Product) {
     if (addToCart(product)) {
@@ -2223,6 +2335,16 @@ export default function RegisterPOSPage() {
                         ))}
 
                         <Button
+                          type="button"
+                          onClick={() => setCameraScannerOpen(true)}
+                          disabled={productsLoading || scanLoading}
+                          className="h-12 min-w-[148px] rounded-2xl bg-gradient-to-r from-violet-500 to-sky-500 font-bold text-white shadow-[0_0_30px_-14px_rgba(56,189,248,0.95)] hover:from-violet-400 hover:to-sky-400"
+                        >
+                          <Camera className="mr-2 h-5 w-5" />
+                          Camera Scan
+                        </Button>
+
+                        <Button
                           variant="outline"
                           onClick={() => void loadOwnerProducts()}
                           disabled={productsLoading}
@@ -2312,6 +2434,27 @@ export default function RegisterPOSPage() {
                             </button>
                           ))}
                         </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-xs font-semibold text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-300">
+                        <Keyboard className="h-4 w-4" />
+                        USB / Bluetooth scanner ready
+                      </span>
+                      <span className="hidden sm:inline">Scanner မရှိလျှင် Camera Scan ကိုသုံးပါ</span>
+                      {lastScan && (
+                        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-sky-600 dark:text-sky-300">
+                          <ScanLine className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">
+                            {lastScan.source === "camera"
+                              ? "Camera"
+                              : lastScan.source === "hardware"
+                              ? "Scanner"
+                              : "Manual"}{" "}
+                            · {lastScan.code}
+                          </span>
+                        </span>
                       )}
                     </div>
                   </div>
@@ -2670,6 +2813,19 @@ export default function RegisterPOSPage() {
               money={money}
             />
 
+            {cameraScannerOpen && (
+              <CameraBarcodeScanner
+                onClose={() => {
+                  setCameraScannerOpen(false);
+                  window.setTimeout(focusScanner, 120);
+                }}
+                onDetected={(barcode) => {
+                  setCameraScannerOpen(false);
+                  void processProductCode(barcode, "camera");
+                }}
+              />
+            )}
+
             <POSActionsDialog
               open={actionsOpen}
               setOpen={setActionsOpen}
@@ -2696,6 +2852,144 @@ export default function RegisterPOSPage() {
             />
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CameraBarcodeScanner({
+  onClose,
+  onDetected,
+}: {
+  onClose: () => void;
+  onDetected: (barcode: string) => void;
+}) {
+  const [cameraError, setCameraError] = useState("");
+  const detectedRef = useRef(false);
+
+  const { ref } = useZxing({
+    constraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    },
+    timeBetweenDecodingAttempts: 120,
+    onDecodeResult(result) {
+      // react-zxing version အလိုက် Result#getText() သို့မဟုတ်
+      // DetectedBarcode.rawValue ပြန်လာနိုင်တာကြောင့် နှစ်မျိုးလုံး support လုပ်ထားသည်။
+      const decoded = result as unknown as {
+        rawValue?: string;
+        text?: string;
+        getText?: () => string;
+      };
+      const barcode = clean(
+        typeof decoded.getText === "function"
+          ? decoded.getText()
+          : decoded.rawValue ?? decoded.text ?? ""
+      );
+      if (!barcode || detectedRef.current) return;
+
+      detectedRef.current = true;
+      navigator.vibrate?.(80);
+      onDetected(barcode);
+    },
+    onError(error) {
+      const errorName = error instanceof Error ? error.name : "";
+
+      // These are normal frame-by-frame decoder misses, not camera failures.
+      if (/NotFound|Checksum|Format/i.test(errorName)) return;
+
+      setCameraError(
+        errorName === "NotAllowedError"
+          ? "Camera permission ပိတ်ထားပါတယ်။ Browser Settings မှာ Camera ကို Allow လုပ်ပါ။"
+          : "Camera ဖွင့်မရပါ။ HTTPS, camera permission နှင့် အခြား app က camera သုံးနေခြင်းကို စစ်ပါ။"
+      );
+    },
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Camera barcode scanner"
+      className="fixed inset-0 z-[100] flex min-h-[100dvh] flex-col bg-slate-950 text-white"
+      style={{
+        paddingTop: "max(12px, env(safe-area-inset-top))",
+        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+        paddingLeft: "max(12px, env(safe-area-inset-left))",
+        paddingRight: "max(12px, env(safe-area-inset-right))",
+      }}
+    >
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 pb-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-lg font-black sm:text-xl">
+            <Camera className="h-5 w-5 text-sky-400" />
+            Camera Barcode Scan
+          </div>
+          <p className="mt-1 truncate text-xs text-slate-300 sm:text-sm">
+            Barcode ကို ဘောင်အလယ်မှာထားပါ — ဖတ်ပြီးတာနဲ့ cart ထဲ အလိုအလျောက်ထည့်ပါမယ်။
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 transition hover:bg-white/20 active:scale-95"
+          aria-label="Close camera"
+        >
+          <X className="h-6 w-6" />
+        </button>
+      </div>
+
+      <div className="relative mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-hidden rounded-3xl border border-white/15 bg-black shadow-2xl">
+        <video
+          ref={ref}
+          autoPlay
+          muted
+          playsInline
+          className="h-full w-full object-cover"
+        />
+
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(2,6,23,.40),transparent_25%,transparent_75%,rgba(2,6,23,.55))]" />
+        <div className="pointer-events-none absolute left-1/2 top-1/2 aspect-[2.3/1] w-[86%] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-3xl border-2 border-sky-300 shadow-[0_0_0_9999px_rgba(2,6,23,.24),0_0_34px_rgba(56,189,248,.75)]">
+          <span className="absolute left-4 top-4 h-8 w-8 rounded-tl-xl border-l-4 border-t-4 border-white" />
+          <span className="absolute right-4 top-4 h-8 w-8 rounded-tr-xl border-r-4 border-t-4 border-white" />
+          <span className="absolute bottom-4 left-4 h-8 w-8 rounded-bl-xl border-b-4 border-l-4 border-white" />
+          <span className="absolute bottom-4 right-4 h-8 w-8 rounded-br-xl border-b-4 border-r-4 border-white" />
+          <span className="absolute left-[8%] right-[8%] top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent shadow-[0_0_14px_rgba(125,211,252,1)]" />
+        </div>
+
+        {cameraError && (
+          <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-300/30 bg-red-950/90 p-4 text-sm font-semibold leading-6 text-red-100 backdrop-blur">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
+              <span>{cameraError}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-2 pt-3 text-center text-xs font-semibold text-slate-300 sm:text-sm">
+        <ScanLine className="h-4 w-4 text-sky-400" />
+        Rear camera ကိုသုံးထားပါတယ် · Safari / Chrome Camera permission လိုအပ်ပါတယ်
       </div>
     </div>
   );
