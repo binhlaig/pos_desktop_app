@@ -1,6 +1,4 @@
-
 "use client";
-
 import Link from "next/link";
 import {
   useCallback,
@@ -48,7 +46,6 @@ import {
   Users,
   Utensils,
 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -58,16 +55,13 @@ import {
   supermarketRoutes,
 } from "@/lib/business-type";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
-
 type BusinessType =
   | "SUPERMARKET"
   | "RESTAURANT"
   | "FASHION"
   | "FRUIT"
   | "BOTH";
-
 type RangeDays = 1 | 7 | 30;
-
 type DashboardProduct = {
   id: number | string;
   name?: string | null;
@@ -79,7 +73,6 @@ type DashboardProduct = {
   quantity?: number | string | null;
   stock?: number | string | null;
 };
-
 type DashboardReceipt = {
   id: number | string;
   receiptNo?: string | null;
@@ -95,7 +88,6 @@ type DashboardReceipt = {
   staffName?: string | null;
   staff_name?: string | null;
 };
-
 type DashboardTicket = {
   id: number;
   ticketNo?: string | null;
@@ -105,12 +97,10 @@ type DashboardTicket = {
   createdAt?: string | null;
   items?: { id: number; quantity?: number | null; status?: string | null }[];
 };
-
 type DashboardTable = {
   id: number;
   status?: string | null;
 };
-
 type DashboardOrder = {
   id: number;
   orderNo?: string | null;
@@ -126,13 +116,11 @@ type DashboardOrder = {
   staffName?: string | null;
   staff_name?: string | null;
 };
-
 type RestaurantLiveData = {
   tickets: DashboardTicket[];
   tables: DashboardTable[];
   orders: DashboardOrder[];
 };
-
 type RestaurantMetrics = {
   todaySales: number;
   todayOrders: number;
@@ -144,7 +132,6 @@ type RestaurantMetrics = {
   readyTickets: number;
   activeKitchenTickets: number;
 };
-
 type SalesPoint = {
   key: string;
   day: string;
@@ -152,7 +139,6 @@ type SalesPoint = {
   sales: number;
   transactions: number;
 };
-
 type RecentSale = {
   id: string;
   number: string;
@@ -162,8 +148,6 @@ type RecentSale = {
   createdAt: string | null;
   href: string;
 };
-
-
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const RESTAURANT_REFRESH_MS = 10_000;
@@ -180,19 +164,15 @@ const TOKEN_KEYS = [
 ] as const;
 const STOCK_COLORS = ["#16a34a", "#f59e0b", "#ef4444"];
 const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
-
 type BrandColors = { name: string; primary: string; accent: string };
-
 const DEFAULT_BRAND_COLORS: BrandColors = {
   name: "Binhlaig",
   primary: "#0B1F3A",
   accent: "#D4A017",
 };
-
 function isHexColor(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 }
-
 function getStoredBrandColors(): BrandColors {
   if (typeof window === "undefined") return DEFAULT_BRAND_COLORS;
   try {
@@ -205,17 +185,14 @@ function getStoredBrandColors(): BrandColors {
   }
   return DEFAULT_BRAND_COLORS;
 }
-
 function applyBrandColors(colors: BrandColors) {
   if (typeof document === "undefined") return;
-
   const root = document.documentElement;
   root.style.setProperty("--brand-primary", colors.primary);
   root.style.setProperty("--brand-accent", colors.accent);
   root.style.setProperty("--dashboard-primary", colors.primary);
   root.style.setProperty("--dashboard-accent", colors.accent);
 }
-
 function getAccessToken() {
   if (typeof window === "undefined") return null;
   const ownerToken = getStoredOwnerToken()?.trim();
@@ -226,17 +203,14 @@ function getAccessToken() {
   }
   return null;
 }
-
 function authorizationValue(token: string) {
   return token.startsWith("Bearer ") ? token : `Bearer ${token}`;
 }
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
 }
-
 function unwrapList<T>(value: unknown): T[] {
   if (Array.isArray(value)) return value as T[];
   const root = asRecord(value);
@@ -254,14 +228,12 @@ function unwrapList<T>(value: unknown): T[] {
   const nestedList = nested.content || nested.items || nested.data;
   return Array.isArray(nestedList) ? (nestedList as T[]) : [];
 }
-
 async function apiError(response: Response, fallback: string) {
   const body = asRecord(await response.clone().json().catch(() => null));
   if (typeof body.message === "string" && body.message.trim()) return body.message;
   if (typeof body.error === "string" && body.error.trim()) return body.error;
   return (await response.text().catch(() => "")) || fallback;
 }
-
 async function fetchDashboardList<T>(path: string, token: string, label: string) {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: authorizationValue(token) },
@@ -272,20 +244,16 @@ async function fetchDashboardList<T>(path: string, token: string, label: string)
   }
   return unwrapList<T>(await response.json().catch(() => []));
 }
-
 function numericValue(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
-
 function statusOf(value?: string | null) {
   return String(value || "NEW").trim().toUpperCase();
 }
-
 function isPaid(value?: string | null) {
   return ["PAID", "COMPLETED", "SUCCESS"].includes(statusOf(value));
 }
-
 function isToday(value?: string | null) {
   if (!value) return false;
   const date = new Date(value);
@@ -297,94 +265,77 @@ function isToday(value?: string | null) {
     date.getDate() === today.getDate()
   );
 }
-
 function dateOf(value?: string | null) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
-
 function dayKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
-
 function chartPointKey(date: Date, days: RangeDays) {
   if (days === 1) {
     return `${dayKey(date)}-${String(date.getHours()).padStart(2, "0")}`;
   }
-
   return dayKey(date);
 }
-
 function formatMoney(value: number) {
   return `${new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
   }).format(value)} ကျပ်`;
 }
-
 function compactMoney(value: number) {
   if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)}K`;
   return String(Math.round(value));
 }
-
 function formatTime(value?: string | null) {
   const date = dateOf(value);
   return date
     ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "--:--";
 }
-
 function formatDateTime(value?: string | null) {
   const date = dateOf(value);
   return date
     ? date.toLocaleString("my-MM", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
     : "—";
 }
-
 function elapsedMinutes(value?: string | null) {
   const date = dateOf(value);
   return date ? Math.max(0, Math.floor((Date.now() - date.getTime()) / 60_000)) : 0;
 }
-
 function productName(product: DashboardProduct) {
   return product.productName || product.product_name || product.name || `ကုန်ပစ္စည်း ${product.id}`;
 }
-
 function productQuantity(product: DashboardProduct) {
   return numericValue(
     product.productQuantityAmount ??
-      product.product_quantity_amount ??
-      product.quantity ??
-      product.stock,
+    product.product_quantity_amount ??
+    product.quantity ??
+    product.stock,
   );
 }
-
 function receiptCreatedAt(receipt: DashboardReceipt) {
   return receipt.createdAt || receipt.created_at || null;
 }
-
 function receiptTotal(receipt: DashboardReceipt) {
   return numericValue(receipt.grandTotal ?? receipt.grand_total ?? receipt.total);
 }
-
 function receiptNumber(receipt: DashboardReceipt) {
   return receipt.receiptNo || receipt.receipt_no || `R-${receipt.id}`;
 }
-
 function orderCreatedAt(order: DashboardOrder) {
   return order.createdAt || order.created_at || null;
 }
-
 function orderTotal(order: DashboardOrder) {
   return numericValue(order.grandTotal ?? order.grand_total ?? order.total);
 }
-
 function normalizeBusinessType(value?: string | null): BusinessType {
   const upper = value?.toUpperCase();
   if (upper === "RESTAURANT") return "RESTAURANT";
@@ -393,23 +344,20 @@ function normalizeBusinessType(value?: string | null): BusinessType {
   if (upper === "BOTH") return "BOTH";
   return "SUPERMARKET";
 }
-
 function getBusinessTypeFromStorage(): BusinessType {
   if (typeof window === "undefined") return "SUPERMARKET";
   return normalizeBusinessType(
     localStorage.getItem("business_type") ||
-      localStorage.getItem("businessType") ||
-      localStorage.getItem("pos_business_type"),
+    localStorage.getItem("businessType") ||
+    localStorage.getItem("pos_business_type"),
   );
 }
-
 function getTitle(type: BusinessType) {
   if (type === "RESTAURANT") return "စားသောက်ဆိုင် အခြေအနေအကျဉ်း";
   if (type === "FASHION") return "ဖက်ရှင်ဆိုင် အခြေအနေအကျဉ်း";
   if (type === "BOTH") return "လုပ်ငန်း အခြေအနေအကျဉ်း";
   return "စူပါမားကတ် အခြေအနေအကျဉ်း";
 }
-
 function businessTypeLabel(type: BusinessType) {
   if (type === "RESTAURANT") return "စားသောက်ဆိုင်";
   if (type === "FASHION") return "ဖက်ရှင်ဆိုင်";
@@ -417,7 +365,6 @@ function businessTypeLabel(type: BusinessType) {
   if (type === "BOTH") return "လုပ်ငန်းအားလုံး";
   return "စူပါမားကတ်";
 }
-
 function statusLabel(value?: string | null) {
   const status = statusOf(value);
   const labels: Record<string, string> = {
@@ -432,16 +379,13 @@ function statusLabel(value?: string | null) {
   };
   return labels[status] || status;
 }
-
 function emptySalesSeries(days: RangeDays) {
   if (days === 1) {
     const today = new Date();
     today.setMinutes(0, 0, 0);
-
     return Array.from({ length: 24 }, (_, hour) => {
       const date = new Date(today);
       date.setHours(hour, 0, 0, 0);
-
       return {
         key: chartPointKey(date, days),
         day: `${String(hour).padStart(2, "0")}:00`,
@@ -451,7 +395,6 @@ function emptySalesSeries(days: RangeDays) {
       } satisfies SalesPoint;
     });
   }
-
   return Array.from({ length: days }, (_, index) => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
@@ -468,7 +411,6 @@ function emptySalesSeries(days: RangeDays) {
     } satisfies SalesPoint;
   });
 }
-
 function StatCard({
   label,
   value,
@@ -490,7 +432,6 @@ function StatCard({
     amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
   };
-
   return (
     <Card className="border-border/60 bg-card shadow-sm">
       <CardContent className="p-4 sm:p-5">
@@ -511,7 +452,6 @@ function StatCard({
     </Card>
   );
 }
-
 function EmptyState({ icon: Icon, title }: { icon: ElementType; title: string }) {
   return (
     <div className="grid min-h-48 place-items-center p-6 text-center">
@@ -522,7 +462,6 @@ function EmptyState({ icon: Icon, title }: { icon: ElementType; title: string })
     </div>
   );
 }
-
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [brandColors, setBrandColors] = useState<BrandColors>(DEFAULT_BRAND_COLORS);
@@ -543,7 +482,6 @@ export default function DashboardPage() {
   const [restaurantRefreshing, setRestaurantRefreshing] = useState(false);
   const [restaurantError, setRestaurantError] = useState("");
   const [restaurantUpdatedAt, setRestaurantUpdatedAt] = useState<Date | null>(null);
-
   const loadBusinessData = useCallback(async (silent = false) => {
     silent ? setBusinessRefreshing(true) : setBusinessLoading(true);
     try {
@@ -575,7 +513,6 @@ export default function DashboardPage() {
       setBusinessRefreshing(false);
     }
   }, []);
-
   const loadRestaurantData = useCallback(async (silent = false) => {
     silent ? setRestaurantRefreshing(true) : setRestaurantLoading(true);
     try {
@@ -613,7 +550,6 @@ export default function DashboardPage() {
       setRestaurantRefreshing(false);
     }
   }, []);
-
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setMounted(true);
@@ -623,39 +559,32 @@ export default function DashboardPage() {
     applyBrandColors(storedColors);
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
-
   useEffect(() => {
     const syncBrandColors = (colors: BrandColors) => {
       if (!isHexColor(colors.primary) || !isHexColor(colors.accent)) return;
       setBrandColors(colors);
       applyBrandColors(colors);
     };
-
     const handleBrandColorChange = (event: Event) => {
       const colors = (event as CustomEvent<BrandColors>).detail;
       if (colors) syncBrandColors(colors);
     };
-
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === BRAND_COLOR_STORAGE_KEY) {
         syncBrandColors(getStoredBrandColors());
       }
     };
-
     window.addEventListener("brand-colors-changed", handleBrandColorChange);
     window.addEventListener("storage", handleStorageChange);
-
     return () => {
       window.removeEventListener("brand-colors-changed", handleBrandColorChange);
       window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
-
   useEffect(() => {
     if (!mounted) return;
     if (businessType !== "RESTAURANT") void loadBusinessData();
   }, [businessType, loadBusinessData, mounted]);
-
   useEffect(() => {
     if (!mounted || (businessType !== "RESTAURANT" && businessType !== "BOTH")) return;
     void loadRestaurantData();
@@ -669,7 +598,6 @@ export default function DashboardPage() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [businessType, loadRestaurantData, mounted]);
-
   const restaurantMetrics = useMemo<RestaurantMetrics>(() => {
     const todayOrders = restaurantData.orders.filter((order) => isToday(orderCreatedAt(order)));
     const newTickets = restaurantData.tickets.filter((ticket) => statusOf(ticket.status) === "NEW").length;
@@ -693,7 +621,6 @@ export default function DashboardPage() {
       activeKitchenTickets: newTickets + cookingTickets + readyTickets,
     };
   }, [restaurantData]);
-
   const paidReceipts = useMemo(() => receipts.filter((receipt) => isPaid(receipt.status)), [receipts]);
   const todayReceipts = useMemo(
     () => paidReceipts.filter((receipt) => isToday(receiptCreatedAt(receipt))),
@@ -703,7 +630,6 @@ export default function DashboardPage() {
     (businessType === "RESTAURANT" || businessType === "BOTH" ? restaurantMetrics.todaySales : 0);
   const todayTransactions = todayReceipts.length +
     (businessType === "RESTAURANT" || businessType === "BOTH" ? restaurantMetrics.todayOrders : 0);
-
   const stockCounts = useMemo(() => {
     let inStock = 0;
     let lowStock = 0;
@@ -718,7 +644,6 @@ export default function DashboardPage() {
     }
     return { inStock, lowStock, outOfStock, totalUnits };
   }, [products]);
-
   const stockData = useMemo(
     () => [
       { name: "လက်ကျန်ရှိ", value: stockCounts.inStock },
@@ -727,7 +652,6 @@ export default function DashboardPage() {
     ],
     [stockCounts],
   );
-
   const salesData = useMemo(() => {
     const series = emptySalesSeries(rangeDays);
     const byKey = new Map(series.map((point) => [point.key, point]));
@@ -755,10 +679,8 @@ export default function DashboardPage() {
     }
     return series;
   }, [businessType, paidReceipts, rangeDays, restaurantData.orders]);
-
   const rangeSales = salesData.reduce((sum, point) => sum + point.sales, 0);
   const rangeTransactions = salesData.reduce((sum, point) => sum + point.transactions, 0);
-
   const paymentSummary = useMemo(() => {
     const totals = { CASH: 0, CARD: 0, WALLET: 0 };
     for (const receipt of todayReceipts) {
@@ -775,7 +697,6 @@ export default function DashboardPage() {
     }
     return totals;
   }, [businessType, restaurantData.orders, todayReceipts]);
-
   const lowStockProducts = useMemo(
     () =>
       [...products]
@@ -784,7 +705,6 @@ export default function DashboardPage() {
         .slice(0, 5),
     [products],
   );
-
   const activeRestaurantTickets = useMemo(
     () =>
       restaurantData.tickets
@@ -793,7 +713,6 @@ export default function DashboardPage() {
         .slice(0, 5),
     [restaurantData.tickets],
   );
-
   const recentSales = useMemo<RecentSale[]>(() => {
     const supermarketSales = paidReceipts.map((receipt) => ({
       id: `receipt-${receipt.id}`,
@@ -824,7 +743,6 @@ export default function DashboardPage() {
       .sort((a, b) => (dateOf(b.createdAt)?.getTime() || 0) - (dateOf(a.createdAt)?.getTime() || 0))
       .slice(0, 6);
   }, [businessType, paidReceipts, restaurantData.orders]);
-
   const quickActions = useMemo(() => {
     if (businessType === "BOTH") {
       return [
@@ -865,12 +783,10 @@ export default function DashboardPage() {
       { label: "ဆက်တင်များ", href: "/dashboard/settings", icon: Settings },
     ];
   }, [businessType]);
-
   const refreshAll = useCallback(() => {
     if (businessType !== "RESTAURANT") void loadBusinessData(true);
     if (businessType === "RESTAURANT" || businessType === "BOTH") void loadRestaurantData(true);
   }, [businessType, loadBusinessData, loadRestaurantData]);
-
   const exportReport = useCallback(() => {
     const rows = [
       ["ရက်စွဲ", "အရောင်းရငွေ (ကျပ်)", "ငွေရှင်းမှတ်တမ်း"],
@@ -888,7 +804,6 @@ export default function DashboardPage() {
     anchor.click();
     URL.revokeObjectURL(url);
   }, [rangeDays, salesData]);
-
   const dashboardLoading = businessLoading || restaurantLoading;
   const dashboardRefreshing = businessRefreshing || restaurantRefreshing;
   const updatedAt = [businessUpdatedAt, restaurantUpdatedAt]
@@ -899,14 +814,13 @@ export default function DashboardPage() {
   const dateRangeLabel =
     rangeDays === 1
       ? new Date().toLocaleDateString("my-MM", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
       : salesData.length
         ? `${salesData[0].date} – ${salesData[salesData.length - 1].date}`
         : "—";
-
   /*
    * Date labels and Recharts depend on the browser locale/time zone.
    * Render a deterministic shell during SSR and the first client render,
@@ -934,7 +848,6 @@ export default function DashboardPage() {
       </main>
     );
   }
-
   return (
     <main className="min-h-screen bg-muted/30 p-3 text-foreground sm:p-5 lg:p-6">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-4">
@@ -948,7 +861,6 @@ export default function DashboardPage() {
               အရောင်း၊ ငွေရှင်းမှတ်တမ်း၊ ကုန်လက်ကျန်နှင့် လုပ်ငန်းအခြေအနေများကို တစ်နေရာတည်းတွင် ကြည့်ရှုနိုင်သည်။
             </p>
           </div>
-
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-xl border border-border bg-background p-1">
               {([1, 7, 30] as RangeDays[]).map((days) => (
@@ -956,11 +868,10 @@ export default function DashboardPage() {
                   key={days}
                   type="button"
                   onClick={() => setRangeDays(days)}
-                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    rangeDays === days
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${rangeDays === days
                       ? "bg-[var(--brand-primary)] text-white shadow-sm dark:bg-[var(--brand-accent)] dark:text-slate-950"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   {days === 1 ? "ဒီနေ့" : days === 7 ? "၇ ရက်" : "ဒီလ"}
                 </button>
@@ -983,14 +894,12 @@ export default function DashboardPage() {
             </Button>
           </div>
         </section>
-
         {displayError && (
           <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <span>{displayError}</span>
           </div>
         )}
-
         <Card className="overflow-hidden border-0 text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${brandColors.primary} 0%, color-mix(in srgb, ${brandColors.primary} 86%, black) 100%)`, boxShadow: `0 12px 28px color-mix(in srgb, ${brandColors.primary} 22%, transparent)` }}>
           <CardContent className="p-0">
             <div className="flex flex-col gap-3 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1038,7 +947,6 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="ယနေ့အရောင်း" value={formatMoney(todaySales)} helper={`ငွေရှင်းပြီး ${todayTransactions} ခု`} icon={Banknote} tone="navy" loading={dashboardLoading} />
           <StatCard label="ငွေရှင်းမှတ်တမ်း" value={todayTransactions.toLocaleString()} helper={`ရွေးထားသောကာလအတွင်း ${rangeTransactions} ခု`} icon={Receipt} tone="blue" loading={dashboardLoading} />
@@ -1053,7 +961,6 @@ export default function DashboardPage() {
             <StatCard label="မီးဖိုချောင်စာရင်း" value={restaurantMetrics.activeKitchenTickets.toLocaleString()} helper={`ဝန်ဆောင်ရန်အဆင်သင့် ${restaurantMetrics.readyTickets} ခု`} icon={Coffee} tone="amber" loading={dashboardLoading} />
           )}
         </section>
-
         <section className="grid gap-4 xl:grid-cols-[1.05fr_1fr_0.9fr]">
           <Card className="border-border/60 shadow-sm">
             <CardContent className="p-5">
@@ -1106,12 +1013,14 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-
           <Card className="border-border/60 shadow-sm">
             <CardContent className="p-0">
               <div className="flex items-center justify-between border-b border-border/60 p-5">
                 <div><h3 className="font-semibold">လတ်တလောလုပ်ဆောင်မှုများ</h3><p className="mt-1 text-xs text-muted-foreground">အရောင်းနှင့် ကုန်လက်ကျန်ပြောင်းလဲမှုများ</p></div>
-                <Button asChild variant="ghost" size="sm"><Link href={businessType === "RESTAURANT" ? restaurantRoutes.orders : supermarketRoutes.receipts}>အားလုံးကြည့်ရန်</Link></Button>
+                <Link
+                  href={businessType === "RESTAURANT" ? restaurantRoutes.orders : supermarketRoutes.receipts}
+                  className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >အားလုံးကြည့်ရန်</Link>
               </div>
               <div className="divide-y divide-border/60">
                 {recentSales.slice(0, 3).map((sale) => (
@@ -1132,31 +1041,42 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
-
           <Card className="border-border/60 shadow-sm">
             <CardContent className="p-5">
               <h3 className="font-semibold">အမြန်လုပ်ဆောင်ရန်</h3>
-              <p className="mt-1 text-xs text-muted-foreground">အသုံးများသော စီမံခန့်ခွဲမှုလင့်ခ်များ</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                အသုံးများသော စီမံခန့်ခွဲမှုလင့်ခ်များ
+              </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {quickActions.map((action) => {
                   const Icon = action.icon;
                   return (
-                    <Button key={`${action.label}-${action.href}`} asChild variant="outline" className="h-20 flex-col gap-2 rounded-xl text-xs">
-                      <Link href={action.href}><Icon className="size-5 text-[var(--brand-primary)] dark:text-[var(--brand-accent)]" />{action.label}</Link>
-                    </Button>
+                    <Link
+                      key={`${action.label}-${action.href}`}
+                      href={action.href}
+                      className="flex h-20 flex-col items-center justify-center gap-2 rounded-xl border border-input bg-background px-3 text-center text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Icon
+                        aria-hidden="true"
+                        className="size-5 text-[var(--brand-primary)] dark:text-[var(--brand-accent)]"
+                      />
+                      <span>{action.label}</span>
+                    </Link>
                   );
                 })}
               </div>
             </CardContent>
           </Card>
         </section>
-
         <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
           <Card className="border-border/60 shadow-sm">
             <CardContent className="p-0">
               <div className="flex items-center justify-between border-b border-border/60 p-5">
                 <div><h3 className="font-semibold">လတ်တလောအရောင်းများ</h3><p className="mt-1 text-xs text-muted-foreground">နောက်ဆုံးငွေရှင်းထားသော ဘောင်ချာနှင့်အော်ဒါများ</p></div>
-                <Button asChild variant="outline" size="sm" className="rounded-lg"><Link href={businessType === "RESTAURANT" ? restaurantRoutes.orders : supermarketRoutes.receipts}>အားလုံးကြည့်ရန်</Link></Button>
+                <Link
+                  href={businessType === "RESTAURANT" ? restaurantRoutes.orders : supermarketRoutes.receipts}
+                  className="inline-flex h-8 items-center justify-center rounded-lg border border-input bg-background px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >အားလုံးကြည့်ရန်</Link>
               </div>
               {recentSales.length === 0 ? (
                 <EmptyState icon={Receipt} title="ငွေရှင်းပြီးသောအရောင်း မရှိသေးပါ" />
@@ -1180,7 +1100,6 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-
           <Card className="border-border/60 shadow-sm">
             <CardContent className="p-5">
               <h3 className="font-semibold">ယနေ့ငွေပေးချေမှုအကျဉ်း</h3>
@@ -1202,7 +1121,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </section>
-
         {(businessType === "RESTAURANT" || businessType === "BOTH") && (
           <Card className="overflow-hidden border-border/60 shadow-sm">
             <CardContent className="p-0">

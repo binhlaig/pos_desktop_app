@@ -1,6 +1,5 @@
 "use client";
-
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -32,16 +31,13 @@ import {
   Home,
 } from "lucide-react";
 import Link from "next/link";
-
 /* ====== Types & Keys ====== */
 type StaffRole = "staff" | "supervise";
-
 type Denom = {
   label: string;
   value: number; // JPY face value
   kind: "bill" | "coin";
 };
-
 type DrawerState = {
   counts: Record<number, number>; // face value -> qty
   notes?: string;
@@ -54,9 +50,7 @@ type DrawerState = {
     memo?: string;
   }>;
 };
-
 const CASH_KEY = "pos_cash_drawer_v1";
-
 /* Japan denominations (incl. ¥2000 note for rare cases) */
 const DENOMS: Denom[] = [
   { label: "¥10,000", value: 10000, kind: "bill" },
@@ -70,10 +64,8 @@ const DENOMS: Denom[] = [
   { label: "¥5", value: 5, kind: "coin" },
   { label: "¥1", value: 1, kind: "coin" },
 ];
-
 const jpy = (n: number) =>
   n.toLocaleString("ja-JP", { style: "currency", currency: "JPY" });
-
 /* ====== Helpers ====== */
 const loadDrawer = (): DrawerState => {
   try {
@@ -94,7 +86,6 @@ const loadDrawer = (): DrawerState => {
 const saveDrawer = (s: DrawerState) =>
   localStorage.setItem(CASH_KEY, JSON.stringify(s));
 const uid = () => Math.random().toString(36).slice(2, 10);
-
 const Glow = ({
   children,
   className = "",
@@ -127,7 +118,6 @@ const Glow = ({
     <div className="relative z-10">{children}</div>
   </motion.div>
 );
-
 const BeamBackground = () => (
   <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
     <div
@@ -156,9 +146,9 @@ const BeamBackground = () => (
     </div>
   </div>
 );
-
 /* ====== Page ====== */
 export default function RegisterCashPage() {
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [role, setRole] = useState<StaffRole>("staff");
   const isSupervisor = role === "supervise";
   const [drawer, setDrawer] = useState<DrawerState>({
@@ -166,14 +156,12 @@ export default function RegisterCashPage() {
     notes: "",
     tx: [],
   });
-
   /* load role + state */
   useEffect(() => {
     const r = (localStorage.getItem("pos_staff_role") as StaffRole) || "staff";
     setRole(r);
     setDrawer(loadDrawer());
   }, []);
-
   /* totals */
   const total = useMemo(() => {
     return DENOMS.reduce(
@@ -181,7 +169,6 @@ export default function RegisterCashPage() {
       0
     );
   }, [drawer.counts]);
-
   const billTotal = useMemo(
     () =>
       DENOMS.filter((d) => d.kind === "bill").reduce(
@@ -198,7 +185,6 @@ export default function RegisterCashPage() {
       ),
     [drawer.counts]
   );
-
   /* actions */
   const setQty = (den: number, qty: number) => {
     setDrawer((prev) => {
@@ -210,12 +196,10 @@ export default function RegisterCashPage() {
       return next;
     });
   };
-
   const nudge = (den: number, delta: number) => {
     const current = drawer.counts[den] || 0;
     setQty(den, current + delta);
   };
-
   const txAdd = (
     type: DrawerState["tx"][number]["type"],
     amount: number,
@@ -258,7 +242,6 @@ export default function RegisterCashPage() {
       return next;
     });
   };
-
   const exportJSON = () => {
     if (!isSupervisor) return toast.error("Supervisor only");
     const blob = new Blob([JSON.stringify(drawer, null, 2)], {
@@ -273,7 +256,6 @@ export default function RegisterCashPage() {
     a.remove();
     URL.revokeObjectURL(url);
   };
-
   const importJSON = async (file?: File) => {
     try {
       if (!file) return;
@@ -287,7 +269,6 @@ export default function RegisterCashPage() {
       toast.error("Invalid file");
     }
   };
-
   const resetAll = () => {
     if (!isSupervisor) return toast.error("Supervisor only");
     const fresh: DrawerState = { counts: {}, notes: "", tx: [] };
@@ -295,11 +276,9 @@ export default function RegisterCashPage() {
     saveDrawer(fresh);
     toast.success("Drawer reset");
   };
-
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
       <BeamBackground />
-
       <div className="mx-auto max-w-6xl px-4 md:px-6 py-6">
         <div className="mb-4 flex items-center gap-2">
           <Badge
@@ -307,7 +286,6 @@ export default function RegisterCashPage() {
             className="gap-1 rounded-full border border-white/10 bg-white/10"
           >
             <Home className="h-3.5 w-3.5" />
-
             <Link href="/dashboard/register" className="underline">
               Back to Home
             </Link>
@@ -326,7 +304,6 @@ export default function RegisterCashPage() {
             </Badge>
           </div>
         </div>
-
         {/* Top totals */}
         <Glow className="p-4 mb-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -343,7 +320,6 @@ export default function RegisterCashPage() {
             <Stat title="Coins" value={jpy(coinTotal)} icon={<CoinsIcon />} />
           </div>
         </Glow>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Denomination Counter */}
           {/* <Glow className="p-4 lg:col-span-2">
@@ -396,7 +372,6 @@ export default function RegisterCashPage() {
                             </div>
                         </CardContent>
                     </Glow> */}
-
           <Glow className="p-4 lg:col-span-2">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -499,7 +474,6 @@ export default function RegisterCashPage() {
               </div>
             </CardContent>
           </Glow>
-
           {/* Actions / Notes */}
           <div className="space-y-4">
             <Glow className="p-4">
@@ -525,7 +499,6 @@ export default function RegisterCashPage() {
                 />
               </CardContent>
             </Glow>
-
             <Glow className="p-4">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Notes</CardTitle>
@@ -546,7 +519,6 @@ export default function RegisterCashPage() {
                 />
               </CardContent>
             </Glow>
-
             <Glow className="p-4">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Admin</CardTitle>
@@ -584,24 +556,29 @@ export default function RegisterCashPage() {
                       </div>
                     </div>
                   </div>
-                  <label className="cursor-pointer">
-                    <span className="sr-only">Import</span>
-                    <Input
+                  <>
+                    <input
+                      ref={importInputRef}
                       type="file"
-                      accept="application/json"
-                      className="hidden"
+                      accept="application/json,.json"
+                      aria-label="Import drawer snapshot"
+                      className="sr-only"
                       disabled={!isSupervisor}
-                      onChange={(e) => importJSON(e.target.files?.[0])}
+                      onChange={(e) => {
+                        void importJSON(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
                     />
                     <Button
-                      asChild
+                      type="button"
                       variant="outline"
                       disabled={!isSupervisor}
                       className="rounded-full"
+                      onClick={() => importInputRef.current?.click()}
                     >
-                      <span>Choose File</span>
+                      Choose File
                     </Button>
-                  </label>
+                  </>
                 </div>
                 <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3">
                   <div className="flex items-center gap-2">
@@ -626,7 +603,6 @@ export default function RegisterCashPage() {
             </Glow>
           </div>
         </div>
-
         {/* Audit Log */}
         <Glow className="p-4 mt-4">
           <CardHeader className="pb-2">
@@ -665,7 +641,6 @@ export default function RegisterCashPage() {
             )}
           </CardContent>
         </Glow>
-
         <p className="mt-3 text-[11px] text-slate-400">
           * ဒီစာမျက်နှာက denomination count ကို Drawer Snapshot အနေနဲ့
           သိမ်းထားပြီး၊ Quick Actions တွေက audit log မှာသာ မှတ်တမ်းတင်ထားပါတယ်
@@ -675,7 +650,6 @@ export default function RegisterCashPage() {
     </div>
   );
 }
-
 /* ====== Small components ====== */
 function Stat({
   title,
@@ -696,7 +670,6 @@ function Stat({
     </div>
   );
 }
-
 function AmountAction({
   label,
   onConfirm,
@@ -708,7 +681,6 @@ function AmountAction({
 }) {
   const [amt, setAmt] = useState<string>("");
   const [memo, setMemo] = useState<string>("");
-
   return (
     <div
       className={`rounded-xl border p-3 ${
@@ -750,7 +722,6 @@ function AmountAction({
     </div>
   );
 }
-
 function CoinsIcon() {
   return (
     <svg

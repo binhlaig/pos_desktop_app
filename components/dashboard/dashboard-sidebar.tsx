@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,7 +8,6 @@ import {
   ChevronRight,
   LogOut,
 } from "lucide-react";
-
 import {
   type BusinessType,
   filterSidebarItemsByFeatures,
@@ -18,29 +16,23 @@ import {
 import { resolveCurrentBusinessType } from "@/components/dashboard/business-type-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
 type SidebarUser = {
   name: string;
   role: string;
   email: string;
 };
-
 const SIDEBAR_COLLAPSED_KEY = "binhlaig_dashboard_sidebar_collapsed";
-
 function textValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
-
 function formatBusinessType(type: BusinessType | null) {
   if (!type) return "Loading workspace";
-
   return String(type)
     .toLowerCase()
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
-
 function initials(name: string) {
   const result = name
     .split(/\s+/)
@@ -48,13 +40,10 @@ function initials(name: string) {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
-
   return result || "AD";
 }
-
 export function DashboardSidebar() {
   const pathname = usePathname();
-
   const [businessType, setBusinessType] =
     useState<BusinessType | null>(null);
   const [features, setFeatures] = useState<
@@ -66,7 +55,6 @@ export function DashboardSidebar() {
     role: "Admin",
     email: "",
   });
-
   const navItems = useMemo(
     () =>
       filterSidebarItemsByFeatures(
@@ -75,15 +63,12 @@ export function DashboardSidebar() {
       ),
     [businessType, features],
   );
-
   useEffect(() => {
     const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     setCollapsed(stored === "true");
   }, []);
-
   useEffect(() => {
     let active = true;
-
     resolveCurrentBusinessType()
       .then((type) => {
         if (active) setBusinessType(type);
@@ -91,11 +76,9 @@ export function DashboardSidebar() {
       .catch(() => {
         if (active) setBusinessType(null);
       });
-
     getSession()
       .then((session) => {
         if (!active) return;
-
         const sessionRecord =
           session && typeof session === "object"
             ? (session as unknown as Record<string, unknown>)
@@ -104,7 +87,6 @@ export function DashboardSidebar() {
           sessionRecord.user && typeof sessionRecord.user === "object"
             ? (sessionRecord.user as Record<string, unknown>)
             : {};
-
         const nextFeatures =
           userRecord.features && typeof userRecord.features === "object"
             ? (userRecord.features as Record<string, unknown>)
@@ -112,7 +94,6 @@ export function DashboardSidebar() {
                 typeof sessionRecord.features === "object"
               ? (sessionRecord.features as Record<string, unknown>)
               : null;
-
         setFeatures(nextFeatures);
         setUser({
           name:
@@ -131,12 +112,10 @@ export function DashboardSidebar() {
       .catch(() => {
         if (active) setFeatures(null);
       });
-
     return () => {
       active = false;
     };
   }, []);
-
   function changeCollapsed(nextValue: boolean) {
     setCollapsed(nextValue);
     window.localStorage.setItem(
@@ -144,7 +123,6 @@ export function DashboardSidebar() {
       String(nextValue),
     );
   }
-
   return (
     <aside
       className={cn(
@@ -196,7 +174,6 @@ export function DashboardSidebar() {
           >
             B
           </span>
-
           {!collapsed && (
             <span className="min-w-0">
               <span className="block truncate text-sm font-bold tracking-wide text-white">
@@ -208,7 +185,6 @@ export function DashboardSidebar() {
             </span>
           )}
         </Link>
-
         {!collapsed && (
           <Button
             type="button"
@@ -222,7 +198,6 @@ export function DashboardSidebar() {
           </Button>
         )}
       </div>
-
       {/* Open collapsed sidebar */}
       {collapsed && (
         <div className="flex shrink-0 justify-center border-b border-white/10 py-2.5">
@@ -238,7 +213,6 @@ export function DashboardSidebar() {
           </Button>
         </div>
       )}
-
       {/* Navigation */}
       <div
         className={cn(
@@ -251,7 +225,6 @@ export function DashboardSidebar() {
             Management
           </p>
         )}
-
         <nav className="space-y-1.5" aria-label="Dashboard navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -260,15 +233,15 @@ export function DashboardSidebar() {
               (item.href !== "/dashboard" &&
                 item.href !== "/dashboard/register" &&
                 pathname.startsWith(`${item.href}/`));
-
             return (
-              <Button
+              <Link
                 key={item.href}
-                variant="ghost"
-                asChild
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
                   `
-                    group relative h-11 overflow-hidden rounded-xl
+                    group relative flex h-11 items-center overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]
                     border border-transparent font-medium
                     transition-all duration-200
                   `,
@@ -287,11 +260,6 @@ export function DashboardSidebar() {
                     `,
                 )}
               >
-                <Link
-                  href={item.href}
-                  title={collapsed ? item.label : undefined}
-                  aria-current={isActive ? "page" : undefined}
-                >
                   <span
                     className={cn(
                       `
@@ -305,23 +273,19 @@ export function DashboardSidebar() {
                   >
                     <Icon className="size-[18px]"  />
                   </span>
-
                   {!collapsed && (
                     <span className="flex-1 truncate text-left text-[13px]">
                       {item.label}
                     </span>
                   )}
-
                   {!collapsed && isActive && (
                     <span className="size-1.5 shrink-0 rounded-full bg-slate-950" />
                   )}
-                </Link>
-              </Button>
+              </Link>
             );
           })}
         </nav>
       </div>
-
       {/* Account */}
       <div
         className={cn(
@@ -365,7 +329,6 @@ export function DashboardSidebar() {
                 </span>
               </span>
             </div>
-
             <Button
               type="button"
               variant="ghost"
