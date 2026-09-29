@@ -2466,7 +2466,16 @@ export default function RegisterPOSPage() {
                       <EmptyState />
                     ) : (
                       <>
-                        <div className="hidden shrink-0 grid-cols-[minmax(180px,1.5fr)_112px_96px_92px_112px_40px] border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground min-[1000px]:grid min-[1200px]:grid-cols-[minmax(220px,1.5fr)_124px_110px_104px_122px_42px]">
+                        {/* iPad landscape: price + discount stay inside Item so the
+                            quantity and remove controls remain large enough to tap. */}
+                        <div className="hidden shrink-0 grid-cols-[minmax(0,1fr)_170px_160px_56px] items-center border-b border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground min-[1000px]:grid xl:hidden">
+                          <div>Item</div>
+                          <div className="text-center">Qty</div>
+                          <div className="text-right">Total</div>
+                          <div />
+                        </div>
+
+                        <div className="hidden shrink-0 grid-cols-[minmax(220px,1.5fr)_124px_110px_104px_122px_42px] border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground xl:grid">
                           <div>Item</div>
                           <div className="text-center">Qty</div>
                           <div className="text-right">Price</div>
@@ -2475,64 +2484,88 @@ export default function RegisterPOSPage() {
                           <div />
                         </div>
 
-                        <div className="grid min-h-0 flex-1 grid-rows-[repeat(5,minmax(0,1fr))] overflow-hidden">
+                        <div className="grid min-h-0 flex-1 grid-rows-[repeat(5,minmax(0,1fr))] overflow-hidden min-[1000px]:block min-[1000px]:overflow-y-auto min-[1000px]:overscroll-contain xl:grid xl:overflow-hidden">
                           {pageSlice.map((line, index) => (
                             <motion.div
                               key={line.id}
                               initial={{ opacity: 0, y: 8, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               transition={{ delay: index * 0.025 }}
-                              className="group grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0 border-b border-border px-3 py-0.5 transition last:border-0 hover:bg-muted/30 md:px-4 min-[1000px]:grid-cols-[minmax(180px,1.5fr)_112px_96px_92px_112px_40px] min-[1000px]:gap-1.5 min-[1000px]:px-3 min-[1000px]:py-2 min-[1200px]:grid-cols-[minmax(220px,1.5fr)_124px_110px_104px_122px_42px]"
+                              className="group grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0 border-b border-border px-3 py-0.5 transition last:border-0 hover:bg-muted/30 md:px-4 min-[1000px]:min-h-[76px] min-[1000px]:grid-cols-[minmax(0,1fr)_170px_160px_56px] min-[1000px]:gap-2 min-[1000px]:px-4 min-[1000px]:py-2 xl:min-h-0 xl:grid-cols-[minmax(220px,1.5fr)_124px_110px_104px_122px_42px] xl:px-4 xl:py-3"
                             >
                               <div className="flex min-w-0 items-center gap-2">
-                                <div className="h-7 w-7 shrink-0 overflow-hidden rounded-md border border-border bg-muted/50 md:h-8 md:w-8 min-[1000px]:h-9 min-[1000px]:w-9 min-[1000px]:rounded-xl">
+                                <div className="h-7 w-7 shrink-0 overflow-hidden rounded-md border border-border bg-muted/50 md:h-8 md:w-8 min-[1000px]:h-12 min-[1000px]:w-12 min-[1000px]:rounded-xl xl:h-10 xl:w-10">
                                   <CartLineVisual line={line} />
                                 </div>
 
                                 <div className="min-w-0 flex-1">
-                                  <div className="truncate text-[11px] font-bold leading-4 tracking-tight md:text-xs min-[1000px]:text-sm min-[1000px]:font-semibold">
+                                  <div className="truncate text-[11px] font-bold leading-4 tracking-tight md:text-xs min-[1000px]:text-base min-[1000px]:font-bold xl:text-sm xl:font-semibold">
                                     {line.name}
                                   </div>
 
-                                  <div className="truncate text-[9px] leading-3 text-muted-foreground md:text-[10px] min-[1000px]:text-[11px]">
+                                  <div className="truncate text-[9px] leading-3 text-muted-foreground md:text-[10px] min-[1000px]:mt-0.5 min-[1000px]:text-xs xl:mt-0 xl:text-[11px]">
                                     {line.barcode ? `Barcode ${line.barcode}` : "No barcode"}
                                     {line.sku ? ` · SKU ${line.sku}` : ""}
                                   </div>
 
-                                  <div className="mt-0.5 text-[10px] font-semibold leading-3 tabular-nums text-muted-foreground md:text-[11px] min-[1000px]:hidden">
+                                  <div className="mt-0.5 text-[10px] font-semibold leading-3 tabular-nums text-muted-foreground md:text-[11px] xl:hidden">
                                     Price {money(line.price)}
+                                  </div>
+
+                                  <div className="mt-1 hidden items-center gap-2 min-[1000px]:flex xl:hidden">
+                                    <span className="text-xs font-semibold text-muted-foreground">
+                                      Discount
+                                    </span>
+                                    {canEditDiscount ? (
+                                      <select
+                                        value={Math.round(line.discount * 100)}
+                                        onChange={(e) => updateDisc(line.id, Number(e.target.value))}
+                                        className="h-9 min-w-[78px] rounded-xl border border-input bg-background px-2 text-sm font-bold outline-none"
+                                        aria-label={`Discount for ${line.name}`}
+                                      >
+                                        {[0, 5, 10, 15, 20, 30, 50].map((v) => (
+                                          <option key={v} value={v}>
+                                            {v}%
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
+                                        {Math.round(line.discount * 100)}%
+                                      </Badge>
+                                    )}
                                   </div>
                                 </div>
                               </div>
 
                               <div className="row-span-2 flex items-center justify-end md:justify-center min-[1000px]:row-span-1">
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 min-[1000px]:gap-2">
                                   <IconButton
                                     onClick={() => updateQty(line.id, line.qty - 1)}
-                                    icon={<Minus className="h-3.5 w-3.5" />}
+                                    icon={<Minus className="h-3.5 w-3.5 min-[1000px]:h-5 min-[1000px]:w-5 xl:h-4 xl:w-4" />}
                                   />
 
-                                  <span className="w-6 text-center text-sm font-black tabular-nums md:w-7">
+                                  <span className="w-6 text-center text-sm font-black tabular-nums md:w-7 min-[1000px]:w-9 min-[1000px]:text-lg xl:w-7 xl:text-sm">
                                     {line.qty}
                                   </span>
 
                                   <IconButton
                                     onClick={() => updateQty(line.id, line.qty + 1)}
-                                    icon={<Plus className="h-3.5 w-3.5" />}
+                                    icon={<Plus className="h-3.5 w-3.5 min-[1000px]:h-5 min-[1000px]:w-5 xl:h-4 xl:w-4" />}
                                   />
                                 </div>
                               </div>
 
-                              <div className="hidden min-w-0 tabular-nums min-[1000px]:col-start-auto min-[1000px]:block min-[1000px]:text-right min-[1000px]:text-sm min-[1000px]:font-semibold min-[1000px]:text-foreground">
+                              <div className="hidden min-w-0 tabular-nums xl:col-start-auto xl:block xl:text-right xl:text-sm xl:font-semibold xl:text-foreground">
                                 {money(line.price)}
                               </div>
 
-                              <div className="flex items-center justify-start md:col-start-1 min-[1000px]:col-start-auto min-[1000px]:justify-center">
+                              <div className="flex items-center justify-start md:col-start-1 min-[1000px]:hidden xl:col-start-auto xl:flex xl:justify-center">
                                 {canEditDiscount ? (
                                   <select
                                     value={Math.round(line.discount * 100)}
                                     onChange={(e) => updateDisc(line.id, Number(e.target.value))}
-                                    className="h-5 rounded border border-input bg-background px-1.5 text-[10px] font-semibold outline-none md:h-6 min-[1000px]:h-9 min-[1000px]:rounded-xl min-[1000px]:px-2 min-[1000px]:text-sm"
+                                    className="h-5 rounded border border-input bg-background px-1.5 text-[10px] font-semibold outline-none md:h-6 xl:h-10 xl:rounded-xl xl:px-3 xl:text-sm"
                                   >
                                     {[0, 5, 10, 15, 20, 30, 50].map((v) => (
                                       <option key={v} value={v}>
@@ -2541,20 +2574,20 @@ export default function RegisterPOSPage() {
                                     ))}
                                   </select>
                                 ) : (
-                                  <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] md:text-[11px] min-[1000px]:px-3 min-[1000px]:py-1 min-[1000px]:text-xs">
+                                  <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] md:text-[11px] xl:px-3 xl:py-1 xl:text-xs">
                                     {Math.round(line.discount * 100)}%
                                   </Badge>
                                 )}
                               </div>
 
-                              <div className="flex items-center justify-end text-xs font-black leading-4 tabular-nums text-sky-500 md:text-[13px] min-[1000px]:col-start-auto min-[1000px]:block min-[1000px]:text-right min-[1000px]:text-sm min-[1000px]:font-bold min-[1000px]:text-foreground min-[1200px]:text-base">
+                              <div className="flex items-center justify-end text-xs font-black leading-4 tabular-nums text-sky-500 md:text-[13px] min-[1000px]:col-start-auto min-[1000px]:block min-[1000px]:text-right min-[1000px]:text-lg min-[1000px]:font-black xl:text-base xl:font-bold xl:text-foreground">
                                 <span>{money(line.qty * line.price * (1 - line.discount))}</span>
                               </div>
 
                               <div className="hidden justify-end min-[1000px]:flex">
                                 <button
                                   onClick={() => removeLine(line.id)}
-                                  className="grid h-9 w-9 place-items-center rounded-xl text-red-500 transition hover:bg-red-500/10"
+                                  className="grid h-11 w-11 place-items-center rounded-xl border border-red-400/20 text-red-500 transition hover:bg-red-500/10 active:scale-95 xl:h-9 xl:w-9 xl:border-0"
                                   aria-label="Remove item"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -3030,8 +3063,9 @@ function IconButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="grid h-6 w-6 place-items-center rounded-md border border-border bg-background/80 text-foreground shadow-sm transition hover:bg-muted md:h-7 md:w-7 xl:h-9 xl:w-9 xl:rounded-xl"
+      className="grid h-6 w-6 place-items-center rounded-md border border-border bg-background/80 text-foreground shadow-sm transition hover:bg-muted active:scale-95 md:h-7 md:w-7 min-[1000px]:h-11 min-[1000px]:w-11 min-[1000px]:rounded-xl min-[1000px]:border-sky-400/25 min-[1000px]:bg-sky-500/10 xl:h-9 xl:w-9"
     >
       {icon}
     </button>
