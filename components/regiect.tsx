@@ -3015,8 +3015,8 @@ function PaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="flex max-h-[90dvh] flex-col border-border bg-card text-card-foreground sm:max-w-4xl">
-        <DialogHeader className="shrink-0">
+      <DialogContent className="flex h-[calc(100dvh-24px)] max-h-[760px] w-[calc(100vw-24px)] max-w-[1000px] flex-col gap-0 overflow-hidden border-border bg-card p-0 text-card-foreground sm:w-[calc(100vw-32px)] sm:max-w-[1000px]">
+        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-12 sm:px-5">
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-sky-400" />
             Payment
@@ -3026,8 +3026,8 @@ function PaymentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-4 overflow-hidden md:grid-cols-[1fr_0.85fr]">
-          <div className="min-h-0 rounded-3xl border border-border bg-background/40 p-4">
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 sm:overflow-hidden sm:p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+          <div className="flex min-h-[220px] flex-col rounded-xl border border-border bg-background/40 p-3 sm:min-h-0">
             <div className="mb-3 flex items-center justify-between gap-3 font-bold">
               <span className="flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-sky-400" />
@@ -3038,7 +3038,7 @@ function PaymentDialog({
               </Badge>
             </div>
 
-            <div className="max-h-[440px] overflow-auto pr-1">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
               {cart.map((line) => (
                 <div
                   key={line.id}
@@ -3065,8 +3065,8 @@ function PaymentDialog({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-col gap-3">
-            <div className="rounded-3xl border border-border bg-background/40 p-4">
+          <div className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain">
+            <div className="shrink-0 rounded-xl border border-border bg-background/40 p-3">
               <div className="space-y-2">
                 <Row label="Subtotal" valueLabel={money(subtotal)} />
                 <Row label={`Tax (${taxRatePercent}%)`} valueLabel={money(tax)} />
@@ -3080,7 +3080,7 @@ function PaymentDialog({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-border bg-background/40 p-4">
+            <div className="shrink-0 rounded-xl border border-border bg-background/40 p-3">
               <Label>Payment Method</Label>
 
               <div className="mt-3 grid grid-cols-2 gap-3">
@@ -3167,7 +3167,7 @@ function PaymentDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border bg-background/45 px-6 py-4">
+        <DialogFooter className="grid shrink-0 grid-cols-2 gap-2 border-t border-border bg-background/45 px-3 py-3 sm:flex sm:flex-wrap sm:justify-end sm:px-4">
           <Button variant="outline" onClick={exportCSV}>
             <Download className="mr-2 h-4 w-4" />
             Export CSV
