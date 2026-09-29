@@ -661,6 +661,9 @@ export default function RegisterPOSPage() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [receiptSaving, setReceiptSaving] = useState(false);
+  // Refs change immediately, before React can render the disabled buttons.
+  const receiptSavingRef = useRef(false);
+  const paymentOpeningRef = useRef(false);
   const [hasHydrated, setHasHydrated] = useState(false);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -1594,6 +1597,7 @@ export default function RegisterPOSPage() {
   }
 
   function openPayment() {
+    if (paymentOpen || paymentOpeningRef.current || receiptSavingRef.current) return;
     if (!requireStaff()) return;
 
     if (cart.length === 0) {
@@ -1601,94 +1605,98 @@ export default function RegisterPOSPage() {
       return;
     }
 
+    paymentOpeningRef.current = true;
     setPaymentOpen(true);
+    // Ignore duplicate touch/click events while the tablet opens the dialog.
+    window.setTimeout(() => { paymentOpeningRef.current = false; }, 500);
   }
 
   async function completePayment(
     paymentMethod: PaymentMethod = "cash",
     cashGivenAmount = 0
   ) {
-    if (!requireStaff()) return;
+    if (receiptSavingRef.current) return;
+    receiptSavingRef.current = true;
+    setReceiptSaving(true);
+    try {
+      if (!requireStaff()) return;
 
-    if (cart.length === 0) {
-      toast.error("No cart item");
-      return;
-    }
+      if (cart.length === 0) {
+        toast.error("No cart item");
+        return;
+      }
 
-    const latestProducts = await loadOwnerProducts({ silent: true });
-    const unavailableItem = cart.find((line) => {
-      const product = latestProducts.find(
-        (p) =>
-          p.id === line.id ||
-          (!!line.dbId && p.dbId === line.dbId) ||
-          (!!line.barcode && p.barcode === line.barcode) ||
-          (!!line.sku && p.sku === line.sku),
-      );
-      return !product || !product.availableForSale;
-    });
+      const latestProducts = await loadOwnerProducts({ silent: true });
+      const unavailableItem = cart.find((line) => {
+        const product = latestProducts.find(
+          (p) =>
+            p.id === line.id ||
+            (!!line.dbId && p.dbId === line.dbId) ||
+            (!!line.barcode && p.barcode === line.barcode) ||
+            (!!line.sku && p.sku === line.sku),
+        );
+        return !product || !product.availableForSale;
+      });
 
-    if (unavailableItem) {
-      toast.error(unavailableToastMessage(unavailableItem.name));
-      return;
-    }
+      if (unavailableItem) {
+        toast.error(unavailableToastMessage(unavailableItem.name));
+        return;
+      }
 
-    const invalidItem = cart.find((line) => !line.dbId && !/^\d+$/.test(line.id));
+      const invalidItem = cart.find((line) => !line.dbId && !/^\d+$/.test(line.id));
 
-    if (invalidItem) {
-      toast.error(
-        `${invalidItem.name} has no valid productId. DB ထဲက product ကိုသာ checkout လုပ်ပါ။`
-      );
-      return;
-    }
-
-    for (const line of cart) {
-      const product = latestProducts.find(
-        (p) =>
-          p.id === line.id ||
-          (!!line.dbId && p.dbId === line.dbId) ||
-          (!!line.barcode && p.barcode === line.barcode) ||
-          (!!line.sku && p.sku === line.sku)
-      );
-
-      const availableStock = Number(product?.stock ?? 0);
-
-      if (availableStock < line.qty) {
+      if (invalidItem) {
         toast.error(
-          `${line.name} stock မလုံလောက်ပါ။ Available stock: ${availableStock}, Cart qty: ${line.qty}`
+          `${invalidItem.name} has no valid productId. DB ထဲက product ကိုသာ checkout လုပ်ပါ။`
         );
         return;
       }
-    }
 
-    const changeAmount =
-      paymentMethod === "cash" ? Math.max(0, cashGivenAmount - grandTotal) : 0;
+      for (const line of cart) {
+        const product = latestProducts.find(
+          (p) =>
+            p.id === line.id ||
+            (!!line.dbId && p.dbId === line.dbId) ||
+            (!!line.barcode && p.barcode === line.barcode) ||
+            (!!line.sku && p.sku === line.sku)
+        );
 
-    const payload: SaveReceiptPayload = {
-      staffId,
-      staffName,
-      staffRole,
-      paymentMethod,
-      subtotal: round(subtotal),
-      taxAmount: round(tax),
-      discountPercent: globalDiscount,
-      grandTotal: round(grandTotal),
-      cashGiven: paymentMethod === "cash" ? round(cashGivenAmount) : 0,
-      changeAmount: round(changeAmount),
-      items: cart.map((line) => ({
-        productId: String(line.dbId || line.id),
-        barcode: line.barcode || null,
-        sku: line.sku || "",
-        productName: line.name,
-        qty: Number(line.qty || 1),
-        price: round(line.price),
-        discountPercent: Math.round(line.discount * 100),
-        taxable: line.taxable,
-        lineTotal: round(line.qty * line.price * (1 - line.discount)),
-      })),
-    };
+        const availableStock = Number(product?.stock ?? 0);
 
-    try {
-      setReceiptSaving(true);
+        if (availableStock < line.qty) {
+          toast.error(
+            `${line.name} stock မလုံလောက်ပါ။ Available stock: ${availableStock}, Cart qty: ${line.qty}`
+          );
+          return;
+        }
+      }
+
+      const changeAmount =
+        paymentMethod === "cash" ? Math.max(0, cashGivenAmount - grandTotal) : 0;
+
+      const payload: SaveReceiptPayload = {
+        staffId,
+        staffName,
+        staffRole,
+        paymentMethod,
+        subtotal: round(subtotal),
+        taxAmount: round(tax),
+        discountPercent: globalDiscount,
+        grandTotal: round(grandTotal),
+        cashGiven: paymentMethod === "cash" ? round(cashGivenAmount) : 0,
+        changeAmount: round(changeAmount),
+        items: cart.map((line) => ({
+          productId: String(line.dbId || line.id),
+          barcode: line.barcode || null,
+          sku: line.sku || "",
+          productName: line.name,
+          qty: Number(line.qty || 1),
+          price: round(line.price),
+          discountPercent: Math.round(line.discount * 100),
+          taxable: line.taxable,
+          lineTotal: round(line.qty * line.price * (1 - line.discount)),
+        })),
+      };
 
       const res = await fetch("/api/pos/receipts", {
         method: "POST",
@@ -1722,6 +1730,7 @@ export default function RegisterPOSPage() {
 
       toast.error(message);
     } finally {
+      receiptSavingRef.current = false;
       setReceiptSaving(false);
     }
   }
@@ -2379,7 +2388,7 @@ export default function RegisterPOSPage() {
                   <div className="flex w-full items-center gap-2">
                     <Button type="button" variant="danger" onClick={clearCart} disabled={!cart.length} className="h-12 shrink-0 rounded-xl px-3"><Trash2 className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Void</span></Button>
                     <div className="min-w-0 flex-1 text-right"><div className="text-xs text-muted-foreground">Total due</div><div className="truncate text-xl font-black tabular-nums text-red-500 sm:text-2xl">{money(grandTotal)}</div></div>
-                    <Button type="button" onClick={openPayment} disabled={!cart.length} className="h-12 min-w-[120px] shrink-0 rounded-xl text-base font-bold sm:min-w-[180px]"><CreditCard className="mr-2 h-5 w-5" />Pay</Button>
+                    <Button type="button" onClick={openPayment} disabled={!cart.length || receiptSaving || paymentOpen} className="h-12 min-w-[120px] touch-manipulation shrink-0 rounded-xl text-base font-bold sm:min-w-[180px]"><CreditCard className="mr-2 h-5 w-5" />Pay</Button>
                   </div>
                 </CardFooter>
               </Card>
@@ -2419,7 +2428,7 @@ export default function RegisterPOSPage() {
 
             <PaymentDialog
               open={paymentOpen}
-              setOpen={setPaymentOpen}
+              setOpen={(next) => { if (!receiptSavingRef.current) setPaymentOpen(next); }}
               cart={cart}
               subtotal={subtotal}
               tax={tax}
@@ -2995,7 +3004,7 @@ function PaymentDialog({
   exportCSV: () => void;
   printReceipt: () => void;
   saving: boolean;
-  onComplete: (method: PaymentMethod, cashGivenAmount: number) => void;
+  onComplete: (method: PaymentMethod, cashGivenAmount: number) => Promise<void>;
   money: (amount: number) => string;
 }) {
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
@@ -3178,14 +3187,15 @@ function PaymentDialog({
             Print Receipt
           </Button>
 
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
             Cancel
           </Button>
 
           <Button
-            onClick={() => onComplete(payMethod, cashNum)}
+            type="button"
+            onClick={() => void onComplete(payMethod, cashNum)}
             disabled={saving || (payMethod === "cash" && !cashEnough)}
-            className="bg-gradient-to-r from-blue-500 to-cyan-400 font-bold text-white"
+            className="touch-manipulation bg-gradient-to-r from-blue-500 to-cyan-400 font-bold text-white"
           >
             {saving ? (
               <>
