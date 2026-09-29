@@ -258,7 +258,6 @@ function ManualGroupIcon({ groupId }: { groupId: string }) {
 }
 
 const DEFAULT_TAX_RATE_PERCENT = 10;
-const PAGE_SIZE = 5;
 const MANUAL_DIALOG_PAGE_SIZE = 8;
 
 const API_BASE =
@@ -673,7 +672,6 @@ export default function RegisterPOSPage() {
 
   const [taxRatePercent, setTaxRatePercent] = useState(DEFAULT_TAX_RATE_PERCENT);
   const [globalDiscount, setGlobalDiscount] = useState(0);
-  const [page, setPage] = useState(1);
   const lastAutoScanRef = useRef("");
   const scanInFlightRef = useRef(false);
   const scannerBufferRef = useRef("");
@@ -707,9 +705,6 @@ export default function RegisterPOSPage() {
   const grandTotal = Math.max(0, total * (1 - globalDiscount / 100));
   const money = (amount: number) => formatMoney(amount, receiptSetting);
 
-  const pageCount = Math.max(1, Math.ceil(cart.length / PAGE_SIZE));
-  const start = (page - 1) * PAGE_SIZE;
-  const pageSlice = cart.slice(start, start + PAGE_SIZE);
 
   const nameHints = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -771,10 +766,6 @@ export default function RegisterPOSPage() {
       productMatchesQuickGroup(product, activeQuickGroup)
     );
   }, [manualActionProducts, activeQuickGroup]);
-
-  useEffect(() => {
-    setPage((current) => Math.min(current, pageCount));
-  }, [pageCount]);
 
   useEffect(() => {
     if (!QUICK_ITEM_GROUPS.some((group) => group.id === quickItemGroup)) {
@@ -1416,7 +1407,6 @@ export default function RegisterPOSPage() {
 
     if (added) {
       toast.success(`${p.name} added`);
-      setPage((old) => Math.max(old, Math.ceil((cart.length + 1) / PAGE_SIZE)));
       return true;
     }
 
@@ -1702,7 +1692,6 @@ export default function RegisterPOSPage() {
       setPaymentOpen(false);
       setCart([]);
       setGlobalDiscount(0);
-      setPage(1);
 
       await loadOwnerProducts();
       await loadReceiptSetting();
@@ -2114,35 +2103,24 @@ export default function RegisterPOSPage() {
   }
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-background text-foreground">
-      <SoftBackground />
+    <div className="flex h-[100dvh] overflow-hidden bg-muted/30 text-foreground">
 
       <div className="relative z-10 flex min-h-0 w-full flex-col">
-        <header className="shrink-0 border-b border-white/10 bg-background/70 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3 px-3 py-3 md:px-5">
-            <div className="flex min-w-0 items-center gap-4">
-              <motion.div
-                initial={{ rotate: -8, scale: 0.9, opacity: 0 }}
-                animate={{ rotate: 0, scale: 1, opacity: 1 }}
-                className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-black/10 bg-sky-500/10 shadow-[0_0_35px_-16px_rgba(56,189,248,0.85)] dark:border-white/10"
-              >
-                <ShoppingBag className="h-6 w-6 text-sky-400" />
-              </motion.div>
-
+        <header className="shrink-0 border-b border-border bg-background">
+          <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-3 px-3 py-2 md:px-4">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <ShoppingBag className="h-5 w-5" />
+              </div>
               <div className="min-w-0">
-                <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
-                  Clear Blue Light — <span className="text-sky-400">POS</span>
-                </h1>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">
-                  Products table barcode scan · Cart checkout ·{" "}
-                  {receiptSetting.currencyCode} {receiptSetting.currencySymbol}
-                </p>
+                <h1 className="truncate text-base font-bold tracking-tight">Nimi Mark <span className="text-primary">POS</span></h1>
+                <p className="truncate text-[11px] text-muted-foreground">Register · {receiptSetting.currencyCode}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               {isLoggedIn && (
-                <div className="hidden items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300 sm:flex">
+                <div className="hidden items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs font-medium sm:flex">
                   <Users className="h-4 w-4" />
                   <span>{staffName || staffId}</span>
                   <span className="text-muted-foreground">·</span>
@@ -2154,37 +2132,14 @@ export default function RegisterPOSPage() {
 
               <Button
                 variant="outline"
-                onClick={() => setActionsOpen(true)}
-                className="hidden h-11 rounded-xl md:inline-flex xl:hidden"
-              >
-                <Settings2 className="mr-2 h-4 w-4" />
-                POS Actions
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={loadReceiptSetting}
-                className="hidden h-11 rounded-xl xl:inline-flex"
-              >
-                <Store className="mr-2 h-4 w-4" />
-                Reload Receipt Info
-              </Button>
-
-              <Button
-                variant="outline"
                 onClick={toggleTheme}
-                className="h-11 rounded-full"
+                aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+                className="h-9 w-9 rounded-lg p-0"
               >
                 {dark ? (
-                  <>
-                    <Sun className="mr-2 h-4 w-4" />
-                    Light
-                  </>
+                  <Sun className="h-4 w-4" />
                 ) : (
-                  <>
-                    <Moon className="mr-2 h-4 w-4" />
-                    Dark
-                  </>
+                  <Moon className="h-4 w-4" />
                 )}
               </Button>
             </div>
@@ -2267,574 +2222,139 @@ export default function RegisterPOSPage() {
           </main>
         ) : (
           <>
-            <section className="mx-auto grid min-h-0 w-full max-w-[1680px] flex-1 grid-cols-1 gap-3 overflow-hidden px-3 py-3 md:px-4 xl:grid-cols-[1.85fr_0.95fr]">
-              <GlassCard className="flex min-h-0 flex-col">
-                <CardHeader className="relative z-10 shrink-0 pb-2">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-500/10 shadow-[0_0_35px_-16px_rgba(56,189,248,0.9)]">
-                          <ShoppingCart className="h-6 w-6 text-sky-400" />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center gap-3">
-                            <CardTitle className="text-2xl font-bold tracking-tight">
-                              Cart
-                            </CardTitle>
-                            <Badge className="rounded-full bg-blue-500 px-3 py-1 text-white">
-                              {cart.length}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              items
-                            </span>
-                          </div>
-
-                          <CardDescription className="mt-1">
-                            {productsLoading
-                              ? "Loading owner products..."
-                              : `${catalog.length} products ready · ${manualActionProducts.length} action products.`}
-                          </CardDescription>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {quickGroups.map((group) => (
-                          <button
-                            key={group.id}
-                            type="button"
-                            onClick={() => {
-                              if (!requireStaff()) return;
-                              setQuickItemGroup(group.id);
-                              setQuickViewOpen(true);
-                            }}
-                            disabled={productsLoading}
-                            className="group relative h-12 overflow-hidden rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-sky-500/10 to-blue-500/10 px-3 text-left shadow-[0_0_34px_-20px_rgba(16,185,129,0.95)] transition hover:-translate-y-0.5 hover:border-emerald-300/60 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <span className="pointer-events-none absolute -right-8 -top-8 h-20 w-20 rounded-full bg-emerald-400/20 blur-2xl transition group-hover:bg-sky-400/25" />
-
-                            <span className="relative flex items-center gap-2.5">
-                              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-white/20 bg-background/70 text-emerald-500 shadow-inner backdrop-blur dark:text-emerald-300">
-                                <ManualGroupIcon groupId={group.id} />
-                              </span>
-
-                              <span className="min-w-0">
-                                <span className="block whitespace-nowrap text-sm font-black text-emerald-700 dark:text-emerald-200">
-                                  {group.label}
-                                </span>
-                                <span className="block text-[10px] font-semibold text-muted-foreground">
-                                  {group.description}
-                                </span>
-                              </span>
-
-                              <Badge className="ml-1 rounded-full bg-emerald-500 px-2 py-0.5 text-white">
-                                {group.count}
-                              </Badge>
-                            </span>
-                          </button>
-                        ))}
-
-                        <Button
-                          type="button"
-                          onClick={() => setCameraScannerOpen(true)}
-                          disabled={productsLoading || scanLoading}
-                          className="h-12 min-w-[148px] rounded-2xl bg-gradient-to-r from-violet-500 to-sky-500 font-bold text-white shadow-[0_0_30px_-14px_rgba(56,189,248,0.95)] hover:from-violet-400 hover:to-sky-400"
-                        >
-                          <Camera className="mr-2 h-5 w-5" />
-                          Camera Scan
-                        </Button>
-
-                        <Button
-                          variant="outline"
-                          onClick={() => void loadOwnerProducts()}
-                          disabled={productsLoading}
-                          className="h-11 rounded-xl"
-                        >
-                          {productsLoading ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Package className="mr-2 h-4 w-4" />
-                          )}
-                          Reload Products
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="relative">
-                      <div className="pointer-events-none absolute left-5 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-xl border border-sky-400/20 bg-sky-500/10">
-                        {scanLoading ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-sky-400" />
-                        ) : (
-                          <Barcode className="h-5 w-5 text-sky-400" />
-                        )}
-                      </div>
-
-                      <Input
-                        id="scan-input"
-                        autoFocus
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleScanOrSearch();
-                          }
-                        }}
-                        placeholder={
-                          productsLoading
-                            ? "Loading products..."
-                            : "Scan products.barcode, SKU, DB ID or type name..."
-                        }
-                        disabled={productsLoading || scanLoading}
-                        className="h-12 rounded-xl border-sky-400/40 bg-background/60 pl-20 pr-14 text-base shadow-[0_0_35px_-18px_rgba(56,189,248,0.95)] placeholder:text-muted-foreground focus-visible:ring-sky-400/30"
-                      />
-
-                      {query && (
+            <section className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-1 flex-col gap-2 overflow-hidden px-3 py-2 md:px-4">
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-sky-500" />
+                  <Input
+                    id="scan-input"
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleScanOrSearch();
+                      }
+                    }}
+                    placeholder={productsLoading ? "Loading products..." : "Scan barcode / SKU or search product"}
+                    disabled={productsLoading || scanLoading}
+                    className="h-12 rounded-xl border-sky-400/40 bg-background pl-11 pr-10 text-base"
+                  />
+                  {query && (
+                    <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg">
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  {!!nameHints.length && (
+                    <div className="absolute inset-x-0 top-14 z-30 max-h-[45vh] overflow-y-auto rounded-xl border border-border bg-background shadow-xl">
+                      {nameHints.map((product) => (
                         <button
-                          onClick={() => setQuery("")}
-                          className="absolute right-5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80"
+                          key={`${product.id}-${product.dbId}`}
+                          type="button"
+                          onClick={() => { addToCart(product); setQuery(""); focusScanner(); }}
+                          className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-border px-4 py-2 text-left last:border-0 hover:bg-muted/50"
                         >
-                          <X className="h-4 w-4" />
+                          <span className="min-w-0 truncate font-semibold">{product.name}</span>
+                          <span className="shrink-0 tabular-nums">{product.availableForSale ? money(product.price) : "Out of Stock"}</span>
                         </button>
-                      )}
-
-                      {!!nameHints.length && (
-                        <div className="absolute left-0 right-0 top-[72px] z-30 overflow-hidden rounded-2xl border border-border bg-background/95 shadow-2xl backdrop-blur-xl">
-                          {nameHints.map((product) => (
-                            <button
-                              key={`${product.id}-${product.dbId}`}
-                              aria-disabled={!product.availableForSale}
-                              onClick={() => {
-                                addToCart(product);
-                                setQuery("");
-                                focusScanner();
-                              }}
-                              className="flex w-full items-center justify-between border-b border-border px-4 py-3 text-left last:border-0 hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <span className="flex min-w-0 items-center gap-3">
-                                <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-border bg-muted">
-                                  <ProductVisual product={product} />
-                                </span>
-
-                                <span className="min-w-0">
-                                  <span className="block truncate font-semibold">
-                                    {product.name}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    Barcode {product.barcode || product.id}
-                                    {product.sku ? ` · SKU ${product.sku}` : ""}
-                                    {` · Stock ${product.stock ?? 0}`}
-                                  </span>
-                                </span>
-                              </span>
-
-                              <span className="font-semibold tabular-nums text-sky-400">
-                                {!product.availableForSale ? "Out of Stock" : money(product.price)}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      ))}
                     </div>
+                  )}
+                </div>
+                <Button type="button" variant="secondary" onClick={() => setCameraScannerOpen(true)} disabled={productsLoading || scanLoading} className="h-12 shrink-0 rounded-xl px-3">
+                  <Camera className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Camera</span>
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setActionsOpen(true)} className="h-12 shrink-0 rounded-xl px-3">
+                  <Settings2 className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Actions</span>
+                </Button>
+              </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-xs font-semibold text-muted-foreground">
-                      <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-300">
-                        <Keyboard className="h-4 w-4" />
-                        USB / Bluetooth scanner ready
-                      </span>
-                      <span className="hidden sm:inline">Scanner မရှိလျှင် Camera Scan ကိုသုံးပါ</span>
-                      {lastScan && (
-                        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-sky-600 dark:text-sky-300">
-                          <ScanLine className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">
-                            {lastScan.source === "camera"
-                              ? "Camera"
-                              : lastScan.source === "hardware"
-                              ? "Scanner"
-                              : "Manual"}{" "}
-                            · {lastScan.code}
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
+              <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5" aria-label="Items without barcode">
+                {quickGroups.map((group) => (
+                  <Button
+                    key={group.id}
+                    type="button"
+                    variant={group.id === "fried" ? "warning" : group.id === "drink" ? "default" : "success"}
+                    onClick={() => {
+                      if (!requireStaff()) return;
+                      setQuickItemGroup(group.id);
+                      setQuickViewOpen(true);
+                    }}
+                    disabled={productsLoading}
+                    className="group flex h-12 min-w-[170px] flex-1 items-center justify-start gap-2 rounded-xl px-3 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/20">
+                      <ManualGroupIcon groupId={group.id} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">{group.label}</span>
+                      <span className="block truncate text-[10px] font-medium opacity-75">{group.description}</span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold tabular-nums">{group.count}</span>
+                  </Button>
+                ))}
+              </div>
+
+              <Card className="flex min-h-0 flex-1 flex-col !gap-0 overflow-hidden border-border bg-card !py-0 shadow-sm">
+                <CardHeader className="relative z-10 flex shrink-0 flex-row items-center justify-between border-b border-border px-4 py-2">
+                  <CardTitle className="flex items-center gap-2 text-lg"><ShoppingCart className="h-5 w-5 text-primary" />Cart <Badge variant="info">{cart.length}</Badge></CardTitle>
+                  <span className="truncate text-xs text-muted-foreground">{lastScan ? `Last scan: ${lastScan.code}` : `${catalog.length} products ready`}</span>
                 </CardHeader>
-
-                <CardContent className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden pt-0">
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-background/35">
-                    {cart.length === 0 ? (
-                      <EmptyState />
-                    ) : (
-                      <>
-                        {/* iPad landscape: price + discount stay inside Item so the
-                            quantity and remove controls remain large enough to tap. */}
-                        <div className="hidden shrink-0 grid-cols-[minmax(0,1fr)_170px_160px_56px] items-center border-b border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground min-[1000px]:grid xl:hidden">
-                          <div>Item</div>
-                          <div className="text-center">Qty</div>
-                          <div className="text-right">Total</div>
-                          <div />
-                        </div>
-
-                        <div className="hidden shrink-0 grid-cols-[minmax(220px,1.5fr)_124px_110px_104px_122px_42px] border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground xl:grid">
-                          <div>Item</div>
-                          <div className="text-center">Qty</div>
-                          <div className="text-right">Price</div>
-                          <div className="text-center">Discount</div>
-                          <div className="text-right">Total</div>
-                          <div />
-                        </div>
-
-                        <div className="grid min-h-0 flex-1 grid-rows-[repeat(5,minmax(0,1fr))] overflow-hidden min-[1000px]:block min-[1000px]:overflow-y-auto min-[1000px]:overscroll-contain xl:grid xl:overflow-hidden">
-                          {pageSlice.map((line, index) => (
-                            <motion.div
-                              key={line.id}
-                              initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              transition={{ delay: index * 0.025 }}
-                              className="group grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0 border-b border-border px-3 py-0.5 transition last:border-0 hover:bg-muted/30 md:px-4 min-[1000px]:min-h-[76px] min-[1000px]:grid-cols-[minmax(0,1fr)_170px_160px_56px] min-[1000px]:gap-2 min-[1000px]:px-4 min-[1000px]:py-2 xl:min-h-0 xl:grid-cols-[minmax(220px,1.5fr)_124px_110px_104px_122px_42px] xl:px-4 xl:py-3"
-                            >
-                              <div className="flex min-w-0 items-center gap-2">
-                                <div className="h-7 w-7 shrink-0 overflow-hidden rounded-md border border-border bg-muted/50 md:h-8 md:w-8 min-[1000px]:h-12 min-[1000px]:w-12 min-[1000px]:rounded-xl xl:h-10 xl:w-10">
-                                  <CartLineVisual line={line} />
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-[11px] font-bold leading-4 tracking-tight md:text-xs min-[1000px]:text-base min-[1000px]:font-bold xl:text-sm xl:font-semibold">
-                                    {line.name}
-                                  </div>
-
-                                  <div className="truncate text-[9px] leading-3 text-muted-foreground md:text-[10px] min-[1000px]:mt-0.5 min-[1000px]:text-xs xl:mt-0 xl:text-[11px]">
-                                    {line.barcode ? `Barcode ${line.barcode}` : "No barcode"}
-                                    {line.sku ? ` · SKU ${line.sku}` : ""}
-                                  </div>
-
-                                  <div className="mt-0.5 text-[10px] font-semibold leading-3 tabular-nums text-muted-foreground md:text-[11px] xl:hidden">
-                                    Price {money(line.price)}
-                                  </div>
-
-                                  <div className="mt-1 hidden items-center gap-2 min-[1000px]:flex xl:hidden">
-                                    <span className="text-xs font-semibold text-muted-foreground">
-                                      Discount
-                                    </span>
-                                    {canEditDiscount ? (
-                                      <select
-                                        value={Math.round(line.discount * 100)}
-                                        onChange={(e) => updateDisc(line.id, Number(e.target.value))}
-                                        className="h-9 min-w-[78px] rounded-xl border border-input bg-background px-2 text-sm font-bold outline-none"
-                                        aria-label={`Discount for ${line.name}`}
-                                      >
-                                        {[0, 5, 10, 15, 20, 30, 50].map((v) => (
-                                          <option key={v} value={v}>
-                                            {v}%
-                                          </option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
-                                        {Math.round(line.discount * 100)}%
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="row-span-2 flex items-center justify-end md:justify-center min-[1000px]:row-span-1">
-                                <div className="flex items-center gap-1 min-[1000px]:gap-2">
-                                  <IconButton
-                                    onClick={() => updateQty(line.id, line.qty - 1)}
-                                    icon={<Minus className="h-3.5 w-3.5 min-[1000px]:h-5 min-[1000px]:w-5 xl:h-4 xl:w-4" />}
-                                  />
-
-                                  <span className="w-6 text-center text-sm font-black tabular-nums md:w-7 min-[1000px]:w-9 min-[1000px]:text-lg xl:w-7 xl:text-sm">
-                                    {line.qty}
-                                  </span>
-
-                                  <IconButton
-                                    onClick={() => updateQty(line.id, line.qty + 1)}
-                                    icon={<Plus className="h-3.5 w-3.5 min-[1000px]:h-5 min-[1000px]:w-5 xl:h-4 xl:w-4" />}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="hidden min-w-0 tabular-nums xl:col-start-auto xl:block xl:text-right xl:text-sm xl:font-semibold xl:text-foreground">
-                                {money(line.price)}
-                              </div>
-
-                              <div className="flex items-center justify-start md:col-start-1 min-[1000px]:hidden xl:col-start-auto xl:flex xl:justify-center">
+                <CardContent className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 py-0 touch-pan-y" aria-label="Cart items">
+                  {cart.length === 0 ? <EmptyState /> : (
+                    <div className="divide-y divide-border">
+                      {cart.map((line) => (
+                        <div key={line.id} className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_150px_130px_44px] sm:px-4">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"><CartLineVisual line={line} /></div>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold">{line.name}</div>
+                              <div className="truncate text-xs text-muted-foreground">{money(line.price)} each{line.barcode ? ` · ${line.barcode}` : ""}</div>
+                              <div className="mt-1 flex items-center gap-2 text-xs">
+                                <span className="text-muted-foreground">Discount</span>
                                 {canEditDiscount ? (
-                                  <select
-                                    value={Math.round(line.discount * 100)}
-                                    onChange={(e) => updateDisc(line.id, Number(e.target.value))}
-                                    className="h-5 rounded border border-input bg-background px-1.5 text-[10px] font-semibold outline-none md:h-6 xl:h-10 xl:rounded-xl xl:px-3 xl:text-sm"
-                                  >
-                                    {[0, 5, 10, 15, 20, 30, 50].map((v) => (
-                                      <option key={v} value={v}>
-                                        {v}%
-                                      </option>
-                                    ))}
+                                  <select value={Math.round(line.discount * 100)} onChange={(e) => updateDisc(line.id, Number(e.target.value))} aria-label={`Discount for ${line.name}`} className="h-8 rounded-md border border-input bg-background px-2">
+                                    {[0, 5, 10, 15, 20, 30, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
                                   </select>
-                                ) : (
-                                  <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] md:text-[11px] xl:px-3 xl:py-1 xl:text-xs">
-                                    {Math.round(line.discount * 100)}%
-                                  </Badge>
-                                )}
+                                ) : <span>{Math.round(line.discount * 100)}%</span>}
                               </div>
-
-                              <div className="flex items-center justify-end text-xs font-black leading-4 tabular-nums text-sky-500 md:text-[13px] min-[1000px]:col-start-auto min-[1000px]:block min-[1000px]:text-right min-[1000px]:text-lg min-[1000px]:font-black xl:text-base xl:font-bold xl:text-foreground">
-                                <span>{money(line.qty * line.price * (1 - line.discount))}</span>
-                              </div>
-
-                              <div className="hidden justify-end min-[1000px]:flex">
-                                <button
-                                  onClick={() => removeLine(line.id)}
-                                  className="grid h-11 w-11 place-items-center rounded-xl border border-red-400/20 text-red-500 transition hover:bg-red-500/10 active:scale-95 xl:h-9 xl:w-9 xl:border-0"
-                                  aria-label="Remove item"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </motion.div>
-                          ))}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-end gap-1 sm:justify-center">
+                            <IconButton onClick={() => updateQty(line.id, line.qty - 1)} icon={<Minus className="h-4 w-4" />} />
+                            <span className="w-7 text-center font-bold tabular-nums">{line.qty}</span>
+                            <IconButton onClick={() => updateQty(line.id, line.qty + 1)} icon={<Plus className="h-4 w-4" />} />
+                          </div>
+                          <div className="col-start-1 pl-14 text-sm font-bold tabular-nums sm:col-start-auto sm:pl-0 sm:text-right">{money(line.qty * line.price * (1 - line.discount))}</div>
+                          <button type="button" onClick={() => removeLine(line.id)} aria-label={`Remove ${line.name}`} className="grid h-11 w-11 place-items-center justify-self-end rounded-lg text-red-500 hover:bg-red-500/10 sm:col-start-auto"><Trash2 className="h-4 w-4" /></button>
                         </div>
-                      </>
-                    )}
-                  </div>
-
-                  {cart.length > 0 && (
-                    <div className="mt-1.5 flex shrink-0 items-center justify-center gap-3 px-2 py-1">
-                      <Button
-                        variant="outline"
-                        disabled={page <= 1}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        className="h-9 min-w-20 rounded-lg"
-                      >
-                        Prev
-                      </Button>
-
-                      <span className="min-w-32 text-center text-xs font-bold tabular-nums text-muted-foreground">
-                        {start + 1}-{Math.min(start + PAGE_SIZE, cart.length)} /{" "}
-                        {cart.length}
-                      </span>
-
-                      <Button
-                        variant="outline"
-                        disabled={page >= pageCount}
-                        onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                        className="h-9 min-w-20 rounded-lg border-sky-300/30 text-sky-500 hover:bg-sky-500/10"
-                      >
-                        Next
-                      </Button>
+                      ))}
                     </div>
                   )}
                 </CardContent>
-
-                <CardFooter className="relative z-10 mt-auto flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      onClick={clearCart}
-                      variant="outline"
-                      className="h-12 gap-2 rounded-xl border-red-400/40 text-red-500 hover:bg-red-500/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Void
-                    </Button>
-
-                    <Button
-                      onClick={exportCSV}
-                      variant="outline"
-                      className="h-12 gap-2 rounded-xl"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export
-                    </Button>
-
-                    <Button
-                      onClick={printReceipt}
-                      variant="outline"
-                      className="h-12 gap-2 rounded-xl border-sky-400/35 text-sky-500 hover:bg-sky-500/10"
-                    >
-                      <Printer className="h-4 w-4" />
-                      Print
-                    </Button>
+                <CardFooter className="relative z-10 shrink-0 flex-col gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4">
+                  <div className="flex w-full items-center justify-between gap-3 text-xs sm:text-sm">
+                    <span className="text-muted-foreground">Subtotal {money(subtotal)} · Tax {money(tax)}</span>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="ghost" onClick={() => void loadOwnerProducts()} disabled={productsLoading} className="hidden h-9 px-2 text-xs sm:inline-flex"><RotateCcw className="mr-1 h-3.5 w-3.5" />Products</Button>
+                      <Button type="button" variant="ghost" onClick={loadReceiptSetting} className="hidden h-9 px-2 text-xs sm:inline-flex"><Receipt className="mr-1 h-3.5 w-3.5" />Receipt info</Button>
+                      <Button type="button" variant="ghost" onClick={exportCSV} disabled={!cart.length} aria-label="Export cart CSV" className="h-9 px-2"><Download className="h-4 w-4" /></Button>
+                      <Button type="button" variant="ghost" onClick={printReceipt} disabled={!cart.length} aria-label="Print receipt" className="h-9 px-2"><Printer className="h-4 w-4" /></Button>
+                      <label className="flex items-center gap-2">Discount
+                        <select value={globalDiscount} onChange={(e) => setGlobalDiscount(Number(e.target.value))} disabled={!canEditDiscount} aria-label="Global discount" className="h-9 rounded-lg border border-input bg-background px-2 disabled:opacity-60">
+                          {[0, 5, 10, 15, 20, 30, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
+                        </select>
+                      </label>
+                    </div>
                   </div>
-
-                  <Button
-                    onClick={openPayment}
-                    className="h-12 min-w-[220px] gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-base font-bold text-white shadow-[0_0_35px_-12px_rgba(34,211,238,1)] hover:from-blue-400 hover:to-cyan-300"
-                  >
-                    <CreditCard className="h-5 w-5" />
-                    Pay
-                  </Button>
+                  <div className="flex w-full items-center gap-2">
+                    <Button type="button" variant="danger" onClick={clearCart} disabled={!cart.length} className="h-12 shrink-0 rounded-xl px-3"><Trash2 className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Void</span></Button>
+                    <div className="min-w-0 flex-1 text-right"><div className="text-xs text-muted-foreground">Total due</div><div className="truncate text-xl font-black tabular-nums text-red-500 sm:text-2xl">{money(grandTotal)}</div></div>
+                    <Button type="button" onClick={openPayment} disabled={!cart.length} className="h-12 min-w-[120px] shrink-0 rounded-xl text-base font-bold sm:min-w-[180px]"><CreditCard className="mr-2 h-5 w-5" />Pay</Button>
+                  </div>
                 </CardFooter>
-              </GlassCard>
-
-              <aside className="hidden min-h-0 flex-col gap-3 overflow-hidden xl:flex">
-                <GlassCard className="shrink-0">
-                  <CardHeader className="relative z-10 pb-2">
-                    <CardTitle className="flex items-center gap-3 text-lg">
-                      <Receipt className="h-5 w-5 text-emerald-500" />
-                      Checkout Summary
-                    </CardTitle>
-                    <CardDescription>
-                      Adjust global discount or export receipt.
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="relative z-10 space-y-3">
-                    <MobileStaffControls
-                      staffId={staffId}
-                      staffName={staffName}
-                      staffRole={staffRole}
-                    />
-
-                    <Row label="Subtotal" valueLabel={money(subtotal)} />
-                    <Row label={`Tax (${taxRatePercent}%)`} valueLabel={money(tax)} />
-
-                    <Separator />
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Percent className="h-4 w-4 text-sky-400" />
-                          <span>Global Discount</span>
-                          {!canEditDiscount && (
-                            <Badge variant="secondary">Supervisor only</Badge>
-                          )}
-                        </div>
-
-                        <span className="font-bold text-emerald-500">
-                          {globalDiscount}%
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          disabled={!canEditDiscount}
-                          onClick={() =>
-                            setGlobalDiscount((v) => Math.max(0, v - 1))
-                          }
-                          className="h-9 w-9 rounded-lg"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-
-                        <Slider
-                          min={0}
-                          max={50}
-                          step={1}
-                          value={[globalDiscount]}
-                          disabled={!canEditDiscount}
-                          onValueChange={([v]) => setGlobalDiscount(v)}
-                          className="flex-1"
-                        />
-
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          disabled={!canEditDiscount}
-                          onClick={() =>
-                            setGlobalDiscount((v) => Math.min(50, v + 1))
-                          }
-                          className="h-9 w-9 rounded-lg"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div className="flex items-end justify-between gap-4">
-                      <div>
-                        <div className="text-xl font-bold">Grand Total</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Including tax and discount
-                        </div>
-                      </div>
-
-                      <div className="text-right text-3xl font-black tabular-nums text-sky-400 drop-shadow-[0_0_14px_rgba(56,189,248,0.45)]">
-                        {money(grandTotal)}
-                      </div>
-                    </div>
-                  </CardContent>
-
-                  <CardFooter className="relative z-10 grid grid-cols-2 gap-3 pt-0">
-                    <Button
-                      onClick={exportCSV}
-                      variant="outline"
-                      className="h-12 gap-2 rounded-xl"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export
-                    </Button>
-
-                    <Button
-                      onClick={printReceipt}
-                      variant="outline"
-                      className="h-12 gap-2 rounded-xl border-sky-400/35 text-sky-500 hover:bg-sky-500/10"
-                    >
-                      <Printer className="h-4 w-4" />
-                      Print
-                    </Button>
-
-                    <Button
-                      onClick={openPayment}
-                      className="col-span-2 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 font-bold text-white"
-                    >
-                      Pay
-                    </Button>
-                  </CardFooter>
-                </GlassCard>
-
-                <GlassCard className="min-h-0 shrink-0">
-                  <CardHeader className="relative z-10 pb-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <CardTitle className="flex items-center gap-3 text-lg">
-                          <span className="grid h-9 w-9 place-items-center rounded-xl border border-sky-300/25 bg-sky-500/15 shadow-[0_0_26px_-12px_rgba(56,189,248,0.95)]">
-                            <Zap className="h-5 w-5 text-sky-400" />
-                          </span>
-                          POS Actions
-                        </CardTitle>
-                      </div>
-
-                      <Badge className="rounded-full bg-sky-500/15 px-3 py-1 text-sky-500">
-                        Ready
-                      </Badge>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="relative z-10">
-                    <button
-                      onClick={() => setActionsOpen(true)}
-                      className="group relative w-full overflow-hidden rounded-2xl border border-sky-300/25 bg-gradient-to-br from-sky-500/15 via-cyan-500/10 to-blue-500/10 p-3 text-left shadow-[0_0_42px_-24px_rgba(56,189,248,1)] transition hover:border-sky-300/45"
-                    >
-                      <div className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-sky-400/20 blur-2xl transition group-hover:bg-sky-400/30" />
-
-                      <div className="relative flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 bg-background/60 backdrop-blur-xl">
-                            <Settings2 className="h-5 w-5 text-sky-400" />
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-black">
-                              Open Action Center
-                            </div>
-                            <div className="truncate text-[11px] text-muted-foreground">
-                              More POS tools
-                            </div>
-                          </div>
-                        </div>
-
-                        <ArrowRight className="h-5 w-5 text-sky-400 transition group-hover:translate-x-1" />
-                      </div>
-                    </button>
-                  </CardContent>
-                </GlassCard>
-              </aside>
+              </Card>
             </section>
 
             <BarcodeLessProductDialog
