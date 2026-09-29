@@ -258,6 +258,7 @@ function ManualGroupIcon({ groupId }: { groupId: string }) {
 }
 
 const DEFAULT_TAX_RATE_PERCENT = 10;
+const CART_PAGE_SIZE = 5;
 const MANUAL_DIALOG_PAGE_SIZE = 8;
 
 const API_BASE =
@@ -642,6 +643,8 @@ export default function RegisterPOSPage() {
 
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [cartPage, setCartPage] = useState(1);
+  const previousCartLengthRef = useRef(0);
   const [query, setQuery] = useState("");
   const [dark, setDark] = useState(true);
 
@@ -704,6 +707,22 @@ export default function RegisterPOSPage() {
   const total = subtotal + tax;
   const grandTotal = Math.max(0, total * (1 - globalDiscount / 100));
   const money = (amount: number) => formatMoney(amount, receiptSetting);
+
+  const cartPageCount = Math.max(1, Math.ceil(cart.length / CART_PAGE_SIZE));
+  const cartPageStart = (cartPage - 1) * CART_PAGE_SIZE;
+  const visibleCartLines = cart.slice(cartPageStart, cartPageStart + CART_PAGE_SIZE);
+
+  useEffect(() => {
+    const previousLength = previousCartLengthRef.current;
+    if (cart.length > previousLength) {
+      // Show a newly added line, including the first cart restored from storage.
+      setCartPage(Math.ceil(cart.length / CART_PAGE_SIZE));
+    } else {
+      // Removing an item on the last page must not leave an empty page visible.
+      setCartPage((current) => Math.min(current, Math.max(1, Math.ceil(cart.length / CART_PAGE_SIZE))));
+    }
+    previousCartLengthRef.current = cart.length;
+  }, [cart.length]);
 
 
   const nameHints = useMemo(() => {
@@ -2301,11 +2320,11 @@ export default function RegisterPOSPage() {
                   <CardTitle className="flex items-center gap-2 text-lg"><ShoppingCart className="h-5 w-5 text-primary" />Cart <Badge variant="info">{cart.length}</Badge></CardTitle>
                   <span className="truncate text-xs text-muted-foreground">{lastScan ? `Last scan: ${lastScan.code}` : `${catalog.length} products ready`}</span>
                 </CardHeader>
-                <CardContent className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 py-0 touch-pan-y" aria-label="Cart items">
+                <CardContent className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 py-0 touch-pan-y min-[1000px]:overflow-hidden" aria-label="Cart items">
                   {cart.length === 0 ? <EmptyState /> : (
-                    <div className="divide-y divide-border">
-                      {cart.map((line) => (
-                        <div key={line.id} className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_150px_130px_44px] sm:px-4">
+                    <div className="divide-y divide-border min-[1000px]:grid min-[1000px]:h-full min-[1000px]:grid-rows-[repeat(5,minmax(0,1fr))] min-[1000px]:divide-y-0">
+                      {visibleCartLines.map((line) => (
+                        <div key={line.id} className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_150px_130px_44px] sm:px-4 min-[1000px]:min-h-0 min-[1000px]:py-1">
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"><CartLineVisual line={line} /></div>
                             <div className="min-w-0">
@@ -2333,6 +2352,15 @@ export default function RegisterPOSPage() {
                     </div>
                   )}
                 </CardContent>
+                {cart.length > CART_PAGE_SIZE && (
+                  <nav className="flex h-11 shrink-0 items-center justify-center gap-3 border-t border-border bg-card px-3" aria-label="Cart pages">
+                    <Button type="button" variant="outline" onClick={() => setCartPage((current) => Math.max(1, current - 1))} disabled={cartPage <= 1} className="h-8 min-w-20 rounded-lg">Prev</Button>
+                    <span className="min-w-28 text-center text-xs font-semibold tabular-nums" aria-live="polite">
+                      {cartPageStart + 1}–{Math.min(cartPageStart + CART_PAGE_SIZE, cart.length)} / {cart.length}
+                    </span>
+                    <Button type="button" variant="outline" onClick={() => setCartPage((current) => Math.min(cartPageCount, current + 1))} disabled={cartPage >= cartPageCount} className="h-8 min-w-20 rounded-lg">Next</Button>
+                  </nav>
+                )}
                 <CardFooter className="relative z-10 shrink-0 flex-col gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4">
                   <div className="flex w-full items-center justify-between gap-3 text-xs sm:text-sm">
                     <span className="text-muted-foreground">Subtotal {money(subtotal)} · Tax {money(tax)}</span>
