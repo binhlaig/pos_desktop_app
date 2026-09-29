@@ -1,5 +1,6 @@
 "use client";
 
+import { withReceiptRequestId, type ReceiptRequest } from "@/lib/receipt-request";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -103,7 +104,7 @@ type PaymentMethod = "cash" | "card";
 type CurrencyPosition = "BEFORE" | "AFTER";
 type ScanSource = "manual" | "hardware" | "camera";
 
-type SaveReceiptPayload = {
+type SaveReceiptPayload = ReceiptRequest & {
   staffId: string;
   staffName: string;
   staffRole: StaffRole;
@@ -663,6 +664,10 @@ export default function RegisterPOSPage() {
   const [receiptSaving, setReceiptSaving] = useState(false);
   // Refs change immediately, before React can render the disabled buttons.
   const receiptSavingRef = useRef(false);
+  const receiptAttemptsRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (cart.length === 0 && !receiptSavingRef.current) receiptAttemptsRef.current.clear();
+  }, [cart.length]);
   const paymentOpeningRef = useRef(false);
   const [hasHydrated, setHasHydrated] = useState(false);
 
@@ -1674,7 +1679,7 @@ export default function RegisterPOSPage() {
       const changeAmount =
         paymentMethod === "cash" ? Math.max(0, cashGivenAmount - grandTotal) : 0;
 
-      const payload: SaveReceiptPayload = {
+      const receiptFields: Omit<SaveReceiptPayload, "requestId"> = {
         staffId,
         staffName,
         staffRole,
@@ -1698,6 +1703,7 @@ export default function RegisterPOSPage() {
         })),
       };
 
+      const payload: SaveReceiptPayload = withReceiptRequestId(receiptAttemptsRef.current, receiptFields);
       const res = await fetch("/api/pos/receipts", {
         method: "POST",
         headers: {
@@ -1717,6 +1723,7 @@ export default function RegisterPOSPage() {
       toast.success(`Payment complete ✅ Receipt: ${data?.receiptNo || "saved"}`);
 
       setPaymentOpen(false);
+      receiptAttemptsRef.current.clear();
       setCart([]);
       setGlobalDiscount(0);
 
@@ -2126,7 +2133,8 @@ export default function RegisterPOSPage() {
   }
 
   function clearCart() {
-    if (!requireStaff()) return;
+    if (receiptSavingRef.current || !requireStaff()) return;
+    receiptAttemptsRef.current.clear();
     setCart([]);
   }
 

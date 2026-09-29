@@ -1,6 +1,7 @@
 "use client";
 // UPDATED: Fashion-POS-style payment assistance and latest cart item priority.
 
+import { withReceiptRequestId, postReceiptWithRetry, type ReceiptRequest } from "@/lib/receipt-request";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -1378,6 +1379,11 @@ export default function RestaurantCashierPOSPage() {
   });
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const paymentSavingRef = useRef(false);
+  const receiptAttemptsRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (cart.length === 0 && !paymentSavingRef.current) receiptAttemptsRef.current.clear();
+  }, [cart.length]);
   const [paymentError, setPaymentError] = useState("");
   const [kitchenTicketIds, setKitchenTicketIds] = useState<string[]>([]);
   // Switching tables must not lose the ticket IDs needed to verify DONE.
@@ -3053,105 +3059,108 @@ export default function RestaurantCashierPOSPage() {
   };
 
   const completePayment = async () => {
-    if (!activeStaff) {
-      setPaymentOpen(false);
-      setStaffError("Staff ID ထည့်ပါ။");
-      return;
-    }
-
-    if (!canPayOrder) return;
-
-    const latestMenuItems = await fetchMenuItems({ silent: true });
-    const unavailableItem = cart.find((item) => {
-      const latest = latestMenuItems.find((product) => isSameMenuItem(item, product));
-      return !latest || !latest.availableForSale;
-    });
-
-    if (unavailableItem) {
-      const message = unavailableToastMessage(unavailableItem.name);
-      setPaymentError(message);
-      setKitchenError(message);
-      toast.error(message);
-      return;
-    }
-
-    const stockError = validateCartStock();
-
-    if (stockError) {
-      setPaymentError(stockError);
-      setKitchenError(stockError);
-      return;
-    }
-
-    const missingDbIdItem = cart.find(
-      (item) => !String(item.dbId || "").trim(),
-    );
-
-    if (missingDbIdItem) {
-      setPaymentError(
-        `${missingDbIdItem.name} မှာ Product DB ID မပါပါ။ Product API response မှာ id ပါ/မပါ စစ်ပါ။`,
-      );
-      return;
-    }
-
-    if (paymentMethod === "CASH" && cashNumber < total) {
-      setPaymentError("Cash received မလုံလောက်သေးပါ");
-      return;
-    }
-
-    const paymentOrder: PaymentOrderPayload = {
-      orderType: orderType || "DINE_IN",
-      ...(orderType === "DINE_IN" && selectedTable
-        ? {
-          tableId: selectedTable.id,
-          tableNo: selectedTable.tableNo,
-        }
-        : {}),
-      staffId: activeStaff.staffId,
-      staffName: activeStaff.staffName,
-      subtotal,
-      serviceCharge,
-      tax,
-      discount,
-      total,
-      note: "",
-      serviceChargeRate: serviceChargeRatePercent / 100,
-      serviceChargeRatePercent,
-      taxRate: taxRatePercent / 100,
-      taxRatePercent,
-      paymentMethod,
-      cashReceived: paymentMethod === "CASH" ? cashNumber : 0,
-      changeAmount: paymentMethod === "CASH" ? change : 0,
-      items: cart.map((item) => {
-        const productDbId = String(item.dbId || "").trim();
-
-        return {
-          productId: productDbId,
-          product_id: productDbId,
-          dbId: productDbId,
-          db_id: productDbId,
-
-          id: item.menuItemId,
-          menuItemId: item.menuItemId,
-
-          productName: item.name,
-          product_name: item.name,
-          qty: item.qty,
-          price: item.price,
-          barcode: item.barcode || "",
-          sku: item.sku || "",
-          itemName: item.name,
-          quantity: item.qty,
-          unitPrice: item.price,
-          totalPrice: item.price * item.qty,
-          modifiers: item.modifiers,
-          kitchenNote: item.note || "",
-        };
-      }),
-    };
-
+    if (paymentSavingRef.current) return;
+    paymentSavingRef.current = true;
+    setPaymentSaving(true);
     try {
-      setPaymentSaving(true);
+      if (!activeStaff) {
+        setPaymentOpen(false);
+        setStaffError("Staff ID ထည့်ပါ။");
+        return;
+      }
+
+      if (!canPayOrder) return;
+
+      const latestMenuItems = await fetchMenuItems({ silent: true });
+      const unavailableItem = cart.find((item) => {
+        const latest = latestMenuItems.find((product) => isSameMenuItem(item, product));
+        return !latest || !latest.availableForSale;
+      });
+
+      if (unavailableItem) {
+        const message = unavailableToastMessage(unavailableItem.name);
+        setPaymentError(message);
+        setKitchenError(message);
+        toast.error(message);
+        return;
+      }
+
+      const stockError = validateCartStock();
+
+      if (stockError) {
+        setPaymentError(stockError);
+        setKitchenError(stockError);
+        return;
+      }
+
+      const missingDbIdItem = cart.find(
+        (item) => !String(item.dbId || "").trim(),
+      );
+
+      if (missingDbIdItem) {
+        setPaymentError(
+          `${missingDbIdItem.name} မှာ Product DB ID မပါပါ။ Product API response မှာ id ပါ/မပါ စစ်ပါ။`,
+        );
+        return;
+      }
+
+      if (paymentMethod === "CASH" && cashNumber < total) {
+        setPaymentError("Cash received မလုံလောက်သေးပါ");
+        return;
+      }
+
+      const paymentOrder: PaymentOrderPayload = {
+        orderType: orderType || "DINE_IN",
+        ...(orderType === "DINE_IN" && selectedTable
+          ? {
+            tableId: selectedTable.id,
+            tableNo: selectedTable.tableNo,
+          }
+          : {}),
+        staffId: activeStaff.staffId,
+        staffName: activeStaff.staffName,
+        subtotal,
+        serviceCharge,
+        tax,
+        discount,
+        total,
+        note: "",
+        serviceChargeRate: serviceChargeRatePercent / 100,
+        serviceChargeRatePercent,
+        taxRate: taxRatePercent / 100,
+        taxRatePercent,
+        paymentMethod,
+        cashReceived: paymentMethod === "CASH" ? cashNumber : 0,
+        changeAmount: paymentMethod === "CASH" ? change : 0,
+        items: cart.map((item) => {
+          const productDbId = String(item.dbId || "").trim();
+
+          return {
+            productId: productDbId,
+            product_id: productDbId,
+            dbId: productDbId,
+            db_id: productDbId,
+
+            id: item.menuItemId,
+            menuItemId: item.menuItemId,
+
+            productName: item.name,
+            product_name: item.name,
+            qty: item.qty,
+            price: item.price,
+            barcode: item.barcode || "",
+            sku: item.sku || "",
+            itemName: item.name,
+            quantity: item.qty,
+            unitPrice: item.price,
+            totalPrice: item.price * item.qty,
+            modifiers: item.modifiers,
+            kitchenNote: item.note || "",
+          };
+        }),
+      };
+
+
       setPaymentError("");
 
       const usableToken = ensurePageAccessToken(sessionAccessToken);
@@ -3202,7 +3211,7 @@ export default function RestaurantCashierPOSPage() {
       // Restaurant payment and the shared POS receipt are separate records.
       // Save the receipt only after the restaurant payment has succeeded.
       // A receipt failure must not submit the payment a second time.
-      const receiptPayload = {
+      const receiptFields = {
         staffId: activeStaff.staffId,
         staffName: activeStaff.staffName,
         paymentMethod,
@@ -3233,6 +3242,7 @@ export default function RestaurantCashierPOSPage() {
         }),
       };
 
+      const receiptPayload: typeof receiptFields & ReceiptRequest = withReceiptRequestId(receiptAttemptsRef.current, receiptFields);
       let receiptNo = paymentNo;
       let receiptSaveWarning = "";
 
@@ -3240,7 +3250,7 @@ export default function RestaurantCashierPOSPage() {
         const receiptUrl = `${API_BASE}/api/pos/receipts`;
         logRequestAuth(receiptUrl, usableToken);
 
-        const receiptResponse = await fetch(receiptUrl, {
+        const receiptResponse = await postReceiptWithRetry(receiptUrl, {
           method: "POST",
           headers: authHeaders(usableToken),
           body: JSON.stringify(receiptPayload),
@@ -3310,6 +3320,7 @@ export default function RestaurantCashierPOSPage() {
           };
         }),
       );
+      receiptAttemptsRef.current.clear();
       setCart([]);
       setTakeawayNumber("");
       setKitchenTicketIds([]);
@@ -3333,6 +3344,7 @@ export default function RestaurantCashierPOSPage() {
         ),
       );
     } finally {
+      paymentSavingRef.current = false;
       setPaymentSaving(false);
     }
   };
@@ -5414,7 +5426,7 @@ export default function RestaurantCashierPOSPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => {
-                if (!paymentSaving) setPaymentOpen(false);
+                if (!paymentSavingRef.current) setPaymentOpen(false);
               }}
             >
               <motion.div
@@ -5447,7 +5459,7 @@ export default function RestaurantCashierPOSPage() {
 
                   <button
                     onClick={() => {
-                      if (!paymentSaving) setPaymentOpen(false);
+                      if (!paymentSavingRef.current) setPaymentOpen(false);
                     }}
                     disabled={paymentSaving}
                     className={`rounded-2xl p-3 ${darkMode ? "bg-white/10" : "bg-slate-100"

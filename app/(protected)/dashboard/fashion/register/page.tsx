@@ -3,6 +3,7 @@
 // UPDATED: iPad compact header controls, staff/product info popover,
 // viewport-locked cart, and the original Fashion POS checkout workflow.
 
+import { withReceiptRequestId, type ReceiptRequest } from "@/lib/receipt-request";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -852,6 +853,11 @@ export default function FashionRegisterPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [cashReceived, setCashReceived] = useState("");
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const paymentSavingRef = useRef(false);
+  const receiptAttemptsRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (cart.length === 0 && !paymentSavingRef.current) receiptAttemptsRef.current.clear();
+  }, [cart.length]);
   const [paymentError, setPaymentError] = useState("");
   const cashInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1491,6 +1497,7 @@ export default function FashionRegisterPage() {
   }
 
   function clearCart() {
+    receiptAttemptsRef.current.clear();
     setCart([]);
     setCartPage(1);
     setLastAddedProductKey("");
@@ -1524,92 +1531,96 @@ export default function FashionRegisterPage() {
   }
 
   async function completePayment() {
-    if (!activeStaff) {
-      setPaymentOpen(false);
-      setStaffError("Staff ID ထည့်ပါ။");
-      return;
-    }
-
-    if (cart.length === 0) return;
-
-    const latestProducts = await fetchProducts({ silent: true });
-    const unavailableItem = cart.find((item) => {
-      const latest = latestProducts.find(
-        (product) =>
-          (!!item.variantId && product.variantId === item.variantId) ||
-          (!!item.dbId && product.dbId === item.dbId) ||
-          (!!item.barcode && product.barcode === item.barcode) ||
-          product.id === item.id,
-      );
-      return !latest || !latest.availableForSale;
-    });
-
-    if (unavailableItem) {
-      const message = unavailableToastMessage(unavailableItem.name);
-      setPaymentError(message);
-      toast.error(message);
-      return;
-    }
-
-    if (paymentMethod === "CASH" && cashNumber < total) {
-      setPaymentError("Cash received မလုံလောက်သေးပါ");
-      return;
-    }
-
-    const missingProductId = cart.find(
-      (item) => !String(item.dbId || "").trim(),
-    );
-
-    if (missingProductId) {
-      setPaymentError(
-        `${missingProductId.name} မှာ Product DB ID မပါပါ။ Product API response မှာ id ပါ/မပါ စစ်ပါ။`,
-      );
-      return;
-    }
-
-    const payload = {
-      staffId: activeStaff.staffId,
-      staffName: activeStaff.staffName,
-      paymentMethod,
-      subtotal,
-      taxAmount: tax,
-      discountPercent: 0,
-      discountAmount: discount,
-      grandTotal: total,
-      cashGiven: paymentMethod === "CASH" ? cashNumber : 0,
-      changeAmount: paymentMethod === "CASH" ? change : 0,
-      businessType: "FASHION",
-      items: cart.map((item) => {
-        const productId = String(item.dbId || "").trim();
-
-        return {
-          productId,
-          product_id: productId,
-          variantId: item.variantId || "",
-          variant_id: item.variantId || "",
-          productName: item.name,
-          product_name: item.name,
-          qty: item.qty,
-          price: item.price,
-          barcode: item.variantBarcode || item.barcode || "",
-          sku: item.sku || "",
-          color: item.color || "",
-          size: item.size || "",
-          brand: item.brand || "",
-          lineTotal: item.price * item.qty,
-          line_total: item.price * item.qty,
-        };
-      }),
-    };
-
+    if (paymentSavingRef.current) return;
+    paymentSavingRef.current = true;
+    setPaymentSaving(true);
     try {
-      setPaymentSaving(true);
+      if (!activeStaff) {
+        setPaymentOpen(false);
+        setStaffError("Staff ID ထည့်ပါ။");
+        return;
+      }
+
+      if (cart.length === 0) return;
+
+      const latestProducts = await fetchProducts({ silent: true });
+      const unavailableItem = cart.find((item) => {
+        const latest = latestProducts.find(
+          (product) =>
+            (!!item.variantId && product.variantId === item.variantId) ||
+            (!!item.dbId && product.dbId === item.dbId) ||
+            (!!item.barcode && product.barcode === item.barcode) ||
+            product.id === item.id,
+        );
+        return !latest || !latest.availableForSale;
+      });
+
+      if (unavailableItem) {
+        const message = unavailableToastMessage(unavailableItem.name);
+        setPaymentError(message);
+        toast.error(message);
+        return;
+      }
+
+      if (paymentMethod === "CASH" && cashNumber < total) {
+        setPaymentError("Cash received မလုံလောက်သေးပါ");
+        return;
+      }
+
+      const missingProductId = cart.find(
+        (item) => !String(item.dbId || "").trim(),
+      );
+
+      if (missingProductId) {
+        setPaymentError(
+          `${missingProductId.name} မှာ Product DB ID မပါပါ။ Product API response မှာ id ပါ/မပါ စစ်ပါ။`,
+        );
+        return;
+      }
+
+      const receiptFields = {
+        staffId: activeStaff.staffId,
+        staffName: activeStaff.staffName,
+        paymentMethod,
+        subtotal,
+        taxAmount: tax,
+        discountPercent: 0,
+        discountAmount: discount,
+        grandTotal: total,
+        cashGiven: paymentMethod === "CASH" ? cashNumber : 0,
+        changeAmount: paymentMethod === "CASH" ? change : 0,
+        businessType: "FASHION",
+        items: cart.map((item) => {
+          const productId = String(item.dbId || "").trim();
+
+          return {
+            productId,
+            product_id: productId,
+            variantId: item.variantId || "",
+            variant_id: item.variantId || "",
+            productName: item.name,
+            product_name: item.name,
+            qty: item.qty,
+            price: item.price,
+            barcode: item.variantBarcode || item.barcode || "",
+            sku: item.sku || "",
+            color: item.color || "",
+            size: item.size || "",
+            brand: item.brand || "",
+            lineTotal: item.price * item.qty,
+            line_total: item.price * item.qty,
+          };
+        }),
+      };
+
+
       setPaymentError("");
 
       if (!getAccessToken()) {
         throw new Error(MISSING_TOKEN_MESSAGE);
       }
 
+      const payload: typeof receiptFields & ReceiptRequest = withReceiptRequestId(receiptAttemptsRef.current, receiptFields);
       const res = await fetch(`${API_BASE}/api/pos/receipts`, {
         method: "POST",
         headers: authHeaders(),
@@ -1720,6 +1731,7 @@ export default function FashionRegisterPage() {
         err instanceof Error ? err.message : "Payment save failed.",
       );
     } finally {
+      paymentSavingRef.current = false;
       setPaymentSaving(false);
     }
   }
@@ -3195,7 +3207,7 @@ export default function FashionRegisterPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => {
-              if (!paymentSaving) setPaymentOpen(false);
+              if (!paymentSavingRef.current) setPaymentOpen(false);
             }}
           >
             <motion.div
