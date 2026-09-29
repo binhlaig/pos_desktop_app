@@ -11,11 +11,13 @@ import { Drawer, DrawerBody, DrawerContent, DrawerDescription, DrawerFooter, Dra
 import JsBarcode from "jsbarcode";
 
 type Product = { id: string; name: string; barcode: string; sku: string; price: number; imagePath: string | null };
-type LabelSize = "40x25" | "50x30" | "60x40";
+type LabelSize = "40x25" | "50x30" | "60x40" | "80x50" | "100x60";
 const SIZES: Record<LabelSize, { width: number; height: number; columns: number }> = {
   "40x25": { width: 40, height: 25, columns: 4 },
   "50x30": { width: 50, height: 30, columns: 3 },
   "60x40": { width: 60, height: 40, columns: 3 },
+  "80x50": { width: 80, height: 50, columns: 2 },
+  "100x60": { width: 100, height: 60, columns: 1 },
 };
 const DESKTOP_PAGE_SIZE = 7;
 const TABLET_PAGE_SIZE = 5;
@@ -57,7 +59,7 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}` } : {};
 }
 const barcodeCache = new Map<string, string>();
-function barcodeImage(value: string) {
+function barcodeSvg(value: string) {
   if (typeof document === "undefined" || !value.trim()) return "";
   const cached = barcodeCache.get(value);
   if (cached) return cached;
@@ -65,7 +67,7 @@ function barcodeImage(value: string) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     // Match the product page whose printed CODE128 barcode scans successfully.
     JsBarcode(svg, value.trim(), { format: "CODE128", displayValue: true, fontSize: 14, height: 70, margin: 8 });
-    const source = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.outerHTML)}`;
+    const source = svg.outerHTML;
     barcodeCache.set(value, source);
     return source;
   } catch { return ""; }
@@ -79,7 +81,7 @@ export default function POSBarcodePrintPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DESKTOP_PAGE_SIZE);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [size, setSize] = useState<LabelSize>("60x40");
+  const [size, setSize] = useState<LabelSize>("80x50");
   const [showPrice, setShowPrice] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -129,7 +131,7 @@ export default function POSBarcodePrintPage() {
   function printLabels() {
     if (!total) return toast.error("Print ထုတ်ရန် product ရွေးပါ။");
     if (total > MAX_LABELS) return toast.error(`တစ်ကြိမ်လျှင် ${MAX_LABELS} labels ထက်မပိုရပါ။`);
-    if (chosen.some((p) => !barcodeImage(p.barcode))) return toast.error("Code 128 မထုတ်နိုင်သော barcode ရှိနေပါသည်။ Product barcode ကို စစ်ပါ။");
+    if (chosen.some((p) => !barcodeSvg(p.barcode))) return toast.error("Code 128 မထုတ်နိုင်သော barcode ရှိနေပါသည်။ Product barcode ကို စစ်ပါ။");
     setPreviewOpen(false);
     window.setTimeout(() => window.print(), 100);
   }
@@ -145,7 +147,7 @@ export default function POSBarcodePrintPage() {
           #barcode-print-sheet { display: block !important; position: absolute !important; inset: 0 auto auto 0 !important; width: 194mm !important; margin: 0 !important; padding: 0 !important; background: white !important; }
           #barcode-print-grid { display: grid !important; grid-template-columns: repeat(var(--label-columns), var(--label-width)) !important; column-gap: 2mm !important; row-gap: 2mm !important; }
           .barcode-label { width: var(--label-width) !important; height: var(--label-height) !important; break-inside: avoid !important; page-break-inside: avoid !important; border: 0.2mm solid #e5e7eb !important; border-radius: 0 !important; box-sizing: border-box !important; padding: 2mm !important; overflow: hidden !important; color: black !important; background: white !important; }
-          .barcode-label img { display: block !important; width: 100% !important; height: var(--barcode-height) !important; object-fit: contain !important; background: white !important; }
+          .barcode-bars svg { display: block !important; width: 100% !important; height: auto !important; max-height: calc(var(--label-height) - 9mm) !important; background: white !important; }
           .barcode-bars { width: 100% !important; padding: 0 2mm !important; background: white !important; box-sizing: border-box !important; }
         }
       `}</style>
@@ -196,14 +198,14 @@ export default function POSBarcodePrintPage() {
           <div className="space-y-5 lg:sticky lg:top-5">
             <Card className="overflow-hidden rounded-2xl border-[var(--border)] shadow-sm"><CardHeader className="border-b border-[var(--border)] p-5"><div className="flex items-center gap-2"><div className="rounded-lg bg-[var(--brand-primary)]/10 p-2 text-[var(--brand-primary)]"><Settings2 className="size-4" /></div><CardTitle className="text-lg">Print settings</CardTitle></div></CardHeader>
               <CardContent className="space-y-5 p-5">
-                <div><label htmlFor="label-size" className="mb-2 block text-sm font-semibold">Label size</label><select id="label-size" value={size} onChange={(e) => setSize(e.target.value as LabelSize)} className="h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 text-sm"><option value="40x25">40 × 25 mm · 4 columns</option><option value="50x30">50 × 30 mm · 3 columns</option><option value="60x40">60 × 40 mm · 3 columns</option></select><p className="mt-1.5 text-xs text-[var(--muted-foreground)]">A4 portrait paper • Code 128</p></div>
+                <div><label htmlFor="label-size" className="mb-2 block text-sm font-semibold">Label size</label><select id="label-size" value={size} onChange={(e) => setSize(e.target.value as LabelSize)} className="h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 text-sm"><option value="40x25">40 × 25 mm · 4 columns</option><option value="50x30">50 × 30 mm · 3 columns</option><option value="60x40">60 × 40 mm · 3 columns</option><option value="80x50">80 × 50 mm · 2 columns · recommended</option><option value="100x60">100 × 60 mm · 1 column · large barcode</option></select><p className="mt-1.5 text-xs text-[var(--muted-foreground)]">A4 portrait paper • Code 128</p></div>
                 <label className="flex cursor-pointer items-center justify-between rounded-xl border border-[var(--border)] p-3 text-sm"><span>Label ပေါ် ဈေးနှုန်းပြမည်</span><input type="checkbox" checked={showPrice} onChange={(e) => setShowPrice(e.target.checked)} className="size-4 accent-[var(--brand-primary)]" /></label>
                 <div className="rounded-xl bg-[var(--muted)]/50 p-4 text-sm"><div className="flex justify-between text-[var(--muted-foreground)]"><span>ရွေးထားသော product</span><span className="font-semibold text-[var(--foreground)]">{chosen.length}</span></div><div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-3 font-semibold"><span>Print ထုတ်မည့် labels</span><span className="text-xl text-[var(--brand-primary)]">{total}</span></div></div>
                 {total > MAX_LABELS && <p role="alert" className="text-xs text-red-600">တစ်ကြိမ်လျှင် {MAX_LABELS} labels ထက်မပိုရပါ။</p>}
                 <Button type="button" variant="default" className="h-12 w-full rounded-xl text-sm font-semibold" disabled={!total || total > MAX_LABELS} onClick={() => setPreviewOpen(true)}><Barcode className="mr-2 size-4" />Preview & Print</Button>
                 <Button type="button" variant="outline" className="h-10 w-full rounded-xl" disabled={!total} onClick={() => setQuantities({})}>Selection ရှင်းမည်</Button>
               </CardContent></Card>
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] p-4 text-xs leading-6 text-[var(--muted-foreground)]"><p className="mb-1 font-semibold text-[var(--foreground)]">Print မထုတ်ခင် စစ်ရန်</p>Scan လွယ်ရန် 60 × 40 mm ရွေးပါ။ A4, Scale 100%, header/footer ပိတ်ပြီး ပထမစာရွက်ကို စမ်းသပ် print ထုတ်ပါ။ Browser print margin သည် CSS 8 mm ဖြစ်သည်။</div>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] p-4 text-xs leading-6 text-[var(--muted-foreground)]"><p className="mb-1 font-semibold text-[var(--foreground)]">Print မထုတ်ခင် စစ်ရန်</p>Scan လွယ်ရန် 80 × 50 mm သို့မဟုတ် 100 × 60 mm ရွေးပါ။ A4, Scale 100%, header/footer ပိတ်ပြီး ပထမစာရွက်ကို စမ်းသပ် print ထုတ်ပါ။ Browser print margin သည် CSS 8 mm ဖြစ်သည်။</div>
           </div>
         </div>
 
@@ -218,10 +220,10 @@ export default function POSBarcodePrintPage() {
           </DrawerHeader>
           <DrawerBody className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
             <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 p-3 text-xs text-[var(--muted-foreground)]">ပထမ {Math.min(total, 24)} labels ကို preview ပြထားသည်။ Print ထုတ်လျှင် ရွေးထားသော {total} labels အားလုံး ပါဝင်မည်။</div>
-            <div className="grid grid-cols-2 gap-3">
-              {labels.slice(0, 24).map((p, index) => <div key={`${p.id}-${index}`} className="flex h-36 min-w-0 flex-col items-center justify-between overflow-hidden rounded-xl border border-[var(--border)] bg-white p-3 text-center text-xs text-black shadow-sm"><strong className="w-full truncate">{p.name}</strong><div className="w-full bg-white px-2"><img src={barcodeImage(p.barcode)} alt="" className="h-16 w-full object-contain" /></div><span className="w-full truncate font-mono text-[10px]">{p.barcode}</span>{showPrice && <span>{formatPrice(p.price)}</span>}</div>)}
+            <div className="grid grid-cols-1 gap-3">
+              {labels.slice(0, 24).map((p, index) => <div key={`${p.id}-${index}`} className="flex min-h-40 min-w-0 flex-col items-center justify-between overflow-hidden rounded-xl border border-[var(--border)] bg-white p-3 text-center text-xs text-black shadow-sm"><strong className="w-full truncate">{p.name}</strong><div className="w-full max-w-[360px] bg-white px-2 [&_svg]:block [&_svg]:h-auto [&_svg]:w-full" role="img" aria-label={`Barcode ${p.barcode}`} dangerouslySetInnerHTML={{ __html: barcodeSvg(p.barcode) }} />{showPrice && <span>{formatPrice(p.price)}</span>}</div>)}
             </div>
-            <p className="mt-5 text-xs leading-5 text-[var(--muted-foreground)]">Scanner အတွက် 60 × 40 mm ကို အကြံပြုပါသည်။ A4, Scale 100%, headers/footers off ဖြင့် စမ်းသပ် print တစ်ရွက် အရင်ထုတ်ပါ။ Barcode ၏ ဘေးနှစ်ဖက် white space ကို မဖြတ်ပါနှင့်။</p>
+            <p className="mt-5 text-xs leading-5 text-[var(--muted-foreground)]">Scanner ဖတ်မြန်ရန် 80 × 50 mm သို့မဟုတ် 100 × 60 mm ရွေးပါ။ A4, Scale 100%, headers/footers off ဖြင့် စမ်းသပ် print တစ်ရွက် အရင်ထုတ်ပါ။ Barcode ၏ ဘေးနှစ်ဖက် white space ကို မဖြတ်ပါနှင့်။</p>
           </DrawerBody>
           <DrawerFooter className="shrink-0 border-t border-[var(--border)] bg-[var(--background)] px-5 py-4 sm:px-6">
             <div className="mb-3 flex items-center justify-between text-sm"><span className="text-[var(--muted-foreground)]">Total labels</span><strong className="text-lg text-[var(--brand-primary)]">{total}</strong></div>
@@ -230,8 +232,8 @@ export default function POSBarcodePrintPage() {
         </DrawerContent>
       </Drawer>
 
-      <div id="barcode-print-sheet" className="hidden" aria-hidden="true" style={{ "--label-width": `${SIZES[size].width}mm`, "--label-height": `${SIZES[size].height}mm`, "--label-columns": SIZES[size].columns, "--barcode-height": size === "40x25" ? "11mm" : size === "50x30" ? "15mm" : "22mm" } as CSSProperties}>
-        <div id="barcode-print-grid">{labels.map((p, index) => <div key={`${p.id}-${index}`} className="barcode-label flex flex-col items-center justify-between text-center" style={{ fontSize: "7pt" }}><div className="w-full truncate font-semibold">{p.name}</div><div className="barcode-bars"><img src={barcodeImage(p.barcode)} alt="" /></div>{showPrice && <div>{formatPrice(p.price)}</div>}</div>)}</div>
+      <div id="barcode-print-sheet" className="hidden" aria-hidden="true" style={{ "--label-width": `${SIZES[size].width}mm`, "--label-height": `${SIZES[size].height}mm`, "--label-columns": SIZES[size].columns } as CSSProperties}>
+        <div id="barcode-print-grid">{labels.map((p, index) => <div key={`${p.id}-${index}`} className="barcode-label flex flex-col items-center justify-between text-center" style={{ fontSize: "7pt" }}><div className="w-full truncate font-semibold">{p.name}</div><div className="barcode-bars" role="img" aria-label={`Barcode ${p.barcode}`} dangerouslySetInnerHTML={{ __html: barcodeSvg(p.barcode) }} />{showPrice && <div>{formatPrice(p.price)}</div>}</div>)}</div>
       </div>
     </main>
   );
