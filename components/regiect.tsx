@@ -527,41 +527,44 @@ function authHeaders(): Record<string, string> {
 
 function normalizeValidatedStaff(
   payload: unknown,
-  fallbackStaffId: string,
-): NonNullable<StaffSessionResponse["staff"]> | null {
-  if (!payload || typeof payload !== "object") return null;
-
+  requestedStaffId: string,
+  ownerToken: string,
+): NonNullable<StaffSessionResponse["staff"]> {
+  if (!payload || typeof payload !== "object") throw new Error("Invalid staff response.");
   const root = payload as Record<string, unknown>;
-  const nested = root.staff ?? root.data ?? root.result ?? root.user ?? root;
-
-  if (!nested || typeof nested !== "object") return null;
-
+  const nested = root.staff ?? root.data ?? root.result ?? root;
+  if (!nested || typeof nested !== "object") throw new Error("Invalid staff response.");
   const staff = nested as Record<string, unknown>;
-  const readString = (keys: string[]) => {
-    for (const key of keys) {
-      const value = staff[key];
-      if (typeof value === "string" && value.trim()) return value.trim();
-      if (typeof value === "number") return String(value);
-    }
-    return "";
-  };
-  const role = readString(["role", "staffRole"]).toLowerCase();
-
+  const staffShop = staff.shop && typeof staff.shop === "object" ? staff.shop as Record<string, unknown> : {};
+  const id = clean(staff.staffId ?? staff.staff_id ?? staff.staffCode ?? staff.staff_code);
+  if (!id || id !== requestedStaffId) throw new Error("Staff ID မမှန်ပါ။");
+  const status = clean(staff.status ?? staff.staffStatus ?? staff.staff_status).toUpperCase();
+  const active = staff.active ?? staff.isActive ?? staff.is_active;
+  const explicitlyInactive = active === false || active === 0 || active === "false";
+  if (explicitlyInactive || (status ? status !== "ACTIVE" : !(active === true || active === 1 || active === "true"))) {
+    throw new Error("Active staff ID ဖြစ်မှ POS အသုံးပြုနိုင်ပါမည်။");
+  }
+  let claims: Record<string, unknown>;
+  try {
+    const part = ownerToken.replace(/^Bearer\s+/i, "").split(".")[1];
+    const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    claims = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
+  } catch { throw new Error("Owner session မမှန်ပါ။ ပြန်လည် login ဝင်ပါ။"); }
+  // Claims are used only for UI comparison. The authenticated backend must enforce shop scope.
+  const ownerShopId = clean(claims.shopId ?? claims.shop_id);
+  const ownerShopCode = clean(claims.shopCode ?? claims.shop_code);
+  const staffShopId = clean(staff.shopId ?? staff.shop_id ?? staffShop.id ?? staffShop.shopId);
+  const staffShopCode = clean(staff.shopCode ?? staff.shop_code ?? staffShop.shopCode ?? staffShop.shop_code);
+  const compareId = !!ownerShopId && !!staffShopId;
+  const compareCode = !!ownerShopCode && !!staffShopCode;
+  if ((!compareId && !compareCode) || (compareId && ownerShopId !== staffShopId) || (compareCode && ownerShopCode !== staffShopCode)) {
+    throw new Error("Owner ရဲ့ shop staff ဖြစ်ကြောင်း အတည်ပြုမရပါ။ Staff shopId / shopCode ကို စစ်ပါ။");
+  }
+  const role = clean(staff.role ?? staff.staffRole).toLowerCase();
   return {
-    id:
-      readString([
-        "staffId",
-        "staff_id",
-        "staffCode",
-        "staff_code",
-        "id",
-        "username",
-      ]) || fallbackStaffId,
-    name: readString(["staffName", "name", "fullName", "username"]),
-    role:
-      role === "supervise" || role === "supervisor" || role === "admin"
-        ? "supervise"
-        : "staff",
+    id,
+    name: clean(staff.fullName ?? staff.staffName ?? staff.name),
+    role: ["supervise", "supervisor", "admin"].includes(role) ? "supervise" : "staff",
   };
 }
 
@@ -647,6 +650,9 @@ export default function RegisterPOSPage() {
   const [staffRole, setStaffRole] = useState<StaffRole>("staff");
 
   const [staffLoginLoading, setStaffLoginLoading] = useState(false);
+  const staffLoginBusyRef = useRef(false);
+  const [staffCameraOpen, setStaffCameraOpen] = useState(false);
+  const staffInputRef = useRef<HTMLInputElement>(null);
   const [staffLoginError, setStaffLoginError] = useState("");
   const [productsLoading, setProductsLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
@@ -1278,7 +1284,7 @@ export default function RegisterPOSPage() {
 
   async function startStaffSession(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
+    if (staffLoginBusyRef.current) return;
     const nextStaffId = staffIdDraft.trim();
 
     if (!nextStaffId) {
@@ -1286,6 +1292,7 @@ export default function RegisterPOSPage() {
       return;
     }
 
+    staffLoginBusyRef.current = true;
     try {
       setStaffLoginLoading(true);
       setStaffLoginError("");
@@ -1297,7 +1304,7 @@ export default function RegisterPOSPage() {
       }
 
       const payload = await fetchStaffById(nextStaffId, accessToken);
-      const staff = normalizeValidatedStaff(payload, nextStaffId);
+      const staff = normalizeValidatedStaff(payload, nextStaffId, accessToken);
 
       if (!staff?.id) {
         throw new Error("Staff validation returned an invalid response.");
@@ -1323,6 +1330,7 @@ export default function RegisterPOSPage() {
       setStaffRole("staff");
       toast.error(message);
     } finally {
+      staffLoginBusyRef.current = false;
       setStaffLoginLoading(false);
     }
   }
@@ -2148,6 +2156,19 @@ export default function RegisterPOSPage() {
           </div>
         </header>
 
+        {staffCameraOpen && !isLoggedIn && (
+          <CameraBarcodeScanner
+            mode="staff"
+            onClose={() => { setStaffCameraOpen(false); window.setTimeout(() => staffInputRef.current?.focus(), 100); }}
+            onDetected={(code) => {
+              setStaffCameraOpen(false);
+              setStaffIdDraft(code.trim());
+              setStaffLoginError("");
+              toast.success("Staff ID ဖတ်ပြီးပါပြီ။ POS စတင်မည် ကိုနှိပ်ပါ။");
+              window.setTimeout(() => staffInputRef.current?.focus(), 100);
+            }}
+          />
+        )}
         {!hasHydrated ? (
           <main className="relative z-10 mx-auto grid min-h-[calc(100dvh-88px)] max-w-[1680px] place-items-center px-4 py-10 md:px-6">
             <div className="h-12 w-12 animate-pulse rounded-2xl border border-sky-300/25 bg-sky-500/15 shadow-[0_0_34px_-14px_rgba(56,189,248,1)]" />
@@ -2182,6 +2203,9 @@ export default function RegisterPOSPage() {
                       <Users className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-sky-400" />
                       <Input
                         id="staff-gate-id"
+                        ref={staffInputRef}
+                        autoComplete="off"
+                        disabled={staffLoginLoading}
                         autoFocus
                         value={staffIdDraft}
                         onChange={(e) => setStaffIdDraft(e.target.value)}
@@ -2191,6 +2215,10 @@ export default function RegisterPOSPage() {
                     </div>
                   </div>
 
+                  <Button type="button" variant="outline" disabled={staffLoginLoading} onClick={() => { setStaffLoginError(""); setStaffCameraOpen(true); }} className="h-12 w-full rounded-2xl border-sky-400/40">
+                    <Camera className="mr-2 h-5 w-5" /> Staff ID Barcode Scan
+                  </Button>
+                  <p className="text-sm text-muted-foreground">Staff ID ရိုက်ထည့်ပါ သို့မဟုတ် barcode scan လုပ်ပါ။ ပြီးလျှင် POS စတင်မည် ကိုနှိပ်ပါ။</p>
                   <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-700 dark:text-amber-300">
                     Staff ID ကို Spring Boot API နဲ့စစ်ပြီး owner ရဲ့ shop staff
                     ဖြစ်မှ session စတင်ပါမယ်။
@@ -2206,7 +2234,7 @@ export default function RegisterPOSPage() {
                 <CardFooter className="relative z-10 pt-2">
                   <Button
                     type="submit"
-                    disabled={staffLoginLoading}
+                    disabled={staffLoginLoading || !staffIdDraft.trim()}
                     className="h-12 w-full rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-base font-bold text-white shadow-[0_0_35px_-12px_rgba(34,211,238,1)] hover:from-blue-400 hover:to-cyan-300"
                   >
                     {staffLoginLoading ? (
@@ -2424,7 +2452,9 @@ export default function RegisterPOSPage() {
 function CameraBarcodeScanner({
   onClose,
   onDetected,
+  mode = "product",
 }: {
+  mode?: "product" | "staff";
   onClose: () => void;
   onDetected: (barcode: string) => void;
 }) {
@@ -2506,10 +2536,10 @@ function CameraBarcodeScanner({
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-lg font-black sm:text-xl">
             <Camera className="h-5 w-5 text-sky-400" />
-            Camera Barcode Scan
+            {mode === "staff" ? "Staff ID Barcode Scan" : "Camera Barcode Scan"}
           </div>
           <p className="mt-1 truncate text-xs text-slate-300 sm:text-sm">
-            Barcode ကို ဘောင်အလယ်မှာထားပါ — ဖတ်ပြီးတာနဲ့ cart ထဲ အလိုအလျောက်ထည့်ပါမယ်။
+            {mode === "staff" ? "Staff ID barcode ကို ဘောင်အလယ်မှာထားပါ။ ဖတ်ပြီးလျှင် POS စတင်မည် ကိုနှိပ်ပါ။" : "Barcode ကို ဘောင်အလယ်မှာထားပါ — ဖတ်ပြီးတာနဲ့ cart ထဲ အလိုအလျောက်ထည့်ပါမယ်။"}
           </p>
         </div>
 
