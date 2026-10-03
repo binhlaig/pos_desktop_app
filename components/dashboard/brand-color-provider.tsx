@@ -13,6 +13,11 @@ export function BrandColorProvider({
   children: React.ReactNode;
 }) {
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("pos-dashboard-color");
+      const allowed = ["blue", "violet", "emerald", "rose", "amber", "indigo"];
+      document.documentElement.setAttribute("data-dashboard-color", saved && allowed.includes(saved) ? saved : "blue");
+    } catch { /* Use the SSR default when storage is unavailable. */ }
     applyBrandColors(getStoredBrandColors());
   }, []);
 

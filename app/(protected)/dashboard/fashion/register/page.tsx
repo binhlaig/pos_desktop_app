@@ -1,5 +1,7 @@
+"use client";
+import { useCurrency } from "@/components/currency-provider";
+import type { MoneyFormatter } from "@/lib/currency";
 
-"use client"
 // UPDATED: iPad compact header controls, staff/product info popover,
 // viewport-locked cart, and the original Fashion POS checkout workflow.
 
@@ -182,10 +184,7 @@ function getFashionCartDraftKey(staffId: string) {
   return `${CART_DRAFT_KEY_PREFIX}:${getShopDraftScope(getAccessToken())}:${staffId}`;
 }
 
-const formatMoney = (value: number) =>
-  new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(value);
+
 
 function getAccessToken() {
   if (typeof window === "undefined") return null;
@@ -527,6 +526,8 @@ function MobileCartBar({
   onPayment: () => void;
   addedFeedbackVisible: boolean;
 }) {
+  const { formatMoney } = useCurrency();
+
   const { ref, isDropTarget } = useDroppable({ id: MOBILE_CART_DROP_ID });
   const hasItems = itemCount > 0;
 
@@ -577,7 +578,7 @@ function MobileCartBar({
               {hasItems ? "Cart Total" : "Cart is empty"}
             </p>
             <p className="truncate text-lg font-black tabular-nums text-[var(--brand-primary)]">
-              {formatMoney(total)} Ks
+              {formatMoney(total)}
             </p>
           </button>
 
@@ -620,7 +621,11 @@ function getFashionSubtitle(item: FashionProduct | CartItem) {
   return parts.join(" · ") || item.category;
 }
 
-function buildReceiptHtml(receipt: PaymentReceiptData) {
+function escapeHtml(value: unknown) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
+function buildReceiptHtml(receipt: PaymentReceiptData, formatMoney: MoneyFormatter) {
   const rows = receipt.items
     .map(
       (item) => `
@@ -630,8 +635,8 @@ function buildReceiptHtml(receipt: PaymentReceiptData) {
             <div class="muted small">${getFashionSubtitle(item)}</div>
           </td>
           <td class="center">${item.qty}</td>
-          <td class="right">${formatMoney(item.price)}</td>
-          <td class="right">${formatMoney(item.price * item.qty)}</td>
+          <td class="right">${escapeHtml(formatMoney(item.price))}</td>
+          <td class="right">${escapeHtml(formatMoney(item.price * item.qty))}</td>
         </tr>`,
     )
     .join("");
@@ -759,16 +764,16 @@ function buildReceiptHtml(receipt: PaymentReceiptData) {
           </table>
 
           <div class="totals">
-            <div class="line"><span>Subtotal</span><strong>${formatMoney(receipt.subtotal)} Ks</strong></div>
-            <div class="line"><span>Tax</span><strong>${formatMoney(receipt.tax)} Ks</strong></div>
-            <div class="line"><span>Discount</span><strong>${formatMoney(receipt.discount)} Ks</strong></div>
-            <div class="line grand"><span>Total</span><strong>${formatMoney(receipt.total)} Ks</strong></div>
+            <div class="line"><span>Subtotal</span><strong>${escapeHtml(formatMoney(receipt.subtotal))}</strong></div>
+            <div class="line"><span>Tax</span><strong>${escapeHtml(formatMoney(receipt.tax))}</strong></div>
+            <div class="line"><span>Discount</span><strong>${escapeHtml(formatMoney(receipt.discount))}</strong></div>
+            <div class="line grand"><span>Total</span><strong>${escapeHtml(formatMoney(receipt.total))}</strong></div>
             <div class="line"><span>Payment</span><strong>${receipt.paymentMethod}</strong></div>
             ${
               receipt.paymentMethod === "CASH"
                 ? `
-                  <div class="line"><span>Cash Received</span><strong>${formatMoney(receipt.cashReceived)} Ks</strong></div>
-                  <div class="line"><span>Change</span><strong>${formatMoney(receipt.changeAmount)} Ks</strong></div>
+                  <div class="line"><span>Cash Received</span><strong>${escapeHtml(formatMoney(receipt.cashReceived))}</strong></div>
+                  <div class="line"><span>Change</span><strong>${escapeHtml(formatMoney(receipt.changeAmount))}</strong></div>
                 `
                 : ""
             }
@@ -795,6 +800,8 @@ function buildReceiptHtml(receipt: PaymentReceiptData) {
 }
 
 export default function FashionRegisterPage() {
+  const { formatMoney } = useCurrency();
+
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(false);
 
@@ -1749,7 +1756,7 @@ export default function FashionRegisterPage() {
     }
 
     printWindow.document.open();
-    printWindow.document.write(buildReceiptHtml(receiptData));
+    printWindow.document.write(buildReceiptHtml(receiptData, formatMoney));
     printWindow.document.close();
   }
 
@@ -1970,7 +1977,7 @@ export default function FashionRegisterPage() {
                   <Receipt size={17} className="text-[var(--brand-primary)]" />
                   <span>{cart.length} items</span>
                   <span className="text-[var(--brand-primary)]">
-                    {formatMoney(total)} Ks
+                    {formatMoney(total)}
                   </span>
                 </div>
               </div>
@@ -2272,7 +2279,7 @@ export default function FashionRegisterPage() {
 
                       <div className="mt-2 flex items-center justify-between gap-2 sm:mt-3">
                         <span className="text-sm font-black text-[var(--brand-primary)] sm:text-lg">
-                          {formatMoney(product.price)} Ks
+                          {formatMoney(product.price)}
                         </span>
                         <span
                           className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[10px] font-black text-white shadow-sm sm:rounded-2xl sm:px-3 sm:text-[11px] ${
@@ -2395,7 +2402,7 @@ export default function FashionRegisterPage() {
                   Total
                 </div>
                 <div className="text-lg font-black text-[var(--brand-primary)] sm:text-xl">
-                  {formatMoney(total)} Ks
+                  {formatMoney(total)}
                 </div>
               </div>
             </div>
@@ -2523,7 +2530,7 @@ export default function FashionRegisterPage() {
                                 {formatMoney(item.price)} × {item.qty}
                               </div>
                               <div className="text-sm font-black text-[var(--brand-primary)]">
-                                {formatMoney(item.price * item.qty)} Ks
+                                {formatMoney(item.price * item.qty)}
                               </div>
                             </div>
                           </div>
@@ -2585,7 +2592,7 @@ export default function FashionRegisterPage() {
                       <ChevronRight size={16} className="transition-transform group-open/cart-totals:rotate-90" />
                       Totals / Discount / Tax
                     </span>
-                    <span className="whitespace-nowrap text-sm text-[var(--brand-primary)]">{formatMoney(total)} Ks</span>
+                    <span className="whitespace-nowrap text-sm text-[var(--brand-primary)]">{formatMoney(total)} </span>
                   </summary>
                 <div className="grid grid-cols-2 gap-1.5 text-xs font-black">
                   <div
@@ -2595,7 +2602,7 @@ export default function FashionRegisterPage() {
                   >
                     <div className="text-slate-400">Subtotal</div>
                     <div className="mt-0.5 text-sm">
-                      {formatMoney(subtotal)} Ks
+                      {formatMoney(subtotal)}
                     </div>
                   </div>
 
@@ -2606,7 +2613,7 @@ export default function FashionRegisterPage() {
                   >
                     <div className="text-slate-400">Total</div>
                     <div className="mt-0.5 text-sm text-[var(--brand-primary)]">
-                      {formatMoney(total)} Ks
+                      {formatMoney(total)}
                     </div>
                   </div>
                 </div>
@@ -2719,7 +2726,7 @@ export default function FashionRegisterPage() {
                 <div>
                   <h2 className="text-xl font-black">Fashion POS Controls</h2>
                   <p className={`mt-1 text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
-                    {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)} Ks
+                    {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)}
                   </p>
                 </div>
                 <button
@@ -2888,18 +2895,18 @@ export default function FashionRegisterPage() {
 
               <h2 className="mt-4 text-xl font-black">Dashboard ကို သွားမလား?</h2>
               <p className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"}`}>
-                Cart ထဲမှာ {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)} Ks ရှိနေပါတယ်။
+                Cart ထဲမှာ {cart.reduce((sum, item) => sum + item.qty, 0)} items · {formatMoney(total)}  ရှိနေပါတယ်။
                 Payment မပြီးသေးဘဲထွက်လျှင် လက်ရှိ cart ပျောက်သွားနိုင်ပါတယ်။
               </p>
 
               <div className={`mt-4 rounded-2xl p-3 ${darkMode ? "bg-white/5" : "bg-[var(--brand-soft)]"}`}>
                 <div className="flex items-center justify-between text-sm font-black">
                   <span>Subtotal</span>
-                  <span>{formatMoney(subtotal)} Ks</span>
+                  <span>{formatMoney(subtotal)} </span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-base font-black">
                   <span>Total</span>
-                  <span className="text-[var(--brand-primary)]">{formatMoney(total)} Ks</span>
+                  <span className="text-[var(--brand-primary)]">{formatMoney(total)} </span>
                 </div>
               </div>
 
@@ -3104,7 +3111,7 @@ export default function FashionRegisterPage() {
                                   {formatMoney(item.price)} × {item.qty}
                                 </div>
                                 <div className="text-sm font-black text-[var(--brand-primary)]">
-                                  {formatMoney(item.price * item.qty)} Ks
+                                  {formatMoney(item.price * item.qty)}
                                 </div>
                               </div>
                             </div>
@@ -3166,7 +3173,7 @@ export default function FashionRegisterPage() {
                       }`}
                     >
                       <div className="text-slate-400">Subtotal</div>
-                      <div className="mt-1 text-sm">{formatMoney(subtotal)} Ks</div>
+                      <div className="mt-1 text-sm">{formatMoney(subtotal)} </div>
                     </div>
                     <div
                       className={`rounded-2xl p-3 ${
@@ -3175,7 +3182,7 @@ export default function FashionRegisterPage() {
                     >
                       <div className="text-slate-400">Total</div>
                       <div className="mt-1 text-sm text-[var(--brand-primary)]">
-                        {formatMoney(total)} Ks
+                        {formatMoney(total)}
                       </div>
                     </div>
                   </div>
@@ -3263,7 +3270,7 @@ export default function FashionRegisterPage() {
                   </p>
                   <p className="mt-1 text-4xl font-black tabular-nums text-[var(--brand-primary)] sm:text-5xl">
                     {formatMoney(total)}
-                    <span className="ml-2 text-lg sm:text-xl">Ks</span>
+
                   </p>
                 </div>
 
@@ -3276,15 +3283,15 @@ export default function FashionRegisterPage() {
                 >
                   <div>
                     <p className="text-[10px] uppercase text-slate-400">Subtotal</p>
-                    <p className="mt-1 tabular-nums">{formatMoney(subtotal)} Ks</p>
+                    <p className="mt-1 tabular-nums">{formatMoney(subtotal)} </p>
                   </div>
                   <div className={`border-x ${darkMode ? "border-white/10" : "border-[var(--brand-border)]"}`}>
                     <p className="text-[10px] uppercase text-slate-400">Discount</p>
-                    <p className="mt-1 tabular-nums">-{formatMoney(discount)} Ks</p>
+                    <p className="mt-1 tabular-nums">-{formatMoney(discount)} </p>
                   </div>
                   <div>
                     <p className="text-[10px] uppercase text-slate-400">Tax</p>
-                    <p className="mt-1 tabular-nums">{formatMoney(tax)} Ks</p>
+                    <p className="mt-1 tabular-nums">{formatMoney(tax)} </p>
                   </div>
                 </div>
               </div>
@@ -3390,7 +3397,7 @@ export default function FashionRegisterPage() {
                               : "bg-slate-100 text-slate-700 hover:bg-[var(--brand-soft)]"
                         }`}
                       >
-                        {formatMoney(amount)} Ks
+                        {formatMoney(amount)}
                       </button>
                     ))}
                   </div>
@@ -3413,13 +3420,13 @@ export default function FashionRegisterPage() {
                     >
                       <span>ပေးထားငွေ</span>
                       <span className="text-lg tabular-nums">
-                        {formatMoney(cashNumber)} Ks
+                        {formatMoney(cashNumber)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-4 py-4">
                       <span className="font-black">Change</span>
                       <span className="text-2xl font-black tabular-nums">
-                        {formatMoney(cashIsEnough ? change : remainingAmount)} Ks
+                        {formatMoney(cashIsEnough ? change : remainingAmount)}
                       </span>
                     </div>
                   </div>
@@ -3467,8 +3474,8 @@ export default function FashionRegisterPage() {
                   {paymentSaving
                     ? "Saving..."
                     : paymentMethod === "CASH" && !cashIsEnough
-                      ? `${formatMoney(remainingAmount)} Ks လိုသေးသည်`
-                      : `${formatMoney(total)} Ks Pay`}
+                      ? `${formatMoney(remainingAmount)}  လိုသေးသည်`
+                      : `${formatMoney(total)}  Pay`}
                 </button>
               </div>
             </motion.div>
@@ -3562,7 +3569,7 @@ export default function FashionRegisterPage() {
                           </div>
                         </div>
                         <div className="font-black">
-                          {formatMoney(item.price * item.qty)} Ks
+                          {formatMoney(item.price * item.qty)}
                         </div>
                       </div>
                     ))}
@@ -3573,20 +3580,20 @@ export default function FashionRegisterPage() {
                   <div className="space-y-2 text-sm font-black">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Subtotal</span>
-                      <span>{formatMoney(receiptData.subtotal)} Ks</span>
+                      <span>{formatMoney(receiptData.subtotal)} </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Discount</span>
-                      <span>{formatMoney(receiptData.discount)} Ks</span>
+                      <span>{formatMoney(receiptData.discount)} </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Tax</span>
-                      <span>{formatMoney(receiptData.tax)} Ks</span>
+                      <span>{formatMoney(receiptData.tax)} </span>
                     </div>
                     <div className="flex justify-between text-lg">
                       <span>Total</span>
                       <span className="text-[var(--brand-primary)]">
-                        {formatMoney(receiptData.total)} Ks
+                        {formatMoney(receiptData.total)}
                       </span>
                     </div>
                   </div>
@@ -3720,7 +3727,7 @@ export default function FashionRegisterPage() {
                 {draggingProduct.name}
               </p>
               <p className="mt-1 text-lg font-black text-[var(--brand-primary)]">
-                {formatMoney(draggingProduct.price)} Ks
+                {formatMoney(draggingProduct.price)}
               </p>
             </div>
             <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[10px] font-black text-white">

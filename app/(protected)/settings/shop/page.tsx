@@ -1,7 +1,11 @@
-
 "use client";
+import { getReceiptSettingsResponse } from "@/lib/settings-api";
+import { DEFAULT_CURRENCY, normalizeCurrency, receiptSettingsPayload, formatCurrency, type CurrencyConfig } from "@/lib/currency";
+import { useCurrency } from "@/components/currency-provider";
+import { useSession } from "next-auth/react";
+import { getStoredOwnerToken } from "@/lib/auth-storage";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -46,7 +50,7 @@ type ReceiptAd = {
   active?: boolean;
 };
 
-type ReceiptShopInfo = {
+type ReceiptShopInfo = CurrencyConfig & {
   shopName: string;
   address: string;
   phone: string;
@@ -62,6 +66,7 @@ const EMPTY_RECEIPT_PLACEHOLDERS = [
 ];
 
 const DEFAULT_INFO: ReceiptShopInfo = {
+  ...DEFAULT_CURRENCY,
   shopName: "Clear Blue Light POS",
   address: "",
   phone: "",
@@ -156,8 +161,8 @@ function getAccessToken() {
   ).trim();
 }
 
-function authHeaders(): Record<string, string> {
-  const token = getAccessToken();
+function authHeaders(sessionToken?: string | null): Record<string, string> {
+  const token = sessionToken || getStoredOwnerToken() || getAccessToken();
 
   return token
     ? {
@@ -180,6 +185,7 @@ function normalizeInfo(data: any): ReceiptShopInfo {
   const shop = payload?.shop && typeof payload.shop === "object" ? payload.shop : {};
 
   return {
+    ...normalizeCurrency(data),
     shopName:
       clean(
         payload?.shopName ??
@@ -238,12 +244,7 @@ function normalizeInfo(data: any): ReceiptShopInfo {
   };
 }
 
-function jpy(n: number) {
-  return Math.round(n).toLocaleString("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-  });
-}
+
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -255,7 +256,16 @@ function escapeHtml(value: unknown) {
 }
 
 export default function ReceiptShopInfoPage() {
+  const { data: session } = useSession();
+  const account = `${session?.user?.shopId ?? session?.user?.shopCode ?? ""}:${session?.user?.id ?? ""}`;
+  return <ReceiptShopInfoForm key={account} />;
+}
+
+function ReceiptShopInfoForm() {
   const router = useRouter();
+  const { updateCurrency } = useCurrency();
+  const { data: session } = useSession();
+  const sessionToken = session?.accessToken || session?.user?.accessToken;
 
   const [info, setInfo] = useState<ReceiptShopInfo>(DEFAULT_INFO);
   const [loading, setLoading] = useState(true);
@@ -315,10 +325,6 @@ export default function ReceiptShopInfoPage() {
   }, []);
 
   useEffect(() => {
-    void loadInfo();
-  }, []);
-
-  useEffect(() => {
     const saved = localStorage.getItem("receipt-shop-info-theme");
 
     if (saved) {
@@ -342,16 +348,16 @@ export default function ReceiptShopInfoPage() {
     setIsNight((current) => !current);
   }
 
-  async function loadInfo() {
+  const loadInfo = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/receipt-settings/my-shop", {
+      const res = await getReceiptSettingsResponse( {
         method: "GET",
         headers: {
           Accept: "application/json",
-          ...authHeaders(),
+          ...authHeaders(sessionToken),
         },
         cache: "no-store",
       });
@@ -383,11 +389,14 @@ export default function ReceiptShopInfoPage() {
 
       setError(message);
       toast.error(message);
-      setInfo(DEFAULT_INFO);
     } finally {
       setLoading(false);
     }
-  }
+  }, [sessionToken]);
+
+  useEffect(() => {
+    void loadInfo();
+  }, [loadInfo]);
 
   function updateTaxRate(nextValue: number) {
     setInfo((current) => ({
@@ -398,6 +407,7 @@ export default function ReceiptShopInfoPage() {
 
   async function saveTaxRate() {
     const payload = {
+      ...normalizeCurrency(info),
       shopName: info.shopName,
       address: info.address,
       phone: info.phone,
@@ -416,7 +426,7 @@ export default function ReceiptShopInfoPage() {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          ...authHeaders(),
+          ...authHeaders(sessionToken),
         },
         body: JSON.stringify(payload),
       });
@@ -429,7 +439,7 @@ export default function ReceiptShopInfoPage() {
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-            ...authHeaders(),
+            ...authHeaders(sessionToken),
           },
           body: JSON.stringify(payload),
         });
@@ -442,8 +452,11 @@ export default function ReceiptShopInfoPage() {
         );
       }
 
+      const savedCurrency = normalizeCurrency({ ...payload, ...receiptSettingsPayload(data) });
+      updateCurrency(savedCurrency);
       setInfo((current) => ({
         ...current,
+        ...savedCurrency,
         taxRatePercent: readPercent(
           data?.taxRatePercent,
           data?.tax_rate_percent,
@@ -800,7 +813,7 @@ export default function ReceiptShopInfoPage() {
               <CardHeader className="border-b border-slate-200/70 dark:border-white/10">
                 <CardTitle className="flex items-center gap-3">
                   <Percent className="h-5 w-5 text-emerald-500 dark:text-emerald-300" />
-                  Tax Rate Control
+                  Receipt Currency & Tax
                 </CardTitle>
                 <CardDescription className="text-slate-600 dark:text-slate-300">
                   Staff တွေသုံးတဲ့ POS screen မှာမပြင်စေဘဲ ဒီ settings page မှာ tax rate ကိုသတ်မှတ်ပါ။
@@ -808,6 +821,25 @@ export default function ReceiptShopInfoPage() {
               </CardHeader>
 
               <CardContent className="p-5">
+                <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2"><Label htmlFor="currency-code">Currency Code</Label>
+                    <Input id="currency-code" value={info.currencyCode} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, currencyCode: e.target.value }))} list="currency-codes" />
+                    <datalist id="currency-codes"><option value="MMK" /><option value="JPY" /><option value="USD" /></datalist>
+                  </div>
+                  <div className="grid gap-2"><Label htmlFor="currency-symbol">Currency Symbol</Label>
+                    <Input id="currency-symbol" value={info.currencySymbol} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, currencySymbol: e.target.value }))} />
+                  </div>
+                  <div className="grid gap-2"><Label htmlFor="currency-digits">Decimal Digits</Label>
+                    <Input id="currency-digits" type="number" min={0} max={20} step={1} value={info.currencyDecimalDigits} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, ...normalizeCurrency({ ...current, currencyDecimalDigits: e.target.value }) }))} />
+                  </div>
+                  <div className="grid gap-2"><Label htmlFor="currency-position">Symbol Position</Label>
+                    <select id="currency-position" className="h-9 rounded-md border bg-transparent px-3" value={info.currencyPosition} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, currencyPosition: e.target.value === "BEFORE" ? "BEFORE" : "AFTER" }))}>
+                      <option value="BEFORE">Before amount</option><option value="AFTER">After amount</option>
+                    </select>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Preview: {formatCurrency(10000, normalizeCurrency(info))}</p>
+                </div>
+
                 <div className="flex flex-col gap-4 rounded-3xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-300/20 dark:bg-emerald-400/10 md:flex-row md:items-end md:justify-between">
                   <div className="grid gap-2">
                     <Label htmlFor="tax-rate-percent">Tax Rate (%)</Label>
@@ -866,7 +898,7 @@ export default function ReceiptShopInfoPage() {
                       ) : (
                         <Save className="h-4 w-4" />
                       )}
-                      Save Tax Rate
+                      Save Receipt Settings
                     </Button>
                   </div>
                 </div>
@@ -1112,6 +1144,8 @@ function ReceiptPreview({
   dateText: string;
   loading: boolean;
 }) {
+  const { formatMoney: jpy } = useCurrency();
+
   const sampleItems = [
     { name: "Coffee", qty: 2, price: 280 },
     { name: "Bread", qty: 1, price: 180 },

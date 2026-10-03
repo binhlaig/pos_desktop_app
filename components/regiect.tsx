@@ -1,4 +1,7 @@
 "use client";
+import { getReceiptSettingsResponse } from "@/lib/settings-api";
+import { useCurrency } from "@/components/currency-provider";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 
 import { withReceiptRequestId, type ReceiptRequest } from "@/lib/receipt-request";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -272,10 +275,7 @@ const DEFAULT_RECEIPT_SETTING: ReceiptPrintSetting = {
   secondPhone: "",
   footerMessage: "Thank you for shopping",
   taxRatePercent: DEFAULT_TAX_RATE_PERCENT,
-  currencyCode: "MMK",
-  currencySymbol: "Ks",
-  currencyDecimalDigits: 0,
-  currencyPosition: "BEFORE",
+  ...DEFAULT_CURRENCY,
   ads: [],
 };
 
@@ -352,18 +352,7 @@ const unwrapShopPayload = (data: any) => {
   return shop || {};
 };
 
-function formatMoney(amount: number, setting: ReceiptPrintSetting) {
-  const value = Number(amount || 0).toLocaleString("en-US", {
-    minimumFractionDigits: setting.currencyDecimalDigits,
-    maximumFractionDigits: setting.currencyDecimalDigits,
-  });
 
-  if (setting.currencyPosition === "AFTER") {
-    return `${value} ${setting.currencySymbol}`;
-  }
-
-  return `${setting.currencySymbol} ${value}`;
-}
 
 function productEmoji(name: string, category?: string) {
   const lower = name.toLowerCase();
@@ -714,7 +703,7 @@ export default function RegisterPOSPage() {
 
   const total = subtotal + tax;
   const grandTotal = Math.max(0, total * (1 - globalDiscount / 100));
-  const money = (amount: number) => formatMoney(amount, receiptSetting);
+  const { currency: currentCurrency, formatMoney: money } = useCurrency();
 
   const cartPageCount = Math.max(1, Math.ceil(cart.length / CART_PAGE_SIZE));
   const cartPageStart = (cartPage - 1) * CART_PAGE_SIZE;
@@ -1043,7 +1032,7 @@ export default function RegisterPOSPage() {
   async function loadReceiptSetting() {
     try {
       const [receiptRes, shopRes] = await Promise.all([
-        fetch("/api/receipt-settings/my-shop", {
+        getReceiptSettingsResponse( {
           method: "GET",
           headers: {
             Accept: "application/json",
@@ -1155,30 +1144,7 @@ export default function RegisterPOSPage() {
 
         taxRatePercent: taxPercent,
 
-        currencyCode:
-          clean(shopPayload?.currencyCode) ||
-          clean(shopPayload?.currency_code) ||
-          DEFAULT_RECEIPT_SETTING.currencyCode,
-
-        currencySymbol:
-          clean(shopPayload?.currencySymbol) ||
-          clean(shopPayload?.currency_symbol) ||
-          DEFAULT_RECEIPT_SETTING.currencySymbol,
-
-        currencyDecimalDigits: Number.isFinite(
-          Number(shopPayload?.currencyDecimalDigits ?? shopPayload?.currency_decimal_digits)
-        )
-          ? Number(shopPayload?.currencyDecimalDigits ?? shopPayload?.currency_decimal_digits)
-          : DEFAULT_RECEIPT_SETTING.currencyDecimalDigits,
-
-        currencyPosition:
-          String(
-            shopPayload?.currencyPosition ??
-              shopPayload?.currency_position ??
-              DEFAULT_RECEIPT_SETTING.currencyPosition
-          ).toUpperCase() === "AFTER"
-            ? "AFTER"
-            : "BEFORE",
+        ...DEFAULT_CURRENCY,
 
         ads: Array.isArray(receiptPayload?.ads)
           ? receiptPayload.ads
@@ -1774,7 +1740,7 @@ export default function RegisterPOSPage() {
     );
 
     const totals = [
-      ["Currency", `${receiptSetting.currencyCode} ${receiptSetting.currencySymbol}`].join(","),
+      ["Currency", `${currentCurrency.currencyCode} ${currentCurrency.currencySymbol}`].join(","),
       ["Subtotal", round(subtotal)].join(","),
       ["Tax", round(tax)].join(","),
       ["Total", round(total)].join(","),
@@ -1816,7 +1782,7 @@ export default function RegisterPOSPage() {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 
-    const receiptMoney = (amount: number) => formatMoney(amount, receiptSetting);
+    const receiptMoney = money;
     const now = new Date();
 
     const receiptNo = `R-${now.getFullYear()}${String(
@@ -1883,8 +1849,8 @@ export default function RegisterPOSPage() {
               <div class="meta">${escapeHtml(line.barcode || line.sku || line.id)}${discountText}</div>
             </td>
             <td class="qty">${line.qty}</td>
-            <td class="price">${escapeHtml(receiptMoney(line.price))}</td>
-            <td class="total">${escapeHtml(receiptMoney(lineTotal))}</td>
+            <td class="price">${escapeHtml(escapeHtml(receiptMoney(line.price)))}</td>
+            <td class="total">${escapeHtml(escapeHtml(receiptMoney(lineTotal)))}</td>
           </tr>
         `;
       })
@@ -2065,7 +2031,7 @@ export default function RegisterPOSPage() {
               staffId || "-"
             )}</b></div>
             <div class="info-row"><span>Currency</span><b>${escapeHtml(
-              `${receiptSetting.currencyCode} ${receiptSetting.currencySymbol}`
+              `${currentCurrency.currencyCode} ${currentCurrency.currencySymbol}`
             )}</b></div>
 
             <div class="divider"></div>
@@ -2085,14 +2051,14 @@ export default function RegisterPOSPage() {
             <div class="divider"></div>
 
             <div class="total-row"><span>Subtotal</span><b>${escapeHtml(
-              receiptMoney(subtotal)
+              escapeHtml(receiptMoney(subtotal))
             )}</b></div>
             <div class="total-row"><span>Tax (${taxRatePercent}%)</span><b>${escapeHtml(
-              receiptMoney(tax)
+              escapeHtml(receiptMoney(tax))
             )}</b></div>
             <div class="total-row"><span>Discount</span><b>${globalDiscount}%</b></div>
             <div class="total-row grand"><span>Grand Total</span><span class="value">${escapeHtml(
-              receiptMoney(grandTotal)
+              escapeHtml(receiptMoney(grandTotal))
             )}</span></div>
 
             ${adsHtml}
@@ -2150,7 +2116,7 @@ export default function RegisterPOSPage() {
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-base font-bold tracking-tight">Nimi Mark <span className="text-primary">POS</span></h1>
-                <p className="truncate text-[11px] text-muted-foreground">Register · {receiptSetting.currencyCode}</p>
+                <p className="truncate text-[11px] text-muted-foreground">Register · {currentCurrency.currencyCode}</p>
               </div>
             </div>
 

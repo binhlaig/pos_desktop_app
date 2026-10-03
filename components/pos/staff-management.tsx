@@ -1,5 +1,5 @@
 "use client";
-
+import { useCurrency } from "@/components/currency-provider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -137,8 +137,7 @@ export type Product = {
   price: number;
   imageUrl?: string;
 };
-const jpy = (n: number) =>
-  new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(n);
+
 
 /* ================= Utils ================= */
 const nowISO = () => new Date().toISOString();
@@ -885,6 +884,8 @@ export function CategoryGrid({
   items: Product[];
   onPick: (p: Product) => void;
 }) {
+  const { formatMoney: jpy } = useCurrency();
+
   const [qtyById, setQtyById] = useState<Record<string, number>>({});
 
   const getQty = (id: string) => qtyById[id] ?? 1;

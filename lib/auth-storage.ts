@@ -26,4 +26,5 @@ export function clearStoredAuthData() {
   for (const key of AUTH_STORAGE_KEYS) {
     localStorage.removeItem(key);
   }
+  window.dispatchEvent(new Event("pos-auth-updated"));
 }

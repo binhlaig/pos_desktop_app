@@ -1,8 +1,9 @@
+"use client";
+import { useCurrency } from "@/components/currency-provider";
+import type { MoneyFormatter } from "@/lib/currency";
 
 
 
-
-"use client"
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -351,11 +352,7 @@ function normalizeOrderType(value?: string | null): Exclude<OrderType, "ALL"> {
   return "DINE_IN";
 }
 
-function formatMoney(value?: number | null) {
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-}
+
 
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
@@ -672,7 +669,7 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", "&#039;");
 }
 
-function buildOrderReceiptHtml(order: RestaurantOrder) {
+function buildOrderReceiptHtml(order: RestaurantOrder, formatMoney: MoneyFormatter) {
   const orderLabel = order.orderNo || order.paymentNo || order.ticketNo || `ORD-${order.id}`;
   const itemRows = (order.items || [])
     .map((item) => {
@@ -689,8 +686,8 @@ function buildOrderReceiptHtml(order: RestaurantOrder) {
             ${item.kitchenNote ? `<small>Note: ${escapeHtml(item.kitchenNote)}</small>` : ""}
           </td>
           <td class="center">${escapeHtml(item.quantity || 1)}</td>
-          <td class="right">${formatMoney(item.unitPrice)}</td>
-          <td class="right">${formatMoney(lineTotal)}</td>
+          <td class="right">${escapeHtml(formatMoney(item.unitPrice))}</td>
+          <td class="right">${escapeHtml(formatMoney(lineTotal))}</td>
         </tr>`;
     })
     .join("");
@@ -733,20 +730,20 @@ function buildOrderReceiptHtml(order: RestaurantOrder) {
         <thead><tr><th>Item</th><th class="center">Qty</th><th class="right">Price</th><th class="right">Amount</th></tr></thead>
         <tbody>${itemRows || `<tr><td colspan="4" class="center">No order items</td></tr>`}</tbody>
       </table>
-      <div class="line"><span>Subtotal</span><strong>${formatMoney(order.subtotal)} Ks</strong></div>
-      <div class="line"><span>Service</span><strong>${formatMoney(order.serviceCharge)} Ks</strong></div>
-      <div class="line"><span>Tax</span><strong>${formatMoney(order.tax)} Ks</strong></div>
-      <div class="line"><span>Discount</span><strong>${formatMoney(order.discount)} Ks</strong></div>
-      <div class="line total"><span>Total</span><span>${formatMoney(order.total)} Ks</span></div>
+      <div class="line"><span>Subtotal</span><strong>${escapeHtml(formatMoney(order.subtotal))}</strong></div>
+      <div class="line"><span>Service</span><strong>${escapeHtml(formatMoney(order.serviceCharge))}</strong></div>
+      <div class="line"><span>Tax</span><strong>${escapeHtml(formatMoney(order.tax))}</strong></div>
+      <div class="line"><span>Discount</span><strong>${escapeHtml(formatMoney(order.discount))}</strong></div>
+      <div class="line total"><span>Total</span><span>${escapeHtml(formatMoney(order.total))}</span></div>
       <div class="line"><span>Payment</span><strong>${escapeHtml(getPaymentLabel(order))}</strong></div>
-      <div class="line"><span>Cash Received</span><strong>${formatMoney(order.cashReceived)} Ks</strong></div>
-      <div class="line"><span>Change</span><strong>${formatMoney(order.changeAmount)} Ks</strong></div>
+      <div class="line"><span>Cash Received</span><strong>${escapeHtml(formatMoney(order.cashReceived))}</strong></div>
+      <div class="line"><span>Change</span><strong>${escapeHtml(formatMoney(order.changeAmount))}</strong></div>
       <div class="line"><span>Paid At</span><strong>${escapeHtml(formatDateTime(order.paidAt))}</strong></div>
     </body>
   </html>`;
 }
 
-function reprintOrder(order: RestaurantOrder) {
+function reprintOrder(order: RestaurantOrder, formatMoney: MoneyFormatter) {
   const printWindow = window.open("", "_blank", "width=420,height=760");
 
   if (!printWindow) {
@@ -755,7 +752,7 @@ function reprintOrder(order: RestaurantOrder) {
   }
 
   printWindow.document.open();
-  printWindow.document.write(buildOrderReceiptHtml(order));
+  printWindow.document.write(buildOrderReceiptHtml(order, formatMoney));
   printWindow.document.close();
   printWindow.focus();
   window.setTimeout(() => printWindow.print(), 250);
@@ -778,6 +775,8 @@ function OrderTypeIcon({
 }
 
 export default function RestaurantOrdersPage() {
+  const { formatMoney } = useCurrency();
+
   const [orders, setOrders] = useState<RestaurantOrder[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>("ALL");
   const [selectedType, setSelectedType] = useState<OrderType>("ALL");
@@ -1260,7 +1259,7 @@ export default function RestaurantOrdersPage() {
 
           <SummaryCard
             title="Revenue"
-            value={`${formatMoney(summary.revenue)} Ks`}
+            value={`${formatMoney(summary.revenue)} `}
             subtitle="From done / paid"
             icon={Banknote}
             tone="slate"
@@ -1373,7 +1372,7 @@ export default function RestaurantOrdersPage() {
                           </div>
                         </td>
 
-                      
+
                         {/* <td className="max-w-[300px] px-4 py-4 align-top">
                           {order.items?.length ? (
                             <div className="space-y-1.5">
@@ -1391,7 +1390,7 @@ export default function RestaurantOrdersPage() {
                                         Number(item.unitPrice || 0) *
                                           Number(item.quantity || 1),
                                     )}{" "}
-                                    Ks
+
                                   </span>
                                 </div>
                               ))}
@@ -1434,7 +1433,7 @@ export default function RestaurantOrdersPage() {
 
                         <td className="px-4 py-4 align-top">
                           <div className="font-black text-slate-950">
-                            {formatMoney(order.total)} Ks
+                            {formatMoney(order.total)}
                           </div>
                         </td>
 
@@ -1468,7 +1467,7 @@ export default function RestaurantOrdersPage() {
                               type="button"
                               aria-label={`Reprint order ${order.orderNo || order.id}`}
                               title="Reprint order"
-                              onClick={() => reprintOrder(order)}
+                              onClick={() => reprintOrder(order, formatMoney)}
                               className="inline-flex items-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-black text-white transition hover:brightness-95"
                             >
                               <Printer size={16} />
@@ -1602,6 +1601,8 @@ function OrderDetailDialog({
   order: RestaurantOrder;
   onClose: () => void;
 }) {
+  const { formatMoney } = useCurrency();
+
   const status = normalizeStatus(order.status);
   const meta = statusStyle[status];
 
@@ -1741,10 +1742,10 @@ function OrderDetailDialog({
 
                     <div className="text-right">
                       <p className="text-sm font-bold text-slate-500">
-                        {formatMoney(item.unitPrice)} Ks
+                        {formatMoney(item.unitPrice)}
                       </p>
                       <p className="mt-1 font-black text-slate-950">
-                        {formatMoney(item.totalPrice)} Ks
+                        {formatMoney(item.totalPrice)}
                       </p>
                     </div>
                   </div>
@@ -1787,39 +1788,39 @@ function OrderDetailDialog({
               <div className="mt-4 space-y-3 text-sm font-bold">
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-300">Subtotal</span>
-                  <span>{formatMoney(order.subtotal)} Ks</span>
+                  <span>{formatMoney(order.subtotal)} </span>
                 </div>
 
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-300">Service</span>
-                  <span>{formatMoney(order.serviceCharge)} Ks</span>
+                  <span>{formatMoney(order.serviceCharge)} </span>
                 </div>
 
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-300">Tax</span>
-                  <span>{formatMoney(order.tax)} Ks</span>
+                  <span>{formatMoney(order.tax)} </span>
                 </div>
 
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-300">Discount</span>
-                  <span>{formatMoney(order.discount)} Ks</span>
+                  <span>{formatMoney(order.discount)} </span>
                 </div>
 
                 <div className="flex justify-between gap-3 border-t border-white/15 pt-3 text-lg font-black">
                   <span>Total</span>
-                  <span>{formatMoney(order.total)} Ks</span>
+                  <span>{formatMoney(order.total)} </span>
                 </div>
 
                 {String(order.paymentMethod || "").toUpperCase() === "CASH" && (
                   <>
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-300">Cash Received</span>
-                      <span>{formatMoney(order.cashReceived)} Ks</span>
+                      <span>{formatMoney(order.cashReceived)} </span>
                     </div>
 
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-300">Change</span>
-                      <span>{formatMoney(order.changeAmount)} Ks</span>
+                      <span>{formatMoney(order.changeAmount)} </span>
                     </div>
                   </>
                 )}
@@ -1830,7 +1831,7 @@ function OrderDetailDialog({
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 p-3">
           <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-200">Close</button>
-          <button type="button" onClick={() => reprintOrder(order)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white">
+          <button type="button" onClick={() => reprintOrder(order, formatMoney)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white">
             <Printer size={17} /> Re-print
           </button>
         </div>

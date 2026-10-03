@@ -1,5 +1,5 @@
 "use client";
-
+import { useCurrency } from "@/components/currency-provider";
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -117,11 +117,7 @@ type RefundResponse = {
   message?: string;
 };
 
-const jpy = (n: number) =>
-  Math.round(Number(n || 0)).toLocaleString("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-  });
+
 
 const round = (n: number) => Math.round(Number(n || 0));
 
@@ -183,6 +179,8 @@ function normalizeReceipt(data: any): ReceiptDetail | null {
 }
 
 export default function POSRefundPage() {
+  const { formatMoney: jpy } = useCurrency();
+
   const router = useRouter();
 
   const [receiptNo, setReceiptNo] = useState("");
@@ -646,6 +644,8 @@ function ReceiptPanel({
   selectAllItems: () => void;
   clearSelection: () => void;
 }) {
+  const { formatMoney: jpy } = useCurrency();
+
   const [expanded, setExpanded] = useState(true);
 
   return (

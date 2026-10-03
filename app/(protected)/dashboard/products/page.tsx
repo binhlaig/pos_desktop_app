@@ -1,5 +1,5 @@
 "use client";
-
+import { useCurrency } from "@/components/currency-provider";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -150,12 +150,7 @@ function isToday(value: string) {
   );
 }
 
-function currency(value: number) {
-  return Math.round(Number(value || 0)).toLocaleString("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-  });
-}
+
 
 function resolveImage(path: string) {
   if (!path) return "";
@@ -193,6 +188,8 @@ function readAndApplyBrandColors(): BrandColors {
 }
 
 export default function ProductDashboardPage() {
+  const { formatMoney: currency } = useCurrency();
+
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);

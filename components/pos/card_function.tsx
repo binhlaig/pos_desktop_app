@@ -1,3 +1,5 @@
+"use client";
+import { useCurrency } from "@/components/currency-provider";
 
 import { Trash2 } from "lucide-react";
 import { Badge } from "../ui/badge";
@@ -9,8 +11,7 @@ import { QtyControl } from "./effect";
 
 
 
-const jpy = (n: number) =>
-    n.toLocaleString("ja-JP", { style: "currency", currency: "JPY" });
+
 
  export function CartTable({
     lines,
@@ -38,6 +39,8 @@ const jpy = (n: number) =>
     removeLine: (id: string) => void;
     canEditDiscount: boolean;
   }) {
+  const { formatMoney: jpy } = useCurrency();
+
 
     return (
       <div className="mt-4 rounded-xl border border-white/10 overflow-hidden">
@@ -65,7 +68,7 @@ const jpy = (n: number) =>
             </Button>
           </div>
         </div>
-  
+
         <div className="max-h/[52vh] overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background/90 backdrop-blur">
@@ -157,4 +160,3 @@ const jpy = (n: number) =>
       </div>
     );
   }
-  

@@ -25,12 +25,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { authOptions } from "@/lib/auth";
+import { Money } from "@/components/currency-provider";
 import { LogoutButton } from "./logout-button";
 
 const stats = [
   {
     label: "Today Sales",
-    value: "¥ 248,900",
+    value: <Money amount={248900} />,
     change: "+12.4%",
     icon: CircleDollarSign,
     tone: "text-emerald-600 bg-emerald-50 border-emerald-100",
@@ -59,10 +60,10 @@ const stats = [
 ];
 
 const recentOrders = [
-  { id: "ORD-1024", cashier: "Aye Chan", total: "¥ 12,800", status: "Paid" },
-  { id: "ORD-1023", cashier: "Min Thu", total: "¥ 8,420", status: "Paid" },
-  { id: "ORD-1022", cashier: "Su Mon", total: "¥ 21,600", status: "Pending" },
-  { id: "ORD-1021", cashier: "Aye Chan", total: "¥ 4,950", status: "Refunded" },
+  { id: "ORD-1024", cashier: "Aye Chan", total: <Money amount={12800} />, status: "Paid" },
+  { id: "ORD-1023", cashier: "Min Thu", total: <Money amount={8420} />, status: "Paid" },
+  { id: "ORD-1022", cashier: "Su Mon", total: <Money amount={21600} />, status: "Pending" },
+  { id: "ORD-1021", cashier: "Aye Chan", total: <Money amount={4950} />, status: "Refunded" },
 ];
 
 // const tasks = [

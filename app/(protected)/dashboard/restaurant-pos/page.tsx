@@ -1,4 +1,7 @@
 "use client";
+import { getReceiptSettingsResponse } from "@/lib/settings-api";
+import { useCurrency } from "@/components/currency-provider";
+import type { MoneyFormatter } from "@/lib/currency";
 // UPDATED: Fashion-POS-style payment assistance and latest cart item priority.
 
 import { withReceiptRequestId, postReceiptWithRetry, type ReceiptRequest } from "@/lib/receipt-request";
@@ -207,10 +210,7 @@ const modifiers = [
   "Less oil",
 ];
 
-const formatMoney = (value: number) =>
-  new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(value);
+
 
 const formatRatePercent = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -241,7 +241,7 @@ const escapeHtml = (value: unknown) =>
 
 function buildPaymentReceiptHtml(
   receipt: PaymentReceiptData,
-  shopInfo: ShopReceiptInfo,
+  shopInfo: ShopReceiptInfo, formatMoney: MoneyFormatter
 ) {
   const rows = receipt.items
     .map(
@@ -259,8 +259,8 @@ function buildPaymentReceiptHtml(
         }
           </td>
           <td class="center">${escapeHtml(item.quantity)}</td>
-          <td class="right">${formatMoney(item.unitPrice)}</td>
-          <td class="right">${formatMoney(item.totalPrice)}</td>
+          <td class="right">${escapeHtml(formatMoney(item.unitPrice))}</td>
+          <td class="right">${escapeHtml(formatMoney(item.totalPrice))}</td>
         </tr>`,
     )
     .join("");
@@ -396,16 +396,16 @@ function buildPaymentReceiptHtml(
           </table>
 
           <div class="totals">
-            <div class="line"><span>Subtotal</span><strong>${formatMoney(receipt.subtotal)} Ks</strong></div>
-            <div class="line"><span>Service ${formatRatePercent(receipt.serviceChargeRatePercent)}%</span><strong>${formatMoney(receipt.serviceCharge)} Ks</strong></div>
-            <div class="line"><span>Tax ${formatRatePercent(receipt.taxRatePercent)}%</span><strong>${formatMoney(receipt.tax)} Ks</strong></div>
-            <div class="line"><span>Discount</span><strong>${formatMoney(receipt.discount)} Ks</strong></div>
-            <div class="line grand"><span>Total</span><strong>${formatMoney(receipt.total)} Ks</strong></div>
+            <div class="line"><span>Subtotal</span><strong>${escapeHtml(formatMoney(receipt.subtotal))}</strong></div>
+            <div class="line"><span>Service ${formatRatePercent(receipt.serviceChargeRatePercent)}%</span><strong>${escapeHtml(formatMoney(receipt.serviceCharge))}</strong></div>
+            <div class="line"><span>Tax ${formatRatePercent(receipt.taxRatePercent)}%</span><strong>${escapeHtml(formatMoney(receipt.tax))}</strong></div>
+            <div class="line"><span>Discount</span><strong>${escapeHtml(formatMoney(receipt.discount))}</strong></div>
+            <div class="line grand"><span>Total</span><strong>${escapeHtml(formatMoney(receipt.total))}</strong></div>
             <div class="line"><span>Payment</span><strong>${escapeHtml(receipt.paymentMethod)}</strong></div>
             ${receipt.paymentMethod === "CASH"
       ? `
-                  <div class="line"><span>Cash Received</span><strong>${formatMoney(receipt.cashReceived)} Ks</strong></div>
-                  <div class="line"><span>Change</span><strong>${formatMoney(receipt.changeAmount)} Ks</strong></div>
+                  <div class="line"><span>Cash Received</span><strong>${escapeHtml(formatMoney(receipt.cashReceived))}</strong></div>
+                  <div class="line"><span>Change</span><strong>${escapeHtml(formatMoney(receipt.changeAmount))}</strong></div>
                 `
       : ""
     }
@@ -1219,6 +1219,8 @@ function RestaurantMobileCartBar({
   kitchenDisabledMessage: string;
   addedFeedbackVisible: boolean;
 }) {
+  const { formatMoney } = useCurrency();
+
   const { ref, isDropTarget } = useDroppable({ id: MOBILE_CART_DROP_ID });
 
   return (
@@ -1250,7 +1252,7 @@ function RestaurantMobileCartBar({
             className="min-w-0 rounded-xl px-2 py-1 text-left"
           >
             <span className="block truncate text-xs font-black text-[var(--brand-primary)]">
-              {itemCount} items · {formatMoney(total)} Ks
+              {itemCount} items · {formatMoney(total)}
             </span>
             <span className="block text-[11px] font-bold opacity-70">
               View cart
@@ -1300,6 +1302,8 @@ function RestaurantMobileCartBar({
 }
 
 export default function RestaurantCashierPOSPage() {
+  const { formatMoney } = useCurrency();
+
   const router = useRouter();
   const { data: session, status } = useSession();
   const sessionAccessToken = getSessionAccessToken(session);
@@ -1823,7 +1827,7 @@ export default function RestaurantCashierPOSPage() {
           headers,
           cache: "no-store",
         }).catch(() => null),
-        fetch("/api/receipt-settings/my-shop", {
+        getReceiptSettingsResponse( {
           method: "GET",
           headers,
           cache: "no-store",
@@ -3478,7 +3482,7 @@ export default function RestaurantCashierPOSPage() {
 
     printWindow.document.open();
     printWindow.document.write(
-      buildPaymentReceiptHtml(paymentReceiptData, shopReceiptInfo),
+      buildPaymentReceiptHtml(paymentReceiptData, shopReceiptInfo, formatMoney),
     );
     printWindow.document.close();
   };
@@ -3673,7 +3677,7 @@ export default function RestaurantCashierPOSPage() {
                   <Receipt size={15} className="text-[var(--brand-accent)]" />
                   <span>{cartTotalQuantity} items</span>
                   <span className="text-[var(--brand-primary)]">
-                    {formatMoney(total)} Ks
+                    {formatMoney(total)}
                   </span>
                 </div>
 
@@ -3711,7 +3715,7 @@ export default function RestaurantCashierPOSPage() {
             <div className="flex min-h-0 flex-col gap-4">
               {/* iPad toolbar: actions stay compact; search/table open as dialogs */}
               <div className="relative mb-1 shrink-0">
-               
+
 
                 <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
                   {categories.map((category) => (
@@ -3954,7 +3958,7 @@ export default function RestaurantCashierPOSPage() {
                           <div className="mt-4 flex items-end justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-xl font-black text-[var(--brand-primary)]">
-                                {formatMoney(item.price)} Ks
+                                {formatMoney(item.price)}
                               </p>
                               <p
                                 className={`mt-1 flex items-center gap-1 truncate text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-400"
@@ -4255,7 +4259,7 @@ export default function RestaurantCashierPOSPage() {
                                       )}
                                     </div>
                                     <p className="mt-0.5 text-xs font-bold text-[var(--brand-primary)]">
-                                      {formatMoney(item.price)} Ks each
+                                      {formatMoney(item.price)}  each
                                     </p>
                                   </div>
                                 </div>
@@ -4306,7 +4310,7 @@ export default function RestaurantCashierPOSPage() {
                                   Line total
                                 </p>
                                 <p className="text-base font-black">
-                                  {formatMoney(item.price * item.qty)} Ks
+                                  {formatMoney(item.price * item.qty)}
                                 </p>
                               </div>
                             </div>
@@ -4360,7 +4364,7 @@ export default function RestaurantCashierPOSPage() {
                         <ChevronRight size={16} className="transition-transform group-open/order-totals:rotate-90" />
                         Totals / Discount / Tax
                       </span>
-                      <span className="whitespace-nowrap text-base text-[var(--brand-primary)]">{formatMoney(total)} Ks</span>
+                      <span className="whitespace-nowrap text-base text-[var(--brand-primary)]">{formatMoney(total)} </span>
                     </summary>
                     <div className="pt-2">
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-bold">
@@ -4373,7 +4377,7 @@ export default function RestaurantCashierPOSPage() {
                         Subtotal
                       </span>
                       <span className="truncate">
-                        {formatMoney(subtotal)} Ks
+                        {formatMoney(subtotal)}
                       </span>
                     </div>
 
@@ -4385,7 +4389,7 @@ export default function RestaurantCashierPOSPage() {
                       >
                         Tax {formatRatePercent(taxRatePercent)}%
                       </span>
-                      <span className="truncate">{formatMoney(tax)} Ks</span>
+                      <span className="truncate">{formatMoney(tax)} </span>
                     </div>
 
                     <div className="flex items-center justify-between gap-2">
@@ -4405,7 +4409,7 @@ export default function RestaurantCashierPOSPage() {
                         </span>
                       </button>
                       <span className="truncate">
-                        {formatMoney(serviceCharge)} Ks
+                        {formatMoney(serviceCharge)}
                       </span>
                     </div>
 
@@ -4437,7 +4441,7 @@ export default function RestaurantCashierPOSPage() {
                     >
                       <span className="text-xs font-black">Total</span>
                       <span className="text-xl font-black text-[var(--brand-primary)]">
-                        {formatMoney(total)} Ks
+                        {formatMoney(total)}
                       </span>
                     </div>
                   </div>
@@ -4562,7 +4566,7 @@ export default function RestaurantCashierPOSPage() {
                   className={`mt-2 text-sm font-semibold leading-6 ${darkMode ? "text-slate-300" : "text-slate-500"}`}
                 >
                   Cart ထဲမှာ {cart.reduce((sum, item) => sum + item.qty, 0)}{" "}
-                  items · {formatMoney(total)} Ks ရှိနေပါတယ်။ မသိမ်းဘဲထွက်လျှင်
+                  items · {formatMoney(total)}  ရှိနေပါတယ်။ မသိမ်းဘဲထွက်လျှင်
                   လက်ရှိပြင်ဆင်ထားတဲ့ order ပျောက်သွားနိုင်ပါတယ်။
                 </p>
 
@@ -4730,7 +4734,7 @@ export default function RestaurantCashierPOSPage() {
                   <div className="mt-2 flex items-center justify-between gap-3 text-sm font-black">
                     <span>စုစုပေါင်းတန်ဖိုး</span>
                     <span className="text-red-500">
-                      {formatMoney(total)} Ks
+                      {formatMoney(total)}
                     </span>
                   </div>
                 </div>}
@@ -4957,7 +4961,7 @@ export default function RestaurantCashierPOSPage() {
                       </p>
                       <span className="text-xs font-black text-[var(--brand-primary)]">
                         {cartLineCount} types · {cartTotalQuantity} qty ·{" "}
-                        {formatMoney(total)} Ks
+                        {formatMoney(total)}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -5486,7 +5490,7 @@ export default function RestaurantCashierPOSPage() {
                     </p>
                     <p className="mt-1 text-4xl font-black tabular-nums text-[var(--brand-primary)] sm:text-5xl">
                       {formatMoney(total)}
-                      <span className="ml-2 text-lg sm:text-xl">Ks</span>
+
                     </p>
                   </div>
 
@@ -5636,7 +5640,7 @@ export default function RestaurantCashierPOSPage() {
                                   : "bg-white text-slate-700 ring-1 ring-slate-100 hover:bg-[var(--brand-soft)]"
                               }`}
                           >
-                            {formatMoney(amount)} Ks
+                            {formatMoney(amount)}
                           </button>
                         ))}
                       </div>
@@ -5657,7 +5661,7 @@ export default function RestaurantCashierPOSPage() {
                         >
                           <span>ပေးထားငွေ</span>
                           <span className="text-lg tabular-nums">
-                            {formatMoney(cashNumber)} Ks
+                            {formatMoney(cashNumber)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between px-4 py-4">
@@ -5666,7 +5670,7 @@ export default function RestaurantCashierPOSPage() {
                             {formatMoney(
                               cashIsEnough ? change : remainingAmount,
                             )}{" "}
-                            Ks
+
                           </span>
                         </div>
                       </div>
@@ -5677,7 +5681,7 @@ export default function RestaurantCashierPOSPage() {
                     <div className="flex items-center justify-between text-sm font-black">
                       <span>Pay Amount</span>
                       <span className="text-2xl text-[var(--brand-primary)]">
-                        {formatMoney(total)} Ks
+                        {formatMoney(total)}
                       </span>
                     </div>
                   )}
@@ -5725,8 +5729,8 @@ export default function RestaurantCashierPOSPage() {
                     {paymentSaving
                       ? "Saving..."
                       : paymentMethod === "CASH" && !cashIsEnough
-                        ? `${formatMoney(remainingAmount)} Ks လိုသေးသည်`
-                        : `${formatMoney(total)} Ks Pay`}
+                        ? `${formatMoney(remainingAmount)}  လိုသေးသည်`
+                        : `${formatMoney(total)}  Pay`}
                   </button>
                 </div>
               </motion.div>
@@ -5882,11 +5886,11 @@ export default function RestaurantCashierPOSPage() {
                               className={`text-xs font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"
                                 }`}
                             >
-                              {item.quantity} × {formatMoney(item.unitPrice)} Ks
+                              {item.quantity} × {formatMoney(item.unitPrice)}
                             </p>
                           </div>
                           <strong className="text-sm">
-                            {formatMoney(item.totalPrice)} Ks
+                            {formatMoney(item.totalPrice)}
                           </strong>
                         </div>
                       ))}
@@ -5898,7 +5902,7 @@ export default function RestaurantCashierPOSPage() {
                       <div className="flex justify-between">
                         <span>Subtotal</span>
                         <span>
-                          {formatMoney(paymentReceiptData.subtotal)} Ks
+                          {formatMoney(paymentReceiptData.subtotal)}
                         </span>
                       </div>
 
@@ -5911,7 +5915,7 @@ export default function RestaurantCashierPOSPage() {
                           %
                         </span>
                         <span>
-                          {formatMoney(paymentReceiptData.serviceCharge)} Ks
+                          {formatMoney(paymentReceiptData.serviceCharge)}
                         </span>
                       </div>
 
@@ -5921,19 +5925,19 @@ export default function RestaurantCashierPOSPage() {
                           {formatRatePercent(paymentReceiptData.taxRatePercent)}
                           %
                         </span>
-                        <span>{formatMoney(paymentReceiptData.tax)} Ks</span>
+                        <span>{formatMoney(paymentReceiptData.tax)} </span>
                       </div>
 
                       <div className="flex justify-between">
                         <span>Discount</span>
                         <span>
-                          {formatMoney(paymentReceiptData.discount)} Ks
+                          {formatMoney(paymentReceiptData.discount)}
                         </span>
                       </div>
 
                       <div className="flex justify-between border-t border-slate-300 pt-3 text-lg font-black">
                         <span>Total</span>
-                        <span>{formatMoney(paymentReceiptData.total)} Ks</span>
+                        <span>{formatMoney(paymentReceiptData.total)} </span>
                       </div>
 
                       <div className="flex justify-between">
@@ -5946,14 +5950,14 @@ export default function RestaurantCashierPOSPage() {
                           <div className="flex justify-between">
                             <span>Cash Received</span>
                             <span>
-                              {formatMoney(paymentReceiptData.cashReceived)} Ks
+                              {formatMoney(paymentReceiptData.cashReceived)}
                             </span>
                           </div>
 
                           <div className="flex justify-between">
                             <span>Change</span>
                             <span>
-                              {formatMoney(paymentReceiptData.changeAmount)} Ks
+                              {formatMoney(paymentReceiptData.changeAmount)}
                             </span>
                           </div>
                         </>
@@ -6053,7 +6057,7 @@ export default function RestaurantCashierPOSPage() {
                   <div className="mt-2 flex items-center justify-between text-sm font-black">
                     <span>Total</span>
                     <span className="text-[var(--brand-primary)]">
-                      {formatMoney(total)} Ks
+                      {formatMoney(total)}
                     </span>
                   </div>
                 </div>
@@ -6184,7 +6188,7 @@ export default function RestaurantCashierPOSPage() {
                 {draggingMenuItem.name}
               </p>
               <p className="mt-1 text-lg font-black text-[var(--brand-primary)]">
-                {formatMoney(draggingMenuItem.price)} Ks
+                {formatMoney(draggingMenuItem.price)}
               </p>
             </div>
             <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[10px] font-black text-white">

@@ -1,5 +1,5 @@
 "use client";
-
+import { useCurrency } from "@/components/currency-provider";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -135,9 +135,7 @@ function normalizeProductSales(value: unknown, productId: number): ProductSale[]
   return result.sort((a, b) => new Date(b.soldAt).getTime() - new Date(a.soldAt).getTime());
 }
 
-function currency(value: number) {
-  return Math.round(Number(value || 0)).toLocaleString("ja-JP", { style: "currency", currency: "JPY" });
-}
+
 
 function formatDateTime(value: string) {
   if (!value) return "-";
@@ -173,6 +171,8 @@ function applyBrandColors() {
 }
 
 export default function ProductSalesHistoryPage() {
+  const { formatMoney: currency } = useCurrency();
+
   const router = useRouter();
   const params = useParams<{ productId: string }>();
   const productId = Number(params.productId);

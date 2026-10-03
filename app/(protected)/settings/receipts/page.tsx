@@ -1,5 +1,5 @@
 "use client";
-
+import { useCurrency } from "@/components/currency-provider";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -116,11 +116,7 @@ const EMPTY_RECEIPT_PLACEHOLDERS = [
   "Phone No မထည့်ရသေးပါ",
 ];
 
-const jpy = (n: number) =>
-  Math.round(Number(n || 0)).toLocaleString("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-  });
+
 
 function clean(value: unknown) {
   const text = String(value ?? "").trim();
@@ -415,6 +411,8 @@ function normalizeReceipts(data: unknown): ReceiptRow[] {
 }
 
 export default function ReceiptsPage() {
+  const { formatMoney: jpy } = useCurrency();
+
   const router = useRouter();
 
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
@@ -712,8 +710,8 @@ export default function ReceiptsPage() {
               )}</div>
             </td>
             <td class="right">${item.qty}</td>
-            <td class="right">${jpy(item.price)}</td>
-            <td class="right">${jpy(item.lineTotal)}</td>
+            <td class="right">${escapeHtml(jpy(item.price))}</td>
+            <td class="right">${escapeHtml(jpy(item.lineTotal))}</td>
           </tr>
         `
       )
@@ -872,18 +870,18 @@ export default function ReceiptsPage() {
 
             <div class="divider"></div>
 
-            <div class="row"><span>Subtotal</span><b>${jpy(
+            <div class="row"><span>Subtotal</span><b>${escapeHtml(jpy(
               receipt.subtotal
-            )}</b></div>
-            <div class="row"><span>Tax</span><b>${jpy(
+            ))}</b></div>
+            <div class="row"><span>Tax</span><b>${escapeHtml(jpy(
               receipt.taxAmount
-            )}</b></div>
+            ))}</b></div>
             <div class="row"><span>Discount</span><b>${
               receipt.discountPercent
             }%</b></div>
-            <div class="row grand"><span>Grand Total</span><span class="value">${jpy(
+            <div class="row grand"><span>Grand Total</span><span class="value">${escapeHtml(jpy(
               receipt.grandTotal
-            )}</span></div>
+            ))}</span></div>
 
             ${adsHtml}
 
@@ -1291,6 +1289,8 @@ function ReceiptCard({
   onToggle: () => void;
   onPrint: () => void;
 }) {
+  const { formatMoney: jpy } = useCurrency();
+
   const itemCount = receipt.items.reduce((sum, item) => sum + item.qty, 0);
 
   return (

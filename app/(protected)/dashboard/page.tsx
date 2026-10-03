@@ -1,4 +1,5 @@
 "use client";
+import { useCurrency } from "@/components/currency-provider";
 import Link from "next/link";
 import {
   useCallback,
@@ -148,8 +149,9 @@ type RecentSale = {
   createdAt: string | null;
   href: string;
 };
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"
+).replace(/\/+$/, "");
 const RESTAURANT_REFRESH_MS = 10_000;
 const LOW_STOCK_LIMIT = 10;
 const fashionRoutes = { pos: "/dashboard/fashion/register" } as const;
@@ -279,16 +281,8 @@ function chartPointKey(date: Date, days: RangeDays) {
   }
   return dayKey(date);
 }
-function formatMoney(value: number) {
-  return `${new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(value)} ကျပ်`;
-}
-function compactMoney(value: number) {
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return String(Math.round(value));
-}
+
+
 function formatTime(value?: string | null) {
   const date = dateOf(value);
   return date
@@ -463,6 +457,9 @@ function EmptyState({ icon: Icon, title }: { icon: ElementType; title: string })
   );
 }
 export default function DashboardPage() {
+  const { formatMoney } = useCurrency();
+  const compactMoney = (amount: number) => formatMoney(amount, true);
+
   const [mounted, setMounted] = useState(false);
   const [brandColors, setBrandColors] = useState<BrandColors>(DEFAULT_BRAND_COLORS);
   const [businessType, setBusinessType] = useState<BusinessType>("SUPERMARKET");

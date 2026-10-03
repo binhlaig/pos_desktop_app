@@ -1,4 +1,5 @@
 "use client";
+import { useCurrency } from "@/components/currency-provider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -34,7 +35,6 @@ import Link from "next/link";
 /* ====== Types & Keys ====== */
 type StaffRole = "staff" | "supervise";
 type Denom = {
-  label: string;
   value: number; // JPY face value
   kind: "bill" | "coin";
 };
@@ -53,19 +53,18 @@ type DrawerState = {
 const CASH_KEY = "pos_cash_drawer_v1";
 /* Japan denominations (incl. ¥2000 note for rare cases) */
 const DENOMS: Denom[] = [
-  { label: "¥10,000", value: 10000, kind: "bill" },
-  { label: "¥5,000", value: 5000, kind: "bill" },
-  { label: "¥2,000", value: 2000, kind: "bill" },
-  { label: "¥1,000", value: 1000, kind: "bill" },
-  { label: "¥500", value: 500, kind: "coin" },
-  { label: "¥100", value: 100, kind: "coin" },
-  { label: "¥50", value: 50, kind: "coin" },
-  { label: "¥10", value: 10, kind: "coin" },
-  { label: "¥5", value: 5, kind: "coin" },
-  { label: "¥1", value: 1, kind: "coin" },
+  { value: 10000, kind: "bill" },
+  { value: 5000, kind: "bill" },
+  { value: 2000, kind: "bill" },
+  { value: 1000, kind: "bill" },
+  { value: 500, kind: "coin" },
+  { value: 100, kind: "coin" },
+  { value: 50, kind: "coin" },
+  { value: 10, kind: "coin" },
+  { value: 5, kind: "coin" },
+  { value: 1, kind: "coin" },
 ];
-const jpy = (n: number) =>
-  n.toLocaleString("ja-JP", { style: "currency", currency: "JPY" });
+
 /* ====== Helpers ====== */
 const loadDrawer = (): DrawerState => {
   try {
@@ -148,6 +147,8 @@ const BeamBackground = () => (
 );
 /* ====== Page ====== */
 export default function RegisterCashPage() {
+  const { formatMoney: jpy } = useCurrency();
+
   const importInputRef = useRef<HTMLInputElement>(null);
   const [role, setRole] = useState<StaffRole>("staff");
   const isSupervisor = role === "supervise";
@@ -337,7 +338,7 @@ export default function RegisterCashPage() {
                                         <Glow key={d.value} className="p-3">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <div className="font-medium">{d.label} <span className="text-xs text-slate-400">× {qty}</span></div>
+                                                    <div className="font-medium">{jpy(d.value)} <span className="text-xs text-slate-400">× {qty}</span></div>
                                                     <div className="text-xs text-slate-400">{d.kind === "bill" ? "Bill" : "Coin"}</div>
                                                 </div>
                                                 <div className="text-sm font-semibold">{jpy(qty * d.value)}</div>
@@ -359,7 +360,7 @@ export default function RegisterCashPage() {
                                                 <Button variant="outline" className="rounded-full"
                                                     onClick={() => {
                                                         // Quick fill: set to reach round figures
-                                                        const want = prompt(`Set quantity for ${d.label}`, String(qty));
+                                                        const want = prompt(`Set quantity for ${jpy(d.value)}`, String(qty));
                                                         if (want == null) return;
                                                         setQty(d.value, Math.max(0, Number(want) || 0));
                                                     }}>
@@ -392,7 +393,7 @@ export default function RegisterCashPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium">
-                            {d.label}{" "}
+                            {jpy(d.value)}{" "}
                             <span className="text-xs text-slate-400">
                               × {qty}
                             </span>
@@ -458,7 +459,7 @@ export default function RegisterCashPage() {
                           onClick={() => {
                             // Quick fill: set to reach round figures
                             const want = prompt(
-                              `Set quantity for ${d.label}`,
+                              `Set quantity for ${jpy(d.value)}`,
                               String(qty)
                             );
                             if (want == null) return;
@@ -515,7 +516,7 @@ export default function RegisterCashPage() {
                     setDrawer(next);
                     saveDrawer(next);
                   }}
-                  placeholder="e.g. Started shift with ¥30,000 float. Safe drop at 16:00."
+                  placeholder="e.g. Started shift with opening float. Safe drop at 16:00."
                 />
               </CardContent>
             </Glow>
@@ -693,7 +694,7 @@ function AmountAction({
           value={amt}
           onChange={(e) => setAmt(e.target.value)}
           className="h-9 w-40"
-          placeholder="Amount (JPY)"
+          placeholder="Amount"
           inputMode="numeric"
           pattern="[0-9]*"
           disabled={disabled}

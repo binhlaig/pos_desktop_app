@@ -1,3 +1,4 @@
+"use client";
 import { motion } from "framer-motion";
 
 import { useState } from "react";
@@ -6,8 +7,7 @@ import { Minus, Plus } from "lucide-react";
 import { Input } from "../ui/input";
 
 
-const jpy = (n: number) =>
-    n.toLocaleString("ja-JP", { style: "currency", currency: "JPY" });
+
 
 
 export function GridGlow() {

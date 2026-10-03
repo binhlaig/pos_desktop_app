@@ -1,5 +1,5 @@
 "use client";
-
+import { useCurrency } from "@/components/currency-provider";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Barcode, Check, ChevronLeft, ChevronRight, CircleHelp, Layers3, Loader2, Minus, Package, Plus, Printer, RefreshCw, Search, Settings2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -122,7 +122,7 @@ export default function POSBarcodePrintPage() {
   const chosen = useMemo(() => products.filter((p) => (quantities[p.id] || 0) > 0), [products, quantities]);
   const total = chosen.reduce((sum, p) => sum + (quantities[p.id] || 0), 0);
   const labels = useMemo(() => chosen.flatMap((p) => Array.from({ length: quantities[p.id] || 0 }, () => p)), [chosen, quantities]);
-  const formatPrice = (price: number) => `${new Intl.NumberFormat("en-US").format(price)} Ks`;
+  const formatPrice = useCurrency().formatMoney;
 
   function setQuantity(id: string, value: number) {
     const next = Number.isFinite(value) ? Math.max(0, Math.min(100, Math.floor(value))) : 0;
