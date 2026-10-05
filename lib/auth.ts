@@ -531,6 +531,7 @@ function pickRecordOrNull(...values: unknown[]): Record<string, unknown> | null 
   }
   return null;
 }
+import { captureRefreshCookie, browserMetadataHeaders } from "@/lib/session-cookie-bridge";
 export const authOptions: NextAuthOptions = {
   debug: false,
   secret: process.env.NEXTAUTH_SECRET,
@@ -544,6 +545,9 @@ export const authOptions: NextAuthOptions = {
     Credentials({
       name: "Credentials",
       credentials: {
+        latitude: { label: "Latitude", type: "text" },
+        longitude: { label: "Longitude", type: "text" },
+        locationAccuracy: { label: "Accuracy", type: "text" },
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
         shopCode: { label: "Shop Code", type: "text" },
@@ -551,6 +555,12 @@ export const authOptions: NextAuthOptions = {
       deviceName: { label: "Device Name", type: "text" },
       },
       async authorize(credentials) {
+        const optionalNumber = (value: unknown): number | null => {
+          if (value == null || String(value).trim() === "") return null;
+          const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null;
+        };
+        const location = { latitude: optionalNumber(credentials?.latitude), longitude: optionalNumber(credentials?.longitude),
+          locationAccuracy: optionalNumber(credentials?.locationAccuracy) };
         const username = String(credentials?.username || "").trim();
         const password = String(credentials?.password || "");
         const shopCode = String(credentials?.shopCode || "")
@@ -590,18 +600,21 @@ export const authOptions: NextAuthOptions = {
           const res = await fetch(`${BACKEND_BASE}/api/auth/login`, {
             method: "POST",
             headers: {
+              ...browserMetadataHeaders(),
               "Content-Type": "application/json",
               Accept: "application/json",
             "X-Device-ID": deviceId,
             "X-Device-Name": deviceName,
             Origin: frontendOrigin,
             },
-            body: JSON.stringify({ username, password, shopCode }),
+            credentials: "include",
+            body: JSON.stringify({ username, password, shopCode, ...location }),
             cache: "no-store",
           });
           if (!res.ok) {
             return null;
           }
+          captureRefreshCookie(res);
           const data: SpringLoginResponse | null = await res
             .json()
             .catch(() => null);

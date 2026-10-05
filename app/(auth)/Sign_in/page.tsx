@@ -923,6 +923,7 @@
 
 
 "use client";
+import { getDeviceLocation, locationPayload } from "@/lib/device-location";
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -1282,7 +1283,9 @@ export default function ShopOwnerLoginPage() {
       setLoading(true);
     const deviceId = getLoginDeviceId();
     const deviceName = getCurrentDeviceName();
+      const location = await getDeviceLocation();
     const result = await signIn("credentials", {
+        ...locationPayload(location),
         redirect: false,
         username: username.trim(),
         password,
