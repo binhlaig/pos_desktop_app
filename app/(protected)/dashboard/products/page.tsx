@@ -1,5 +1,4 @@
 "use client";
-
 import { useShopTimezone } from "@/components/shop-timezone-provider";
 import { isShopToday } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
@@ -28,12 +27,10 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-
 type Product = {
   id: number;
   sku: string;
@@ -44,25 +41,21 @@ type Product = {
   quantity: number;
   discount: number;
   imagePath: string;
+  availableForSale: boolean;
 };
-
 type Receipt = {
   grandTotal: number;
   createdAt: string;
 };
-
 type BrandColors = {
   primary: string;
   accent: string;
 };
-
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
 const PAGE_SIZES = [10, 20, 50] as const;
-
 function getAccessToken() {
   if (typeof window === "undefined") return "";
-
   return (
     localStorage.getItem("pos_shop_owner_token") ||
     localStorage.getItem("pos_access_token") ||
@@ -73,27 +66,23 @@ function getAccessToken() {
     ""
   ).trim();
 }
-
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   return token
     ? { Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}` }
     : {};
 }
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
 }
-
 function unwrapList(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   const record = asRecord(value);
   const list = record.content || record.data || record.products || record.receipts || record.items;
   return Array.isArray(list) ? list : [];
 }
-
 function firstText(...values: unknown[]) {
   for (const value of values) {
     const text = String(value ?? "").trim();
@@ -101,15 +90,15 @@ function firstText(...values: unknown[]) {
   }
   return "";
 }
-
 function firstNumber(...values: unknown[]) {
   for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
     const number = Number(value);
     if (Number.isFinite(number)) return number;
   }
   return 0;
 }
-
+function available(value: unknown) { return ![false, 0, "false", "0", "no", "inactive", "unavailable", "out_of_stock"].includes(typeof value === "string" ? value.trim().toLowerCase() : value as boolean); }
 function normalizeProducts(value: unknown): Product[] {
   return unwrapList(value).map((raw, index) => {
     const item = asRecord(raw);
@@ -126,12 +115,12 @@ function normalizeProducts(value: unknown): Product[] {
         item.quantity,
         item.stock,
       ),
+      availableForSale: available(item.availableForSale ?? item.available_for_sale),
       discount: firstNumber(item.productDiscount, item.product_discount, item.discount),
       imagePath: firstText(item.imagePath, item.image_path, item.imageUrl, item.image_url),
     };
   });
 }
-
 function normalizeReceipts(value: unknown): Receipt[] {
   return unwrapList(value).map((raw) => {
     const item = asRecord(raw);
@@ -141,23 +130,16 @@ function normalizeReceipts(value: unknown): Receipt[] {
     };
   });
 }
-
-
-
-
-
 function resolveImage(path: string) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path) || path.startsWith("data:")) return path;
   return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 }
-
 function readAndApplyBrandColors(): BrandColors {
   const root = document.documentElement;
   const styles = window.getComputedStyle(root);
   let primary = styles.getPropertyValue("--dashboard-primary").trim() || "#2563eb";
   let accent = styles.getPropertyValue("--dashboard-accent").trim() || "#60a5fa";
-
   try {
     const stored = JSON.parse(localStorage.getItem(BRAND_COLOR_STORAGE_KEY) || "null") as
       | Partial<BrandColors>
@@ -167,7 +149,6 @@ function readAndApplyBrandColors(): BrandColors {
   } catch {
     // Keep the global defaults when saved data is invalid.
   }
-
   root.style.setProperty("--brand-primary", primary);
   root.style.setProperty("--brand-accent", accent);
   root.style.setProperty("--dashboard-primary", primary);
@@ -180,11 +161,9 @@ function readAndApplyBrandColors(): BrandColors {
   root.style.setProperty("--brand-border", "color-mix(in srgb, var(--brand-primary) 28%, transparent)");
   return { primary, accent };
 }
-
 export default function ProductDashboardPage() {
   const timezone = useShopTimezone();
   const { formatMoney: currency } = useCurrency();
-
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -198,13 +177,11 @@ export default function ProductDashboardPage() {
     primary: "#2563eb",
     accent: "#60a5fa",
   });
-
   useEffect(() => {
     const sync = () => setBrand(readAndApplyBrandColors());
     const handleStorage = (event: StorageEvent) => {
       if (event.key === BRAND_COLOR_STORAGE_KEY) sync();
     };
-
     sync();
     window.addEventListener("brand-colors-changed", sync);
     window.addEventListener("storage", handleStorage);
@@ -213,17 +190,14 @@ export default function ProductDashboardPage() {
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
-
   async function loadDashboard() {
     setLoading(true);
     setError("");
-
     try {
       const token = getAccessToken();
       if (!token) throw new Error("Login session မရှိပါ။ Login ပြန်ဝင်ပါ။");
-
       const [productResult, receiptResult] = await Promise.allSettled([
-        fetch(`${API_BASE}/api/products`, {
+        fetch(`${API_BASE}/api/products?availability=all`, {
           headers: { Accept: "application/json", ...authHeaders() },
           cache: "no-store",
         }),
@@ -232,14 +206,11 @@ export default function ProductDashboardPage() {
           cache: "no-store",
         }),
       ]);
-
       if (productResult.status !== "fulfilled" || !productResult.value.ok) {
         const status = productResult.status === "fulfilled" ? productResult.value.status : "network";
         throw new Error(`Products load failed (${status}).`);
       }
-
       setProducts(normalizeProducts(await productResult.value.json()));
-
       if (receiptResult.status === "fulfilled" && receiptResult.value.ok) {
         setReceipts(normalizeReceipts(await receiptResult.value.json()));
       } else {
@@ -253,18 +224,15 @@ export default function ProductDashboardPage() {
       setLoading(false);
     }
   }
-
   useEffect(() => {
     void loadDashboard();
     // Initial dashboard load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   const categories = useMemo(
     () => ["ALL", ...Array.from(new Set(products.map((product) => product.category))).sort()],
     [products],
   );
-
   const filteredProducts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return products.filter((product) => {
@@ -278,18 +246,15 @@ export default function ProductDashboardPage() {
       return matchesCategory && matchesQuery;
     });
   }, [products, query, category]);
-
   useEffect(() => {
     setCurrentPage(1);
   }, [query, category, pageSize]);
-
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const paginatedProducts = filteredProducts.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
-
   const inventoryValue = products.reduce(
     (sum, product) => sum + product.price * product.quantity,
     0,
@@ -302,19 +267,16 @@ export default function ProductDashboardPage() {
     0,
   );
   const lowStockCount = products.filter((product) => product.quantity > 0 && product.quantity <= 5).length;
-
   const valueOverviewData = [
     { name: "Remaining Product Value", value: inventoryValue },
     { name: "Total Sold Value", value: totalSoldValue },
   ].filter((item) => item.value > 0);
   const valueOverviewColors = [brand.primary, brand.accent];
-
   const pageNumbers = useMemo(() => {
     const start = Math.max(1, safePage - 2);
     const end = Math.min(totalPages, safePage + 2);
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [safePage, totalPages]);
-
   return (
     <main className="products-dashboard min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-foreground sm:p-6 lg:p-8">
       <style jsx global>{`
@@ -380,8 +342,10 @@ export default function ProductDashboardPage() {
               </p>
             </div>
           </div>
-
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => router.push("/dashboard/products/out-of-stock")} className="rounded-xl border-red-200 text-red-600">
+              <AlertTriangle className="mr-2 h-4 w-4" /> Out of Stock ({products.filter((product) => !product.availableForSale || product.quantity <= 0).length})
+            </Button>
             <Button
               variant="outline"
               onClick={() => router.push("/dashboard")}
@@ -399,14 +363,12 @@ export default function ProductDashboardPage() {
             </Button>
           </div>
         </header>
-
         {error && (
           <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">
             <AlertTriangle size={19} className="shrink-0" />
             <span>{error}</span>
           </div>
         )}
-
         <section className="grid gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(260px,1.3fr)] xl:grid-cols-[1fr_1fr_1.35fr]">
           <MetricCard
             icon={<CircleDollarSign size={25} />}
@@ -420,7 +382,6 @@ export default function ProductDashboardPage() {
             value={currency(todaySales)}
             description={`${receipts.filter((receipt) => isShopToday(receipt.createdAt, timezone)).length} receipts today`}
           />
-
           <Card className="min-w-0 rounded-[2rem] border-[var(--brand-border)] bg-card/95 shadow-sm">
             <CardHeader className="pb-2 md:px-4 md:pt-4 xl:px-6 xl:pt-6">
               <CardTitle className="flex items-center gap-2 text-lg md:text-sm lg:text-base xl:text-lg">
@@ -461,7 +422,6 @@ export default function ProductDashboardPage() {
             </CardContent>
           </Card>
         </section>
-
         <Card className="overflow-hidden rounded-[2rem] border-[var(--brand-border)] bg-card/95 shadow-sm">
           <CardHeader className="border-b border-border">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -474,7 +434,6 @@ export default function ProductDashboardPage() {
                   {filteredProducts.length} products · {lowStockCount} low stock
                 </p>
               </div>
-
               <div className="flex flex-col gap-2 sm:flex-row">
                 <div className="relative sm:w-[320px]">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-accent)]" />
@@ -499,7 +458,6 @@ export default function ProductDashboardPage() {
               </div>
             </div>
           </CardHeader>
-
           <CardContent className="p-0">
             {loading ? (
               <div className="grid min-h-[380px] place-items-center">
@@ -540,7 +498,7 @@ export default function ProductDashboardPage() {
                   <tbody className="divide-y divide-border">
                     {paginatedProducts.map((product) => {
                       const stockStatus =
-                        product.quantity <= 0 ? "OUT" : product.quantity <= 5 ? "LOW" : "IN STOCK";
+                        !product.availableForSale || product.quantity <= 0 ? "OUT" : product.quantity <= 5 ? "LOW" : "IN STOCK";
                       return (
                         <tr key={product.id} className="transition hover:bg-[var(--brand-soft)]">
                           <td className="px-5 py-4">
@@ -594,7 +552,6 @@ export default function ProductDashboardPage() {
                 </table>
               </div>
             )}
-
             <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>
@@ -608,7 +565,6 @@ export default function ProductDashboardPage() {
                   {PAGE_SIZES.map((size) => <option key={size} value={size}>{size} / page</option>)}
                 </select>
               </div>
-
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" className="rounded-xl" disabled={safePage <= 1} onClick={() => setCurrentPage(safePage - 1)}>
                   <ChevronLeft className="mr-1 h-4 w-4" /> Prev
@@ -635,7 +591,6 @@ export default function ProductDashboardPage() {
     </main>
   );
 }
-
 function MetricCard({
   icon,
   title,
@@ -663,13 +618,11 @@ function MetricCard({
     </Card>
   );
 }
-
 function StockBadge({ status }: { status: "OUT" | "LOW" | "IN STOCK" }) {
   const style = {
     OUT: "bg-red-50 text-red-600 ring-red-100",
     LOW: "bg-amber-50 text-amber-700 ring-amber-100",
     "IN STOCK": "bg-emerald-50 text-emerald-700 ring-emerald-100",
   }[status];
-
   return <span className={`product-stock-status inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-black ring-1 ${style}`}>{status}</span>;
 }

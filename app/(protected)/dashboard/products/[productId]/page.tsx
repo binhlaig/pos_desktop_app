@@ -1,5 +1,4 @@
 "use client";
-
 import { useShopTimezone } from "@/components/shop-timezone-provider";
 import { formatShopDateTime, shopDateKey, parseBusinessTimestamp } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
@@ -14,23 +13,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-
 type ProductDetail = {
   id: number; name: string; sku: string; barcode: string; category: string;
   price: number; quantity: number; imagePath: string; availableForSale: boolean;
 };
-
 type ProductSale = {
   itemId: number; receiptId: number; receiptNo: string; soldAt: string;
   quantity: number; unitPrice: number; discountPercent: number; lineTotal: number;
   paymentMethod: string; staffId: string; staffName: string;
   shopName: string; shopCode: string; shopAddress: string;
 };
-
 type BrandColors = { primary: string; accent: string };
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const BRAND_COLOR_STORAGE_KEY = "binhlaig_brand_colors";
-
 function getAccessToken() {
   if (typeof window === "undefined") return "";
   return (
@@ -41,23 +36,19 @@ function getAccessToken() {
     localStorage.getItem("token") || localStorage.getItem("jwt") || ""
   ).trim();
 }
-
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   return token ? { Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}` } : {};
 }
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
-
 function unwrapList(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   const record = asRecord(value);
   const list = record.content || record.data || record.receipts || record.items;
   return Array.isArray(list) ? list : [];
 }
-
 function firstText(...values: unknown[]) {
   for (const value of values) {
     const result = String(value ?? "").trim();
@@ -65,15 +56,14 @@ function firstText(...values: unknown[]) {
   }
   return "";
 }
-
 function firstNumber(...values: unknown[]) {
   for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
     const result = Number(value);
     if (Number.isFinite(result)) return result;
   }
   return 0;
 }
-
 function firstBoolean(defaultValue: boolean, ...values: unknown[]) {
   for (const value of values) {
     if (typeof value === "boolean") return value;
@@ -86,7 +76,6 @@ function firstBoolean(defaultValue: boolean, ...values: unknown[]) {
   }
   return defaultValue;
 }
-
 function normalizeProduct(value: unknown, productId: number): ProductDetail {
   const item = asRecord(value);
   return {
@@ -108,7 +97,6 @@ function normalizeProduct(value: unknown, productId: number): ProductDetail {
     ),
   };
 }
-
 function normalizeProductSales(value: unknown, productId: number): ProductSale[] {
   const result: ProductSale[] = [];
   unwrapList(value).forEach((rawReceipt) => {
@@ -137,17 +125,11 @@ function normalizeProductSales(value: unknown, productId: number): ProductSale[]
   });
   return result.sort((a, b) => (parseBusinessTimestamp(b.soldAt)?.getTime() ?? 0) - (parseBusinessTimestamp(a.soldAt)?.getTime() ?? 0));
 }
-
-
-
-
-
 function resolveImage(path: string) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path) || path.startsWith("data:")) return path;
   return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 }
-
 function applyBrandColors() {
   const root = document.documentElement;
   const styles = window.getComputedStyle(root);
@@ -165,11 +147,9 @@ function applyBrandColors() {
   root.style.setProperty("--brand-soft", "color-mix(in srgb, var(--brand-primary) 10%, transparent)");
   root.style.setProperty("--brand-border", "color-mix(in srgb, var(--brand-primary) 28%, transparent)");
 }
-
 export default function ProductSalesHistoryPage() {
   const timezone = useShopTimezone();
   const { formatMoney: currency } = useCurrency();
-
   const router = useRouter();
   const params = useParams<{ productId: string }>();
   const productId = Number(params.productId);
@@ -183,7 +163,6 @@ export default function ProductSalesHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
   const [error, setError] = useState("");
-
   useEffect(() => {
     const sync = () => applyBrandColors();
     const onStorage = (event: StorageEvent) => event.key === BRAND_COLOR_STORAGE_KEY && sync();
@@ -195,7 +174,6 @@ export default function ProductSalesHistoryPage() {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
-
   async function loadHistory() {
     if (!Number.isFinite(productId) || productId <= 0) {
       setError("Product ID မမှန်ပါ။"); setLoading(false); return;
@@ -216,22 +194,17 @@ export default function ProductSalesHistoryPage() {
       setProduct(null); setSales([]);
     } finally { setLoading(false); }
   }
-
   useEffect(() => {
     void loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
-
   async function toggleProductAvailability() {
     if (!product || updatingAvailability) return;
-
     const nextAvailable = !product.availableForSale;
     setUpdatingAvailability(true);
     setError("");
-
     try {
       if (!getAccessToken()) throw new Error("Login session မရှိပါ။ Login ပြန်ဝင်ပါ။");
-
       const response = await fetch(
         `${API_BASE}/api/products/${product.id}/availability`,
         {
@@ -244,12 +217,10 @@ export default function ProductSalesHistoryPage() {
           body: JSON.stringify({ availableForSale: nextAvailable }),
         }
       );
-
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || `Product availability update failed (${response.status}).`);
       }
-
       setProduct((current) =>
         current ? { ...current, availableForSale: nextAvailable } : current
       );
@@ -263,7 +234,6 @@ export default function ProductSalesHistoryPage() {
       setUpdatingAvailability(false);
     }
   }
-
   const filteredSales = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return sales.filter((sale) => {
@@ -275,7 +245,6 @@ export default function ProductSalesHistoryPage() {
       return fromOk && toOk && queryOk;
     });
   }, [sales, query, dateFrom, dateTo, timezone]);
-
   useEffect(() => setCurrentPage(1), [query, dateFrom, dateTo, pageSize]);
   const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -285,7 +254,6 @@ export default function ProductSalesHistoryPage() {
   const lastSale = sales[0]?.soldAt || "";
   const startPage = Math.max(1, Math.min(totalPages - 4, safePage - 2));
   const pageNumbers = Array.from({ length: Math.min(5, totalPages) }, (_, index) => startPage + index);
-
   return (
     <main className="product-sales-page min-h-screen bg-[linear-gradient(145deg,var(--brand-soft),var(--background)_45%,color-mix(in_srgb,var(--brand-accent)_8%,var(--background)))] p-4 text-foreground sm:p-6 lg:p-8">
       <style jsx global>{`
@@ -339,6 +307,7 @@ export default function ProductSalesHistoryPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => router.push("/dashboard/products/out-of-stock")} className="rounded-xl border-red-200 text-red-600"><Ban className="mr-2 h-4 w-4" />Out of Stock List</Button>
               <Button variant="outline" onClick={() => router.push("/dashboard/products")} className="rounded-xl border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand-primary)]"><ArrowLeft className="mr-2 h-4 w-4" />Products</Button>
               {product && (
                 <Button
@@ -386,15 +355,12 @@ export default function ProductSalesHistoryPage() {
             </div>
           )}
         </header>
-
         {error && <div className="flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600"><AlertTriangle size={19} />{error}</div>}
-
         <section className="grid gap-4 sm:grid-cols-3">
           <SummaryCard icon={<ShoppingCart size={22} />} label="Sold Quantity" value={`${totalQuantity} items`} />
           <SummaryCard icon={<Wallet size={22} />} label="Sold Value" value={currency(totalSoldValue)} />
           <SummaryCard icon={<Clock3 size={22} />} label="Last Sold" value={lastSale ? formatShopDateTime(lastSale, timezone) : "No sales"} compact />
         </section>
-
         <Card className="overflow-hidden rounded-[2rem] border-[var(--brand-border)] bg-card/95 shadow-sm">
           <CardHeader className="border-b border-border">
             <div className="sales-toolbar flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -406,7 +372,6 @@ export default function ProductSalesHistoryPage() {
               </div>
             </div>
           </CardHeader>
-
           <CardContent className="p-0">
             {loading ? <div className="grid min-h-[360px] place-items-center"><Loader2 className="h-9 w-9 animate-spin text-[var(--brand-accent)]" /></div> :
              visibleSales.length === 0 ? <EmptyState /> : (
@@ -436,15 +401,12 @@ export default function ProductSalesHistoryPage() {
     </main>
   );
 }
-
 function SummaryCard({ icon, label, value, compact = false }: { icon: React.ReactNode; label: string; value: string; compact?: boolean }) {
   return <Card className="rounded-[2rem] border-[var(--brand-border)] bg-card/95"><CardContent className="flex items-center gap-4 p-5"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand-accent)]">{icon}</div><div className="min-w-0"><div className="text-xs font-bold text-muted-foreground">{label}</div><div className={`mt-1 font-black text-[var(--brand-primary)] ${compact ? "text-base" : "text-2xl"}`}>{value}</div></div></CardContent></Card>;
 }
-
 function EmptyState() {
   return <div className="grid min-h-[360px] place-items-center p-8 text-center"><div><div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[var(--brand-soft)] text-[var(--brand-accent)]"><ReceiptText size={35} /></div><h3 className="mt-4 text-xl font-black">Sales record မရှိသေးပါ</h3><p className="mt-2 text-sm text-muted-foreground">ဒီ Product ID ပါသော receipt item မတွေ့ပါ။</p></div></div>;
 }
-
 function Pagination({ currentPage, totalPages, pageNumbers, pageSize, total, onPage, onPageSize }: { currentPage: number; totalPages: number; pageNumbers: number[]; pageSize: number; total: number; onPage: (page: number) => void; onPageSize: (size: number) => void }) {
   return <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2 text-sm text-muted-foreground">Total {total}<select value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="rounded-lg border border-border bg-background px-2 py-1"><option value={10}>10 / page</option><option value={20}>20 / page</option><option value={50}>50 / page</option></select></div><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => onPage(currentPage - 1)} className="rounded-xl"><ChevronLeft className="mr-1 h-4 w-4" />Prev</Button>{pageNumbers.map((page) => <Button key={page} size="sm" variant={page === currentPage ? "default" : "outline"} onClick={() => onPage(page)} className="h-9 min-w-9 rounded-xl px-3">{page}</Button>)}<Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => onPage(currentPage + 1)} className="rounded-xl">Next<ChevronRight className="ml-1 h-4 w-4" /></Button></div></div>;
 }
