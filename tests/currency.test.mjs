@@ -15,6 +15,7 @@ function compileModule(path, dependencies = {}, globals = {}) {
   return context.exports;
 }
 const currency = compileModule("lib/currency.ts");
+const dateTime = compileModule("lib/date-time.ts");
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const config = (code, symbol, digits, position) => currency.normalizeCurrency({ currencyCode: code, currencySymbol: symbol, currencyDecimalDigits: digits, currencyPosition: position });
 
@@ -139,7 +140,7 @@ for (const [path, name] of [
   const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const builder = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   const escapeHtml = value => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-  const context = { escapeHtml, Date, Number, String, getFashionSubtitle: () => "", formatReceiptDate: () => "date", formatDateTime: () => "date", formatRatePercent: value => String(value), normalizeOrderType: () => "TAKEAWAY", getPaymentLabel: () => "Cash", parseModifiers: () => [] };
+  const context = { ...dateTime, escapeHtml, Date, Number, String, getFashionSubtitle: () => "", formatReceiptDate: () => "date", formatDateTime: () => "date", formatRatePercent: value => String(value), normalizeOrderType: () => "TAKEAWAY", getPaymentLabel: () => "Cash", parseModifiers: () => [] };
   vm.runInNewContext(ts.transpileModule(`${builder.getText(ast)}\nvar build = ${name};`, { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText, context);
   const receipt = { shopInfo: {}, items: [{ name: "item", itemName: "item", price: 10000, qty: 1, quantity: 1, unitPrice: 10000, totalPrice: 10000 }], receiptNo: "R1", subtotal: 10000, total: 10000, tax: 0, discount: 0, serviceCharge: 0, cashReceived: 10000, changeAmount: 0, paymentMethod: "CASH", paidAt: "2026-10-03", taxRatePercent: 0, serviceChargeRatePercent: 0, ads: [] };
   for (const settings of [config("MMK", "Ks", 0, "AFTER"), config("USD", "$", 2, "BEFORE"), config("JPY", "¥", 0, "BEFORE"), config("USD", "<symbol>", 2, "BEFORE")]) {

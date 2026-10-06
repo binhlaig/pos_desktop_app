@@ -36,6 +36,7 @@ import "./globals.css";
 import { AuthSessionProvider } from "@/components/auth/session-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { BrandColorProvider } from "@/components/dashboard/brand-color-provider";
+import { ShopTimezoneProvider } from "@/components/shop-timezone-provider";
 import { CurrencyProvider } from "@/components/currency-provider";
 
 export const metadata: Metadata = {
@@ -58,9 +59,11 @@ export default function RootLayout({
 <body className="antialiased">
         <AuthSessionProvider>
           <BrandColorProvider>
+            <ShopTimezoneProvider>
             <CurrencyProvider>
             {children}
             </CurrencyProvider>
+            </ShopTimezoneProvider>
           </BrandColorProvider>
 
           <Toaster />

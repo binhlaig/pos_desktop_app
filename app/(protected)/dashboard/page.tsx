@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime, formatShopDate, formatShopTime, shopDateKey, isShopToday, parseBusinessTimestamp } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import Link from "next/link";
 import {
@@ -256,50 +259,21 @@ function statusOf(value?: string | null) {
 function isPaid(value?: string | null) {
   return ["PAID", "COMPLETED", "SUCCESS"].includes(statusOf(value));
 }
-function isToday(value?: string | null) {
-  if (!value) return false;
-  const date = new Date(value);
-  const today = new Date();
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  );
-}
+
 function dateOf(value?: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseBusinessTimestamp(value);
 }
-function dayKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-function chartPointKey(date: Date, days: RangeDays) {
+
+function chartPointKey(date: Date, days: RangeDays, timezone: string = "") {
   if (days === 1) {
-    return `${dayKey(date)}-${String(date.getHours()).padStart(2, "0")}`;
+    return `${shopDateKey(date, timezone)}-${formatShopTime(date, timezone).slice(0, 2)}`;
   }
-  return dayKey(date);
+  return shopDateKey(date, timezone);
 }
 
 
-function formatTime(value?: string | null) {
-  const date = dateOf(value);
-  return date
-    ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "--:--";
-}
-function formatDateTime(value?: string | null) {
-  const date = dateOf(value);
-  return date
-    ? date.toLocaleString("my-MM", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-    : "—";
-}
+
+
 function elapsedMinutes(value?: string | null) {
   const date = dateOf(value);
   return date ? Math.max(0, Math.floor((Date.now() - date.getTime()) / 60_000)) : 0;
@@ -373,33 +347,26 @@ function statusLabel(value?: string | null) {
   };
   return labels[status] || status;
 }
-function emptySalesSeries(days: RangeDays) {
+function emptySalesSeries(days: RangeDays, timezone: string = "") {
+  const todayKey = shopDateKey(new Date(), timezone);
+  if (!todayKey) return [];
   if (days === 1) {
-    const today = new Date();
-    today.setMinutes(0, 0, 0);
-    return Array.from({ length: 24 }, (_, hour) => {
-      const date = new Date(today);
-      date.setHours(hour, 0, 0, 0);
-      return {
-        key: chartPointKey(date, days),
-        day: `${String(hour).padStart(2, "0")}:00`,
-        date: `ယနေ့ ${String(hour).padStart(2, "0")}:00`,
-        sales: 0,
-        transactions: 0,
-      } satisfies SalesPoint;
-    });
+    return Array.from({ length: 24 }, (_, hour) => ({
+      key: todayKey + "-" + String(hour).padStart(2, "0"),
+      day: String(hour).padStart(2, "0") + ":00",
+      date: "ယနေ့ " + String(hour).padStart(2, "0") + ":00",
+      sales: 0,
+      transactions: 0,
+    } satisfies SalesPoint));
   }
   return Array.from({ length: days }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (days - 1 - index));
+    // Calendar arithmetic uses UTC on the shop's calendar date, independent of the host.
+    const calendar = new Date(todayKey + "T12:00:00Z");
+    calendar.setUTCDate(calendar.getUTCDate() - (days - 1 - index));
     return {
-      key: chartPointKey(date, days),
-      day:
-        days === 7
-          ? date.toLocaleDateString("my-MM", { weekday: "short" })
-          : date.toLocaleDateString("my-MM", { day: "numeric" }),
-      date: date.toLocaleDateString("my-MM", { month: "short", day: "numeric" }),
+      key: shopDateKey(calendar, "UTC"),
+      day: formatShopDate(calendar, "UTC", days === 7 ? { weekday: "short" } : { day: "numeric" }, "my-MM"),
+      date: formatShopDate(calendar, "UTC", { month: "short", day: "numeric" }, "my-MM"),
       sales: 0,
       transactions: 0,
     } satisfies SalesPoint;
@@ -457,6 +424,7 @@ function EmptyState({ icon: Icon, title }: { icon: ElementType; title: string })
   );
 }
 export default function DashboardPage() {
+  const timezone = useShopTimezone();
   const { formatMoney } = useCurrency();
   const compactMoney = (amount: number) => formatMoney(amount, true);
 
@@ -596,7 +564,7 @@ export default function DashboardPage() {
     };
   }, [businessType, loadRestaurantData, mounted]);
   const restaurantMetrics = useMemo<RestaurantMetrics>(() => {
-    const todayOrders = restaurantData.orders.filter((order) => isToday(orderCreatedAt(order)));
+    const todayOrders = restaurantData.orders.filter((order) => isShopToday(orderCreatedAt(order), timezone));
     const newTickets = restaurantData.tickets.filter((ticket) => statusOf(ticket.status) === "NEW").length;
     const cookingTickets = restaurantData.tickets.filter((ticket) => statusOf(ticket.status) === "COOKING").length;
     const readyTickets = restaurantData.tickets.filter((ticket) => statusOf(ticket.status) === "READY").length;
@@ -617,11 +585,11 @@ export default function DashboardPage() {
       readyTickets,
       activeKitchenTickets: newTickets + cookingTickets + readyTickets,
     };
-  }, [restaurantData]);
+  }, [restaurantData, timezone]);
   const paidReceipts = useMemo(() => receipts.filter((receipt) => isPaid(receipt.status)), [receipts]);
   const todayReceipts = useMemo(
-    () => paidReceipts.filter((receipt) => isToday(receiptCreatedAt(receipt))),
-    [paidReceipts],
+    () => paidReceipts.filter((receipt) => isShopToday(receiptCreatedAt(receipt), timezone)),
+    [paidReceipts, timezone],
   );
   const todaySales = todayReceipts.reduce((sum, receipt) => sum + receiptTotal(receipt), 0) +
     (businessType === "RESTAURANT" || businessType === "BOTH" ? restaurantMetrics.todaySales : 0);
@@ -650,12 +618,12 @@ export default function DashboardPage() {
     [stockCounts],
   );
   const salesData = useMemo(() => {
-    const series = emptySalesSeries(rangeDays);
+    const series = emptySalesSeries(rangeDays, timezone);
     const byKey = new Map(series.map((point) => [point.key, point]));
     for (const receipt of paidReceipts) {
       const createdAt = dateOf(receiptCreatedAt(receipt));
       const point = createdAt
-        ? byKey.get(chartPointKey(createdAt, rangeDays))
+        ? byKey.get(chartPointKey(createdAt, rangeDays, timezone))
         : undefined;
       if (point) {
         point.sales += receiptTotal(receipt);
@@ -666,7 +634,7 @@ export default function DashboardPage() {
       for (const order of restaurantData.orders.filter((item) => isPaid(item.status))) {
         const createdAt = dateOf(orderCreatedAt(order));
         const point = createdAt
-          ? byKey.get(chartPointKey(createdAt, rangeDays))
+          ? byKey.get(chartPointKey(createdAt, rangeDays, timezone))
           : undefined;
         if (point) {
           point.sales += orderTotal(order);
@@ -675,7 +643,7 @@ export default function DashboardPage() {
       }
     }
     return series;
-  }, [businessType, paidReceipts, rangeDays, restaurantData.orders]);
+  }, [businessType, paidReceipts, rangeDays, restaurantData.orders, timezone]);
   const rangeSales = salesData.reduce((sum, point) => sum + point.sales, 0);
   const rangeTransactions = salesData.reduce((sum, point) => sum + point.transactions, 0);
   const paymentSummary = useMemo(() => {
@@ -686,14 +654,14 @@ export default function DashboardPage() {
     }
     if (businessType === "RESTAURANT" || businessType === "BOTH") {
       for (const order of restaurantData.orders.filter(
-        (item) => isPaid(item.status) && isToday(orderCreatedAt(item)),
+        (item) => isPaid(item.status) && isShopToday(orderCreatedAt(item), timezone),
       )) {
         const method = statusOf(order.paymentMethod || order.payment_method);
         if (method in totals) totals[method as keyof typeof totals] += orderTotal(order);
       }
     }
     return totals;
-  }, [businessType, restaurantData.orders, todayReceipts]);
+  }, [businessType, restaurantData.orders, todayReceipts, timezone]);
   const lowStockProducts = useMemo(
     () =>
       [...products]
@@ -810,11 +778,7 @@ export default function DashboardPage() {
   const showStock = businessType !== "RESTAURANT";
   const dateRangeLabel =
     rangeDays === 1
-      ? new Date().toLocaleDateString("my-MM", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
+      ? formatShopDate(new Date(), timezone)
       : salesData.length
         ? `${salesData[0].date} – ${salesData[salesData.length - 1].date}`
         : "—";
@@ -966,7 +930,7 @@ export default function DashboardPage() {
                   <h3 className="font-semibold">{showStock ? "ကုန်လက်ကျန်ခွဲခြမ်းမှု" : "အော်ဒါခွဲခြမ်းမှု"}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">လက်ရှိလုပ်ငန်းအခြေအနေ</p>
                 </div>
-                {updatedAt && <span className="text-[10px] text-muted-foreground">နောက်ဆုံးရယူချိန် {formatTime(updatedAt.toISOString())}</span>}
+                {updatedAt && <span className="text-[10px] text-muted-foreground">နောက်ဆုံးရယူချိန် {formatShopTime(updatedAt.toISOString(), timezone)}</span>}
               </div>
               {showStock ? (
                 products.length === 0 && !businessLoading ? (
@@ -1024,7 +988,7 @@ export default function DashboardPage() {
                   <Link key={sale.id} href={sale.href} className="flex items-center gap-3 p-4 transition hover:bg-muted/40">
                     <span className="grid size-9 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-600"><Receipt className="size-4" /></span>
                     <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{sale.number}</strong><span className="text-xs text-muted-foreground">ငွေရှင်းပြီး · {formatMoney(sale.amount)}</span></span>
-                    <span className="text-[10px] text-muted-foreground">{formatDateTime(sale.createdAt)}</span>
+                    <span className="text-[10px] text-muted-foreground">{formatShopDateTime(sale.createdAt, timezone)}</span>
                   </Link>
                 ))}
                 {showStock && lowStockProducts.slice(0, Math.max(0, 4 - recentSales.length)).map((product) => (
@@ -1086,7 +1050,7 @@ export default function DashboardPage() {
                         <tr key={sale.id} className="border-b border-border/40 last:border-0 hover:bg-muted/25">
                           <td className="px-5 py-3 text-sm font-semibold"><Link href={sale.href}>{sale.number}</Link></td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">{sale.staff}</td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(sale.createdAt)}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{formatShopDateTime(sale.createdAt, timezone)}</td>
                           <td className="px-4 py-3 text-sm font-semibold">{formatMoney(sale.amount)}</td>
                           <td className="px-5 py-3"><span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{statusLabel(sale.status)}</span></td>
                         </tr>
@@ -1126,7 +1090,7 @@ export default function DashboardPage() {
                   <span className="grid size-10 place-items-center rounded-xl bg-orange-500/10 text-orange-600"><ChefHat className="size-5" /></span>
                   <div><h3 className="font-semibold">စားသောက်ဆိုင် လက်ရှိလုပ်ငန်းအခြေအနေ</h3><p className="mt-1 text-xs text-muted-foreground">မီးဖိုချောင်စာရင်းကို ၁၀ စက္ကန့်တိုင်း ပြန်လည်ရယူသည်</p></div>
                 </div>
-                <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">တိုက်ရိုက် · {restaurantUpdatedAt ? formatTime(restaurantUpdatedAt.toISOString()) : "--:--"}</span><Button type="button" variant="outline" size="sm" onClick={() => void loadRestaurantData(true)} disabled={restaurantRefreshing}><RefreshCcw className={`size-4 ${restaurantRefreshing ? "animate-spin" : ""}`} />ပြန်လည်ရယူရန်</Button></div>
+                <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">တိုက်ရိုက် · {restaurantUpdatedAt ? formatShopTime(restaurantUpdatedAt.toISOString(), timezone) : "--:--"}</span><Button type="button" variant="outline" size="sm" onClick={() => void loadRestaurantData(true)} disabled={restaurantRefreshing}><RefreshCcw className={`size-4 ${restaurantRefreshing ? "animate-spin" : ""}`} />ပြန်လည်ရယူရန်</Button></div>
               </div>
               {restaurantLoading ? (
                 <div className="grid min-h-56 place-items-center"><Loader2 className="size-7 animate-spin text-orange-500" /></div>

@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -121,18 +124,7 @@ type RefundResponse = {
 
 const round = (n: number) => Math.round(Number(n || 0));
 
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+
 
 function normalizeReceipt(data: any): ReceiptDetail | null {
   const r = data?.receipt || data?.data || data;
@@ -644,6 +636,7 @@ function ReceiptPanel({
   selectAllItems: () => void;
   clearSelection: () => void;
 }) {
+  const timezone = useShopTimezone();
   const { formatMoney: jpy } = useCurrency();
 
   const [expanded, setExpanded] = useState(true);
@@ -663,7 +656,7 @@ function ReceiptPanel({
               </Badge>
             </CardTitle>
             <CardDescription className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
-              <span>{formatDate(receipt.createdAt)}</span>
+              <span>{formatShopDateTime(receipt.createdAt, timezone)}</span>
               <span>{receipt.shopName || receipt.shopCode || "-"}</span>
               <span>{receipt.paymentMethod}</span>
             </CardDescription>

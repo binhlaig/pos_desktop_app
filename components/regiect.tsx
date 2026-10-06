@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime, formatShopTime, shopDateKey } from "@/lib/date-time";
 import { getReceiptSettingsResponse } from "@/lib/settings-api";
 import { useCurrency } from "@/components/currency-provider";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
@@ -631,6 +634,7 @@ function CartLineVisual({
 }
 
 export default function RegisterPOSPage() {
+  const timezone = useShopTimezone();
   const router = useRouter();
   const latestReceiptLoadRef = useRef<() => Promise<void>>(async () => {});
 
@@ -1793,13 +1797,7 @@ export default function RegisterPOSPage() {
     const receiptMoney = money;
     const now = new Date();
 
-    const receiptNo = `R-${now.getFullYear()}${String(
-      now.getMonth() + 1
-    ).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(
-      now.getHours()
-    ).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(
-      now.getSeconds()
-    ).padStart(2, "0")}`;
+    const receiptNo = `R-${shopDateKey(now, timezone).replaceAll("-", "")}-${formatShopTime(now, timezone).replaceAll(":", "")}`;
 
     const receiptBarcodeSrc = code128SvgDataUri(receiptNo);
 
@@ -2033,7 +2031,7 @@ export default function RegisterPOSPage() {
 
             <div class="info-row"><span>Receipt</span><b>${receiptNo}</b></div>
             <div class="info-row"><span>Date</span><b>${escapeHtml(
-              now.toLocaleString("ja-JP")
+              formatShopDateTime(now, timezone)
             )}</b></div>
             <div class="info-row"><span>Staff</span><b>${escapeHtml(
               staffId || "-"

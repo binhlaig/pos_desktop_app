@@ -1,5 +1,8 @@
 "use client";
 
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime, formatShopTime, isShopToday } from "@/lib/date-time";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -289,48 +292,12 @@ function parseModifiers(value: KitchenTicketItem["modifiers"]) {
   return [];
 }
 
-function formatTime(value?: string | null) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleString([], {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 
-function isTodayLocalDate(value?: string | null) {
-  if (!value) return false;
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
 
-  const today = new Date();
 
-  return (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  );
-}
+
 
 function countItems(ticket: KitchenTicket) {
   return (ticket.items || []).reduce(
@@ -386,6 +353,7 @@ function deriveTicketStatus(items: KitchenTicketItem[]): "NEW" | "COOKING" | "RE
 }
 
 export default function RestaurantKitchenPage() {
+  const timezone = useShopTimezone();
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<KitchenStatus>("ALL");
   const [search, setSearch] = useState("");
@@ -462,7 +430,7 @@ export default function RestaurantKitchenPage() {
       // DONE tab မှာ today date orders ပဲပြရန်။
       // အရင်နေ့က DONE orders တွေကို table ထဲ မပြတော့ပါ။
       const matchTodayDone =
-        selectedStatus === "DONE" ? isTodayLocalDate(ticket.createdAt) : true;
+        selectedStatus === "DONE" ? isShopToday(ticket.createdAt, timezone) : true;
 
       const matchSearch =
         !keyword ||
@@ -475,7 +443,7 @@ export default function RestaurantKitchenPage() {
 
       return matchStatus && matchTodayDone && matchSearch;
     });
-  }, [tickets, selectedStatus, search, acknowledgedCancellations]);
+  }, [tickets, selectedStatus, search, acknowledgedCancellations, timezone]);
 
   const completedTableTickets = useMemo(() => {
     return filteredTickets.filter((ticket) =>
@@ -510,7 +478,7 @@ export default function RestaurantKitchenPage() {
 
       // DONE count ကိုလည်း today count ပဲပြပါမယ်။
       if (status === "DONE") {
-        if (isTodayLocalDate(ticket.createdAt)) {
+        if (isShopToday(ticket.createdAt, timezone)) {
           counts.DONE += 1;
         }
         return;
@@ -524,7 +492,7 @@ export default function RestaurantKitchenPage() {
     });
 
     return counts;
-  }, [tickets]);
+  }, [tickets, timezone]);
 
   async function fetchTickets() {
     if (fetchLockRef.current || mutationRef.current) return;
@@ -1066,11 +1034,11 @@ export default function RestaurantKitchenPage() {
                         </td>
 
                         <td className="px-4 py-4 align-top text-sm font-semibold text-slate-600">
-                          {formatDateTime(ticket.createdAt)}
+                          {formatShopDateTime(ticket.createdAt, timezone)}
                         </td>
 
                         <td className="px-4 py-4 align-top text-sm font-semibold text-slate-600">
-                          {formatDateTime(ticket.updatedAt)}
+                          {formatShopDateTime(ticket.updatedAt, timezone)}
                         </td>
                       </tr>
                     );
@@ -1164,7 +1132,7 @@ export default function RestaurantKitchenPage() {
                           <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
                             <span className="inline-flex items-center gap-1">
                               <Timer size={14} />
-                              {formatTime(ticket.createdAt)}
+                              {formatShopTime(ticket.createdAt, timezone)}
                             </span>
                             <span>{countItems(ticket)} items</span>
                             {ticket.staffName && (

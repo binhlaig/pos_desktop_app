@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime, shopDateKey } from "@/lib/date-time";
 import { getReceiptSettingsResponse } from "@/lib/settings-api";
 import { DEFAULT_CURRENCY, normalizeCurrency, receiptSettingsPayload, formatCurrency, type CurrencyConfig } from "@/lib/currency";
 import { useCurrency } from "@/components/currency-provider";
@@ -262,6 +265,7 @@ export default function ReceiptShopInfoPage() {
 }
 
 function ReceiptShopInfoForm() {
+  const timezone = useShopTimezone();
   const router = useRouter();
   const { updateCurrency } = useCurrency();
   const { data: session } = useSession();
@@ -274,14 +278,8 @@ function ReceiptShopInfoForm() {
   const [isNight, setIsNight] = useState(false);
 
   const todayText = useMemo(() => {
-    return new Date().toLocaleString("ja-JP", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }, []);
+    return formatShopDateTime(new Date(), timezone);
+  }, [timezone]);
 
   const phoneLine = useMemo(() => {
     return info.phone || info.secondPhone
@@ -293,11 +291,8 @@ function ReceiptShopInfoForm() {
 
   const sampleReceiptNo = useMemo(() => {
     const now = new Date();
-    return `R-${now.getFullYear()}${String(now.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}${String(now.getDate()).padStart(2, "0")}-PREVIEW`;
-  }, []);
+    return `R-${shopDateKey(now, timezone).replaceAll("-", "")}-PREVIEW`;
+  }, [timezone]);
 
   const completion = useMemo(() => {
     let score = 0;

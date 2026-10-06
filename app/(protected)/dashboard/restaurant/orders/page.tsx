@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime, shopDateKey, parseBusinessTimestamp } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import type { MoneyFormatter } from "@/lib/currency";
 
@@ -354,37 +357,12 @@ function normalizeOrderType(value?: string | null): Exclude<OrderType, "ALL"> {
 
 
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "-";
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
 
-  return date.toLocaleString([], {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
-function formatDateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
 
-  return `${year}-${month}-${day}`;
-}
-
-function isSameDate(value: string | null | undefined, yyyyMmDd: string) {
-  if (!yyyyMmDd) return true;
-  if (!value) return false;
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-
-  return formatDateInput(date) === yyyyMmDd;
+function isSameDate(value: string | null | undefined, yyyyMmDd: string, timezone: string = "") {
+  return !yyyyMmDd || shopDateKey(value, timezone) === yyyyMmDd;
 }
 
 function parseModifiers(value: OrderItem["modifiers"]) {
@@ -669,7 +647,7 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", "&#039;");
 }
 
-function buildOrderReceiptHtml(order: RestaurantOrder, formatMoney: MoneyFormatter) {
+function buildOrderReceiptHtml(order: RestaurantOrder, formatMoney: MoneyFormatter, timezone: string = "") {
   const orderLabel = order.orderNo || order.paymentNo || order.ticketNo || `ORD-${order.id}`;
   const itemRows = (order.items || [])
     .map((item) => {
@@ -720,7 +698,7 @@ function buildOrderReceiptHtml(order: RestaurantOrder, formatMoney: MoneyFormatt
       <div class="subtitle">Re-print</div>
       <div class="line"><span>Order</span><strong>${escapeHtml(orderLabel)}</strong></div>
       <div class="line"><span>Payment No</span><strong>${escapeHtml(order.paymentNo || "-")}</strong></div>
-      <div class="line"><span>Date</span><strong>${escapeHtml(formatDateTime(order.paidAt || order.createdAt || order.updatedAt))}</strong></div>
+      <div class="line"><span>Date</span><strong>${escapeHtml(formatShopDateTime(order.paidAt || order.createdAt || order.updatedAt, timezone))}</strong></div>
       <div class="line"><span>Type</span><strong>${escapeHtml(normalizeOrderType(order.orderType))}</strong></div>
       ${normalizeOrderType(order.orderType) === "DINE_IN" ? `<div class="line"><span>Table</span><strong>${escapeHtml(order.tableNo || "-")}</strong></div>` : ""}
       <div class="line"><span>Staff</span><strong>${escapeHtml(order.staffName || order.cashierName || "-")}</strong></div>
@@ -738,12 +716,12 @@ function buildOrderReceiptHtml(order: RestaurantOrder, formatMoney: MoneyFormatt
       <div class="line"><span>Payment</span><strong>${escapeHtml(getPaymentLabel(order))}</strong></div>
       <div class="line"><span>Cash Received</span><strong>${escapeHtml(formatMoney(order.cashReceived))}</strong></div>
       <div class="line"><span>Change</span><strong>${escapeHtml(formatMoney(order.changeAmount))}</strong></div>
-      <div class="line"><span>Paid At</span><strong>${escapeHtml(formatDateTime(order.paidAt))}</strong></div>
+      <div class="line"><span>Paid At</span><strong>${escapeHtml(formatShopDateTime(order.paidAt, timezone))}</strong></div>
     </body>
   </html>`;
 }
 
-function reprintOrder(order: RestaurantOrder, formatMoney: MoneyFormatter) {
+function reprintOrder(order: RestaurantOrder, formatMoney: MoneyFormatter, timezone: string = "") {
   const printWindow = window.open("", "_blank", "width=420,height=760");
 
   if (!printWindow) {
@@ -752,7 +730,7 @@ function reprintOrder(order: RestaurantOrder, formatMoney: MoneyFormatter) {
   }
 
   printWindow.document.open();
-  printWindow.document.write(buildOrderReceiptHtml(order, formatMoney));
+  printWindow.document.write(buildOrderReceiptHtml(order, formatMoney, timezone));
   printWindow.document.close();
   printWindow.focus();
   window.setTimeout(() => printWindow.print(), 250);
@@ -775,14 +753,18 @@ function OrderTypeIcon({
 }
 
 export default function RestaurantOrdersPage() {
+  const timezone = useShopTimezone();
   const { formatMoney } = useCurrency();
 
   const [orders, setOrders] = useState<RestaurantOrder[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>("ALL");
   const [selectedType, setSelectedType] = useState<OrderType>("ALL");
   const [selectedDate, setSelectedDate] = useState(() =>
-    formatDateInput(new Date()),
+    shopDateKey(new Date(), timezone),
   );
+  useEffect(() => {
+    if (timezone) setSelectedDate(shopDateKey(new Date(), timezone));
+  }, [timezone]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -817,7 +799,7 @@ export default function RestaurantOrdersPage() {
 
       const matchType = selectedType === "ALL" ? true : selectedType === type;
 
-      const matchDate = isSameDate(dateValue, selectedDate);
+      const matchDate = isSameDate(dateValue, selectedDate, timezone);
 
       const matchSearch =
         !keyword ||
@@ -833,7 +815,7 @@ export default function RestaurantOrdersPage() {
 
       return matchStatus && matchType && matchDate && matchSearch;
     });
-  }, [orders, selectedStatus, selectedType, selectedDate, search]);
+  }, [orders, selectedStatus, selectedType, selectedDate, search, timezone]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
 
@@ -893,7 +875,7 @@ export default function RestaurantOrdersPage() {
     orders.forEach((order) => {
       const dateValue = order.paidAt || order.createdAt || order.updatedAt;
 
-      if (!isSameDate(dateValue, selectedDate)) return;
+      if (!isSameDate(dateValue, selectedDate, timezone)) return;
 
       const status = normalizeStatus(order.status);
       counts[status] += 1;
@@ -901,7 +883,7 @@ export default function RestaurantOrdersPage() {
     });
 
     return counts;
-  }, [orders, selectedDate]);
+  }, [orders, selectedDate, timezone]);
 
   /* Legacy cross-endpoint loader retained in source history only.
   async function fetchOrders() {
@@ -962,12 +944,8 @@ export default function RestaurantOrdersPage() {
         loadedPayloads.flatMap(unwrapOrdersPayload).map(mapOrder),
       )
         .sort((a, b) => {
-          const aTime = new Date(
-            a.paidAt || a.createdAt || a.updatedAt || 0,
-          ).getTime();
-          const bTime = new Date(
-            b.paidAt || b.createdAt || b.updatedAt || 0,
-          ).getTime();
+          const aTime = parseBusinessTimestamp(a.paidAt || a.createdAt || a.updatedAt)?.getTime() ?? 0;
+          const bTime = parseBusinessTimestamp(b.paidAt || b.createdAt || b.updatedAt)?.getTime() ?? 0;
 
           return bTime - aTime;
         });
@@ -1047,8 +1025,8 @@ export default function RestaurantOrdersPage() {
 
       const mappedOrders = enrichOrders(authoritativeOrders, payments, tickets).sort(
         (a, b) =>
-          new Date(b.paidAt || b.createdAt || b.updatedAt || 0).getTime() -
-          new Date(a.paidAt || a.createdAt || a.updatedAt || 0).getTime(),
+          (parseBusinessTimestamp(b.paidAt || b.createdAt || b.updatedAt || 0)?.getTime() ?? 0) -
+          (parseBusinessTimestamp(a.paidAt || a.createdAt || a.updatedAt || 0)?.getTime() ?? 0),
       );
 
       setOrders(mappedOrders);
@@ -1065,7 +1043,7 @@ export default function RestaurantOrdersPage() {
   function resetFilters() {
     setSelectedStatus("ALL");
     setSelectedType("ALL");
-    setSelectedDate(formatDateInput(new Date()));
+    setSelectedDate(shopDateKey(new Date(), timezone));
     setSearch("");
     setPage(1);
   }
@@ -1446,8 +1424,8 @@ export default function RestaurantOrdersPage() {
                         </td>
 
                         <td className="px-4 py-4 align-top text-sm font-semibold text-slate-600">
-                          {formatDateTime(
-                            order.paidAt || order.createdAt || order.updatedAt,
+                          {formatShopDateTime(
+                            order.paidAt || order.createdAt || order.updatedAt, timezone
                           )}
                         </td>
 
@@ -1467,7 +1445,7 @@ export default function RestaurantOrdersPage() {
                               type="button"
                               aria-label={`Reprint order ${order.orderNo || order.id}`}
                               title="Reprint order"
-                              onClick={() => reprintOrder(order, formatMoney)}
+                              onClick={() => reprintOrder(order, formatMoney, timezone)}
                               className="inline-flex items-center gap-2 rounded-2xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-black text-white transition hover:brightness-95"
                             >
                               <Printer size={16} />
@@ -1601,6 +1579,7 @@ function OrderDetailDialog({
   order: RestaurantOrder;
   onClose: () => void;
 }) {
+  const timezone = useShopTimezone();
   const { formatMoney } = useCurrency();
 
   const status = normalizeStatus(order.status);
@@ -1635,7 +1614,7 @@ function OrderDetailDialog({
             </h2>
 
             <p className="mt-1 text-sm font-semibold text-slate-500">
-              {formatDateTime(order.paidAt || order.createdAt || order.updatedAt)}
+              {formatShopDateTime(order.paidAt || order.createdAt || order.updatedAt, timezone)}
             </p>
           </div>
 
@@ -1831,7 +1810,7 @@ function OrderDetailDialog({
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 p-3">
           <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-white px-5 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-200">Close</button>
-          <button type="button" onClick={() => reprintOrder(order, formatMoney)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white">
+          <button type="button" onClick={() => reprintOrder(order, formatMoney, timezone)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white">
             <Printer size={17} /> Re-print
           </button>
         </div>

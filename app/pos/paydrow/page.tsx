@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
@@ -147,6 +150,7 @@ const BeamBackground = () => (
 );
 /* ====== Page ====== */
 export default function RegisterCashPage() {
+  const timezone = useShopTimezone();
   const { formatMoney: jpy } = useCurrency();
 
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -623,7 +627,7 @@ export default function RegisterCashPage() {
                     className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 bg-white/5"
                   >
                     <div className="text-xs md:text-sm">
-                      {new Date(item.t).toLocaleString()}
+                      {formatShopDateTime(item.t, timezone)}
                     </div>
                     <div className="text-xs md:text-sm">
                       <Badge variant="outline" className="rounded-full">

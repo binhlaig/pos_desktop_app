@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -194,20 +197,7 @@ function authHeaders(): Record<string, string> {
     : {};
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "-";
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleString("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -445,6 +435,7 @@ function normalizeReceipts(data: unknown): ReceiptRow[] {
 }
 
 export default function ReceiptsPage() {
+  const timezone = useShopTimezone();
   const { formatMoney: jpy } = useCurrency();
 
   const router = useRouter();
@@ -643,7 +634,7 @@ export default function ReceiptsPage() {
     const rows = filteredReceipts.map((r) =>
       [
         r.receiptNo,
-        formatDate(r.createdAt),
+        formatShopDateTime(r.createdAt, timezone),
         r.staffName || r.staffId || "",
         r.paymentMethod,
         Math.round(r.subtotal),
@@ -895,7 +886,7 @@ export default function ReceiptsPage() {
               receipt.receiptNo
             )}</b></div>
             <div class="row"><span>Date</span><b>${escapeHtml(
-              formatDate(receipt.createdAt)
+              formatShopDateTime(receipt.createdAt, timezone)
             )}</b></div>
             <div class="row"><span>Staff</span><b>${escapeHtml(
               receipt.staffName || receipt.staffId || "-"
@@ -1321,6 +1312,7 @@ function ReceiptCard({
   onToggle: () => void;
   onPrint: () => void;
 }) {
+  const timezone = useShopTimezone();
   const { formatMoney: jpy } = useCurrency();
 
   const itemCount = receipt.items.reduce((sum, item) => sum + item.qty, 0);
@@ -1334,7 +1326,7 @@ function ReceiptCard({
         <button type="button" onClick={onToggle} aria-expanded={expanded} className="min-w-0 text-left">
           <h3 className="break-words text-sm font-bold">{receipt.receiptNo}</h3>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span>{formatDate(receipt.createdAt)}</span>
+            <span>{formatShopDateTime(receipt.createdAt, timezone)}</span>
             <span>{receipt.staffName || receipt.staffId || "-"}</span>
             <span className="capitalize">{receipt.paymentMethod}</span>
             <span>{receipt.status || "COMPLETED"}</span>

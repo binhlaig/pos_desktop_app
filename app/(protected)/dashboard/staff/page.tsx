@@ -1,4 +1,6 @@
 "use client";
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDate } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import * as React from "react";
 import { useSession } from "next-auth/react";
@@ -180,6 +182,10 @@ function normalizeStatus(s: unknown): Status {
   return (["active", "on_leave", "inactive"] as Status[]).includes(v as Status)
     ? (v as Status)
     : "active";
+}
+
+function formatJoinedDate(value: string, timezone: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : formatShopDate(value, timezone);
 }
 
 function formatDate(value?: string) {
@@ -1243,6 +1249,7 @@ function DetailPanel({
   onClose: () => void;
   night: boolean;
 }) {
+  const timezone = useShopTimezone();
   const { formatMoney: money, formatMoney } = useCurrency();
 
   const [tab, setTab] = React.useState<"profile" | "tasks">("profile");
@@ -1461,7 +1468,7 @@ function DetailPanel({
                 {
                   icon: Calendar,
                   label: "Start Date",
-                  value: formatDate(member.joined),
+                  value: formatJoinedDate(member.joined, timezone),
                 },
                 {
                   icon: Briefcase,
@@ -1832,6 +1839,7 @@ function PaginationBar({
 }
 
 export default function StaffPage() {
+  const timezone = useShopTimezone();
   const { data: session, status: sessionStatus } = useSession();
   const { resolvedTheme } = useTheme();
   const night = resolvedTheme === "dark";
@@ -2089,7 +2097,7 @@ export default function StaffPage() {
               <td><span className="font-semibold">{roleCfg[member.role].label}</span><span className="mt-1 block text-[11px] text-slate-500">{member.branch}</span></td>
               <td><span className="inline-flex whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-bold" style={{color:statusCfg[member.status].color,background:statusCfg[member.status].color+"18"}}>{statusCfg[member.status].label}</span></td>
               <td><span className="block">{member.phone}</span><span className="mt-1 block text-[11px] text-slate-500">{member.email}</span></td>
-              <td className="text-xs">{formatDate(member.joined)}</td>
+              <td className="text-xs">{formatJoinedDate(member.joined, timezone)}</td>
               <td><button type="button" onClick={() => selectMember(member)} aria-label={`View ${member.name} details`} className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 dark:border-white/10"><Eye className="h-4 w-4" /></button></td>
             </tr>)}</tbody>
           </table>

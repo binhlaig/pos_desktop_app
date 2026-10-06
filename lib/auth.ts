@@ -424,6 +424,7 @@
 
 
 
+import { shopTimezone } from "@/lib/date-time";
 import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { pickBusinessType } from "@/lib/business-type";
@@ -436,6 +437,8 @@ type SpringLoginResponse = {
   role?: string;
   shopId?: number | string | null;
   shopCode?: string | null;
+  timezone?: string | null;
+  shop?: Record<string, unknown> | null;
   imageUrl?: string | null;
   image?: string | null;
   businessType?: string | null;
@@ -457,6 +460,7 @@ type AuthUserFields = {
   role?: string | null;
   shopId?: number | null;
   shopCode?: string | null;
+  timezone?: string | null;
   businessType?: string | null;
   image?: string | null;
   imageUrl?: string | null;
@@ -731,6 +735,7 @@ export const authOptions: NextAuthOptions = {
             role: parsedRole,
             shopId: parsedShopId,
             shopCode: parsedShopCode,
+            timezone: shopTimezone(data) || shopTimezone(payload),
             image: parsedImageUrl,
             imageUrl: parsedImageUrl,
             avatarUrl: parsedImageUrl,
@@ -759,6 +764,7 @@ export const authOptions: NextAuthOptions = {
         token.role = authUser.role ?? null;
         token.shopId = authUser.shopId ?? null;
         token.shopCode = authUser.shopCode ?? null;
+        token.timezone = authUser.timezone ?? null;
         token.businessType = authUser.businessType ?? null;
         token.image =
           authUser.imageUrl || authUser.image || authUser.avatarUrl || null;
@@ -796,6 +802,7 @@ export const authOptions: NextAuthOptions = {
         role: token.role ?? null,
         shopId: token.shopId ?? null,
         shopCode: token.shopCode ?? null,
+        timezone: token.timezone ?? null,
         businessType: token.businessType ?? null,
         image: token.image ?? null,
         imageUrl: token.image ?? null,

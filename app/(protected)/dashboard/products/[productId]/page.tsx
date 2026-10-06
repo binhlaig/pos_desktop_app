@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime, shopDateKey, parseBusinessTimestamp } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -132,19 +135,12 @@ function normalizeProductSales(value: unknown, productId: number): ProductSale[]
       });
     });
   });
-  return result.sort((a, b) => new Date(b.soldAt).getTime() - new Date(a.soldAt).getTime());
+  return result.sort((a, b) => (parseBusinessTimestamp(b.soldAt)?.getTime() ?? 0) - (parseBusinessTimestamp(a.soldAt)?.getTime() ?? 0));
 }
 
 
 
-function formatDateTime(value: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("ja-JP", {
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
-  });
-}
+
 
 function resolveImage(path: string) {
   if (!path) return "";
@@ -171,6 +167,7 @@ function applyBrandColors() {
 }
 
 export default function ProductSalesHistoryPage() {
+  const timezone = useShopTimezone();
   const { formatMoney: currency } = useCurrency();
 
   const router = useRouter();
@@ -270,14 +267,14 @@ export default function ProductSalesHistoryPage() {
   const filteredSales = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return sales.filter((sale) => {
-      const soldDate = sale.soldAt ? new Date(sale.soldAt) : null;
-      const fromOk = !dateFrom || (!!soldDate && soldDate >= new Date(`${dateFrom}T00:00:00`));
-      const toOk = !dateTo || (!!soldDate && soldDate <= new Date(`${dateTo}T23:59:59.999`));
+      const soldDate = shopDateKey(sale.soldAt, timezone);
+      const fromOk = !dateFrom || (!!soldDate && soldDate >= dateFrom);
+      const toOk = !dateTo || (!!soldDate && soldDate <= dateTo);
       const queryOk = !keyword || [sale.receiptNo, sale.staffName, sale.staffId, sale.shopName, sale.shopCode]
         .some((value) => value.toLowerCase().includes(keyword));
       return fromOk && toOk && queryOk;
     });
-  }, [sales, query, dateFrom, dateTo]);
+  }, [sales, query, dateFrom, dateTo, timezone]);
 
   useEffect(() => setCurrentPage(1), [query, dateFrom, dateTo, pageSize]);
   const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
@@ -395,7 +392,7 @@ export default function ProductSalesHistoryPage() {
         <section className="grid gap-4 sm:grid-cols-3">
           <SummaryCard icon={<ShoppingCart size={22} />} label="Sold Quantity" value={`${totalQuantity} items`} />
           <SummaryCard icon={<Wallet size={22} />} label="Sold Value" value={currency(totalSoldValue)} />
-          <SummaryCard icon={<Clock3 size={22} />} label="Last Sold" value={lastSale ? formatDateTime(lastSale) : "No sales"} compact />
+          <SummaryCard icon={<Clock3 size={22} />} label="Last Sold" value={lastSale ? formatShopDateTime(lastSale, timezone) : "No sales"} compact />
         </section>
 
         <Card className="overflow-hidden rounded-[2rem] border-[var(--brand-border)] bg-card/95 shadow-sm">
@@ -422,7 +419,7 @@ export default function ProductSalesHistoryPage() {
                   <tbody className="divide-y divide-border">{visibleSales.map((sale) => (
                     <tr key={`${sale.receiptId}-${sale.itemId}`} className="hover:bg-[var(--brand-soft)]">
                       <td className="px-5 py-4"><b>{sale.receiptNo}</b><div className="text-xs text-muted-foreground">ID: {sale.receiptId}</div></td>
-                      <td className="px-4 py-4"><div className="flex items-center gap-2 font-bold"><CalendarDays className="h-4 w-4 text-[var(--brand-accent)]" />{formatDateTime(sale.soldAt)}</div></td>
+                      <td className="px-4 py-4"><div className="flex items-center gap-2 font-bold"><CalendarDays className="h-4 w-4 text-[var(--brand-accent)]" />{formatShopDateTime(sale.soldAt, timezone)}</div></td>
                       <td className="px-4 py-4"><div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand-accent)]" /><div><b>{sale.shopName || sale.shopCode || "-"}</b><div className="max-w-[240px] text-xs text-muted-foreground">{sale.shopAddress || sale.shopCode || "No address"}</div></div></div></td>
                       <td className="px-4 py-4"><div className="flex items-center gap-2"><User className="h-4 w-4 text-[var(--brand-accent)]" /><div><b>{sale.staffName || "-"}</b><div className="text-xs text-muted-foreground">{sale.staffId || "No staff ID"}</div></div></div></td>
                       <td className="px-4 py-4"><Badge variant="secondary" className="sales-payment rounded-full uppercase">{sale.paymentMethod}</Badge></td>

@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime } from "@/lib/date-time";
 import { getReceiptSettingsResponse } from "@/lib/settings-api";
 import { useCurrency } from "@/components/currency-provider";
 import type { MoneyFormatter } from "@/lib/currency";
@@ -217,19 +220,7 @@ const formatRatePercent = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value);
 
-const formatReceiptDate = (value: string) => {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleString([], {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+;
 
 const escapeHtml = (value: unknown) =>
   String(value ?? "")
@@ -241,7 +232,7 @@ const escapeHtml = (value: unknown) =>
 
 function buildPaymentReceiptHtml(
   receipt: PaymentReceiptData,
-  shopInfo: ShopReceiptInfo, formatMoney: MoneyFormatter
+  shopInfo: ShopReceiptInfo, formatMoney: MoneyFormatter, timezone: string = ""
 ) {
   const rows = receipt.items
     .map(
@@ -373,7 +364,7 @@ function buildPaymentReceiptHtml(
           <div class="line"><span>Receipt No</span><strong>${escapeHtml(receipt.receiptNo)}</strong></div>
           <div class="line"><span>Payment No</span><strong>${escapeHtml(receipt.paymentNo)}</strong></div>
           <div class="line"><span>Order No</span><strong>${escapeHtml(receipt.orderNo)}</strong></div>
-          <div class="line"><span>Date</span><strong>${escapeHtml(formatReceiptDate(receipt.paidAt))}</strong></div>
+          <div class="line"><span>Date</span><strong>${escapeHtml(formatShopDateTime(receipt.paidAt, timezone))}</strong></div>
           <div class="line"><span>Order Type</span><strong>${escapeHtml(receipt.orderType)}</strong></div>
           ${receipt.orderType === "DINE_IN"
       ? `<div class="line"><span>Table</span><strong>${escapeHtml(receipt.tableNo || "-")}</strong></div>`
@@ -1302,6 +1293,7 @@ function RestaurantMobileCartBar({
 }
 
 export default function RestaurantCashierPOSPage() {
+  const timezone = useShopTimezone();
   const { formatMoney } = useCurrency();
 
   const router = useRouter();
@@ -3482,7 +3474,7 @@ export default function RestaurantCashierPOSPage() {
 
     printWindow.document.open();
     printWindow.document.write(
-      buildPaymentReceiptHtml(paymentReceiptData, shopReceiptInfo, formatMoney),
+      buildPaymentReceiptHtml(paymentReceiptData, shopReceiptInfo, formatMoney, timezone),
     );
     printWindow.document.close();
   };
@@ -5841,7 +5833,7 @@ export default function RestaurantCashierPOSPage() {
                           Date
                         </span>
                         <span>
-                          {formatReceiptDate(paymentReceiptData.paidAt)}
+                          {formatShopDateTime(paymentReceiptData.paidAt, timezone)}
                         </span>
                       </div>
 

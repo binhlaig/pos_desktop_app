@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -286,6 +289,7 @@ const NeonRing: React.FC<{ className?: string }> = ({ className }) => (
 
 /* ================= Page ================= */
 export default function StaffManagementPage() {
+  const timezone = useShopTimezone();
   const router = useRouter();
 
   // Guard (only supervise can edit)
@@ -624,7 +628,7 @@ export default function StaffManagementPage() {
                         <TableCell>
                           <div className="font-medium text-slate-900 dark:text-cyan-50 text-base">{s.name}</div>
                           <div className="text-xs text-slate-500 dark:text-slate-400">
-                            Created: {new Date(s.createdAt).toLocaleString()}
+                            Created: {formatShopDateTime(s.createdAt, timezone)}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -846,8 +850,8 @@ export default function StaffManagementPage() {
               <Separator className="bg-slate-200 dark:bg-white/10" />
 
               <div className="text-xs text-slate-500 dark:text-slate-400">
-                <div>Created: {new Date(editing.createdAt).toLocaleString()}</div>
-                <div>Updated: {new Date(editing.updatedAt).toLocaleString()}</div>
+                <div>Created: {formatShopDateTime(editing.createdAt, timezone)}</div>
+                <div>Updated: {formatShopDateTime(editing.updatedAt, timezone)}</div>
               </div>
             </div>
           )}

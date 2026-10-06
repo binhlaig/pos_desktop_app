@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { isShopToday } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -139,16 +142,7 @@ function normalizeReceipts(value: unknown): Receipt[] {
   });
 }
 
-function isToday(value: string) {
-  const date = new Date(value);
-  const today = new Date();
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  );
-}
+
 
 
 
@@ -188,6 +182,7 @@ function readAndApplyBrandColors(): BrandColors {
 }
 
 export default function ProductDashboardPage() {
+  const timezone = useShopTimezone();
   const { formatMoney: currency } = useCurrency();
 
   const router = useRouter();
@@ -300,7 +295,7 @@ export default function ProductDashboardPage() {
     0,
   );
   const todaySales = receipts
-    .filter((receipt) => isToday(receipt.createdAt))
+    .filter((receipt) => isShopToday(receipt.createdAt, timezone))
     .reduce((sum, receipt) => sum + receipt.grandTotal, 0);
   const totalSoldValue = receipts.reduce(
     (sum, receipt) => sum + receipt.grandTotal,
@@ -423,7 +418,7 @@ export default function ProductDashboardPage() {
             icon={<TrendingUp size={25} />}
             title="Today Sales"
             value={currency(todaySales)}
-            description={`${receipts.filter((receipt) => isToday(receipt.createdAt)).length} receipts today`}
+            description={`${receipts.filter((receipt) => isShopToday(receipt.createdAt, timezone)).length} receipts today`}
           />
 
           <Card className="min-w-0 rounded-[2rem] border-[var(--brand-border)] bg-card/95 shadow-sm">

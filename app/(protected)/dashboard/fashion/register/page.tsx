@@ -1,4 +1,7 @@
 "use client";
+
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopDateTime } from "@/lib/date-time";
 import { useCurrency } from "@/components/currency-provider";
 import type { MoneyFormatter } from "@/lib/currency";
 
@@ -625,7 +628,7 @@ function escapeHtml(value: unknown) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
-function buildReceiptHtml(receipt: PaymentReceiptData, formatMoney: MoneyFormatter) {
+function buildReceiptHtml(receipt: PaymentReceiptData, formatMoney: MoneyFormatter, timezone: string = "") {
   const rows = receipt.items
     .map(
       (item) => `
@@ -746,7 +749,7 @@ function buildReceiptHtml(receipt: PaymentReceiptData, formatMoney: MoneyFormatt
           <div class="divider"></div>
 
           <div class="line"><span>Receipt No</span><strong>${receipt.receiptNo}</strong></div>
-          <div class="line"><span>Date</span><strong>${new Date(receipt.paidAt).toLocaleString()}</strong></div>
+          <div class="line"><span>Date</span><strong>${formatShopDateTime(receipt.paidAt, timezone)}</strong></div>
           <div class="line"><span>Cashier</span><strong>${receipt.cashierName}</strong></div>
 
           <div class="divider"></div>
@@ -800,6 +803,7 @@ function buildReceiptHtml(receipt: PaymentReceiptData, formatMoney: MoneyFormatt
 }
 
 export default function FashionRegisterPage() {
+  const timezone = useShopTimezone();
   const { formatMoney } = useCurrency();
 
   const router = useRouter();
@@ -1756,7 +1760,7 @@ export default function FashionRegisterPage() {
     }
 
     printWindow.document.open();
-    printWindow.document.write(buildReceiptHtml(receiptData, formatMoney));
+    printWindow.document.write(buildReceiptHtml(receiptData, formatMoney, timezone));
     printWindow.document.close();
   }
 
@@ -3550,7 +3554,7 @@ export default function FashionRegisterPage() {
                         darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      {new Date(receiptData.paidAt).toLocaleString()}
+                      {formatShopDateTime(receiptData.paidAt, timezone)}
                     </p>
                   </div>
 

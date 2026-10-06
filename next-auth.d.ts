@@ -18,6 +18,7 @@ declare module "next-auth" {
       role?: string | null;
       shopId?: number | null;
       shopCode?: string | null;
+      timezone?: string | null;
       businessType?: string | null;
       image?: string | null;
       avatarUrl?: string | null;
@@ -37,6 +38,7 @@ declare module "next-auth" {
     role?: string | null;
     shopId?: number | null;
     shopCode?: string | null;
+    timezone?: string | null;
     businessType?: string | null;
     image?: string | null;
     avatarUrl?: string | null;
@@ -59,6 +61,7 @@ declare module "next-auth/jwt" {
     role?: string | null;
     shopId?: number | null;
     shopCode?: string | null;
+    timezone?: string | null;
     businessType?: string | null;
     image?: string | null;
     shopStatus?: string | null;

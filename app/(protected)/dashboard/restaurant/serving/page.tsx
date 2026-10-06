@@ -1,5 +1,7 @@
 
-"use client"
+"use client";
+import { useShopTimezone } from "@/components/shop-timezone-provider";
+import { formatShopTime, isShopToday, parseBusinessTimestamp } from "@/lib/date-time";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -214,33 +216,21 @@ async function getApiErrorMessage(response: Response, fallback: string) {
   return (await response.text().catch(() => "")) || fallback;
 }
 
-function formatTime(value?: string | null) {
-  if (!value) return "--:--";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--:--";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+
 
 function elapsedMinutes(value?: string | null) {
   if (!value) return 0;
-  const timestamp = new Date(value).getTime();
+  const date = parseBusinessTimestamp(value);
+  if (!date) return 0;
+  const timestamp = date.getTime();
   if (Number.isNaN(timestamp)) return 0;
   return Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
 }
 
-function isToday(value?: string | null) {
-  if (!value) return false;
-  const date = new Date(value);
-  const today = new Date();
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  );
-}
+
 
 export default function RestaurantServingPage() {
+  const timezone = useShopTimezone();
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(false);
   const [activeStaff, setActiveStaff] = useState<ActiveServingStaff | null>(null);
@@ -293,7 +283,7 @@ export default function RestaurantServingPage() {
         if (status === "READY") counts.READY += 1;
         if (
           status === "DONE" &&
-          isToday(item.servedAt || ticket.createdAt) &&
+          isShopToday(item.servedAt || ticket.createdAt, timezone) &&
           (!item.runnerStaffId || item.runnerStaffId === activeStaff?.staffId)
         ) {
           counts.DONE += 1;
@@ -302,7 +292,7 @@ export default function RestaurantServingPage() {
     });
 
     return counts;
-  }, [tickets, activeStaff]);
+  }, [tickets, activeStaff, timezone]);
 
   const visibleTickets = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -315,7 +305,7 @@ export default function RestaurantServingPage() {
             selectedStatus === "READY"
               ? status === "READY"
               : status === "DONE" &&
-                isToday(item.servedAt || ticket.createdAt) &&
+                isShopToday(item.servedAt || ticket.createdAt, timezone) &&
                 (!item.runnerStaffId || item.runnerStaffId === activeStaff?.staffId);
 
           const matchesSearch =
@@ -332,11 +322,11 @@ export default function RestaurantServingPage() {
       })
       .filter((ticket) => (ticket.items || []).length > 0)
       .sort((a, b) => {
-        const aTime = new Date(a.readyAt || a.createdAt || 0).getTime();
-        const bTime = new Date(b.readyAt || b.createdAt || 0).getTime();
+        const aTime = (parseBusinessTimestamp(a.readyAt || a.createdAt || 0)?.getTime() ?? 0);
+        const bTime = (parseBusinessTimestamp(b.readyAt || b.createdAt || 0)?.getTime() ?? 0);
         return aTime - bTime;
       });
-  }, [tickets, selectedStatus, search, activeStaff]);
+  }, [tickets, selectedStatus, search, activeStaff, timezone]);
 
   async function verifyStaff(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -818,7 +808,7 @@ export default function RestaurantServingPage() {
                         </div>
                         <div className="text-right">
                           <p className="text-[10px] font-black uppercase text-slate-400">Ready at</p>
-                          <p className="mt-1 text-sm font-black text-emerald-500">{formatTime(readySince)}</p>
+                          <p className="mt-1 text-sm font-black text-emerald-500">{formatShopTime(readySince, timezone)}</p>
                         </div>
                       </div>
                     </div>
