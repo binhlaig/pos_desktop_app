@@ -70,7 +70,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       const headers = { Authorization: /^Bearer\s/i.test(token) ? token : `${session?.tokenType || "Bearer"} ${token}` };
       const [settings, profile] = await Promise.allSettled([
         getReceiptSettings({ headers }),
-        fetch("/api/me/shop", { headers, cache: "no-store" }).then(async response => {
+        fetch("/api/shop/settings", { headers, cache: "no-store" }).then(async response => {
           if (!response.ok) throw new Error("Shop profile unavailable");
           return response.json();
         }),
