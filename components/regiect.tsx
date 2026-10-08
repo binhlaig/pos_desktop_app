@@ -4,7 +4,7 @@ import { useShopTimezone } from "@/components/shop-timezone-provider";
 import { formatShopDateTime, formatShopTime, shopDateKey } from "@/lib/date-time";
 import { getReceiptSettingsResponse } from "@/lib/settings-api";
 import { useCurrency } from "@/components/currency-provider";
-import { DEFAULT_CURRENCY, normalizeCurrency, formatCurrency, receiptSettingsPayload } from "@/lib/currency";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 
 import { withReceiptRequestId, type ReceiptRequest } from "@/lib/receipt-request";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -713,9 +713,7 @@ export default function RegisterPOSPage() {
 
   const total = subtotal + tax;
   const grandTotal = Math.max(0, total * (1 - globalDiscount / 100));
-  const { currency: providerCurrency } = useCurrency();
-  const currentCurrency = useMemo(() => resolveRegisterCurrency(providerCurrency), [providerCurrency]);
-  const money = (amount?: number | null, compact = false) => formatCurrency(amount, currentCurrency, compact);
+  const { currency: currentCurrency, formatMoney: money } = useCurrency();
 
   const cartPageCount = Math.max(1, Math.ceil(cart.length / CART_PAGE_SIZE));
   const cartPageStart = (cartPage - 1) * CART_PAGE_SIZE;
@@ -3174,30 +3172,6 @@ function PaymentDialog({
 }
 
 // Register-only tokens avoid changing the dashboard or global brand preferences.
-function resolveRegisterCurrency(data: unknown) {
-  const value = receiptSettingsPayload(data);
-  const text = (input: unknown) => typeof input === "string" ? input.trim() : "";
-  const symbol = text(value.currencySymbol ?? value.currency_symbol ?? value.symbol);
-  const code = text(value.currencyCode ?? value.currency_code ?? value.code).toUpperCase()
-    || (symbol === "¥" || symbol === "￥" ? "JPY" : DEFAULT_CURRENCY.currencyCode);
-  let resolvedSymbol = symbol;
-  if (!resolvedSymbol) {
-    if (code === "MMK") resolvedSymbol = "Ks";
-    else {
-      try {
-        resolvedSymbol = new Intl.NumberFormat("en-US", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
-          .formatToParts(0).find((part) => part.type === "currency")?.value || code;
-      } catch { resolvedSymbol = code; }
-    }
-  }
-  return normalizeCurrency({
-    currencyCode: code,
-    currencySymbol: resolvedSymbol,
-    currencyDecimalDigits: value.currencyDecimalDigits ?? value.currency_decimal_digits ?? value.decimalDigits,
-    currencyPosition: value.currencyPosition ?? value.currency_position ?? value.position ?? (code === "MMK" ? "AFTER" : "BEFORE"),
-  });
-}
-
 function RegisterDesignStyles() {
   return <style jsx global>{`
     .register-product-dialog {
