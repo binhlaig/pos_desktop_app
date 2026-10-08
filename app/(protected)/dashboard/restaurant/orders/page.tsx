@@ -2,7 +2,7 @@
 
 import { useShopTimezone } from "@/components/shop-timezone-provider";
 import { formatShopDateTime, shopDateKey, parseBusinessTimestamp } from "@/lib/date-time";
-import { useCurrency } from "@/components/currency-provider";
+import { formatHistoricalMoney } from "@/lib/currency";
 import type { MoneyFormatter } from "@/lib/currency";
 
 
@@ -730,7 +730,7 @@ function reprintOrder(order: RestaurantOrder, formatMoney: MoneyFormatter, timez
   }
 
   printWindow.document.open();
-  printWindow.document.write(buildOrderReceiptHtml(order, formatMoney, timezone));
+  printWindow.document.write(buildOrderReceiptHtml(order, (amount) => formatHistoricalMoney(amount, order), timezone));
   printWindow.document.close();
   printWindow.focus();
   window.setTimeout(() => printWindow.print(), 250);
@@ -754,7 +754,7 @@ function OrderTypeIcon({
 
 export default function RestaurantOrdersPage() {
   const timezone = useShopTimezone();
-  const { formatMoney } = useCurrency();
+  const formatMoney: MoneyFormatter = (amount) => formatHistoricalMoney(amount);
 
   const [orders, setOrders] = useState<RestaurantOrder[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>("ALL");
@@ -1411,7 +1411,7 @@ export default function RestaurantOrdersPage() {
 
                         <td className="px-4 py-4 align-top">
                           <div className="font-black text-slate-950">
-                            {formatMoney(order.total)}
+                            {formatHistoricalMoney(order.total, order)}
                           </div>
                         </td>
 
@@ -1580,7 +1580,7 @@ function OrderDetailDialog({
   onClose: () => void;
 }) {
   const timezone = useShopTimezone();
-  const { formatMoney } = useCurrency();
+  const formatMoney: MoneyFormatter = (amount) => formatHistoricalMoney(amount, order);
 
   const status = normalizeStatus(order.status);
   const meta = statusStyle[status];
@@ -1787,7 +1787,7 @@ function OrderDetailDialog({
 
                 <div className="flex justify-between gap-3 border-t border-white/15 pt-3 text-lg font-black">
                   <span>Total</span>
-                  <span>{formatMoney(order.total)} </span>
+                  <span>{formatHistoricalMoney(order.total, order)} </span>
                 </div>
 
                 {String(order.paymentMethod || "").toUpperCase() === "CASH" && (

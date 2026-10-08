@@ -1,4 +1,5 @@
 export type ReceiptSettings = {
+  region?: string | null;
   currencyCode?: string | null;
   currencySymbol?: string | null;
   currencyDecimalDigits?: number | string | null;
@@ -9,7 +10,10 @@ export type ReceiptSettings = {
 // receipt/print metadata consumers share the provider's request safely.
 const requests = new Map<string, { expires: number; response: Promise<Response> }>();
 export async function getReceiptSettingsResponse(init: RequestInit = {}): Promise<Response> {
-  const key = new Headers(init.headers).get("Authorization") || "session";
+  const key = new Headers(init.headers).get("Authorization");
+  // A cookie-only request has no verifiable shop identity here. Never reuse
+  // another session's response after an account switch.
+  if (!key) return fetch("/api/receipt-settings/my-shop", { ...init, method: "GET", cache: "no-store" });
   const existing = requests.get(key);
   if (existing && existing.expires > Date.now()) return (await existing.response).clone();
   const response = fetch("/api/receipt-settings/my-shop", { ...init, method: "GET", cache: "no-store" });

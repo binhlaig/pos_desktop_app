@@ -21,14 +21,14 @@ const config = (code, symbol, digits, position) => currency.normalizeCurrency({ 
 
 test("configured symbol, decimals and position override currency defaults", () => {
   assert.equal(currency.formatCurrency(10000, config("MMK", "Ks", 0, "AFTER")), "10,000 Ks");
-  assert.equal(currency.formatCurrency(10000, config("JPY", "¥", "0", "BEFORE")), "¥ 10,000");
+  assert.equal(currency.formatCurrency(10000, config("JPY", "¥", "0", "BEFORE")), "¥10,000");
   assert.equal(currency.formatCurrency(10000, config("USD", "$", "2", "BEFORE")), "$ 10,000.00");
   assert.equal(currency.formatCurrency(10000.5, config("JPY", "custom", 2, "AFTER")), "10,000.50 custom");
 });
 test("nullable and invalid digits normalize to a safe integer", () => {
   for (const digits of [null, undefined, "", " ", "bad", -1, 1.2, "1.2", 21, Infinity, true]) {
     assert.equal(config(null, null, digits, null).currencyDecimalDigits, 0);
-    assert.equal(currency.formatCurrency(10000, config(null, null, digits, null)), "10,000 Ks");
+    assert.equal(currency.formatCurrency(10000, config(null, null, digits, null)), "10,000");
   }
   assert.equal(config(null, null, "2", "before").currencyDecimalDigits, 2);
   assert.equal(config(null, null, 20, null).currencyDecimalDigits, 20);
@@ -76,7 +76,7 @@ function providerHarness() {
     useMemo: fn => fn(),
     useEffect: (fn, deps) => { const i = index++; const old = slots[i]; if (!old || deps.some((dep, j) => dep !== old.deps[j])) effects.push(() => { old?.cleanup?.(); slots[i] = { deps, cleanup: fn() }; }); },
   };
-  const localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) };
+  const localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) };
   const provider = compileModule("components/currency-provider.tsx", {
     react, "react/jsx-runtime": { jsx: (type, props) => ({ type, props }) },
     "next-auth/react": { useSession: () => session }, "next/navigation": { usePathname: () => "/dashboard" },
@@ -92,43 +92,52 @@ function providerHarness() {
     emit: (name, event) => listeners.get(name)?.forEach(fn => fn(event)),
   };
 }
-test("provider saves propagate, stale fetches cannot overwrite, shop caches stay isolated", async () => {
+test("cookie-only settings requests never share an account cache",async()=>{
+ let calls=0;const api=compileModule("lib/settings-api.ts",{}, {fetch:async()=>{calls++;return new Response('{}')}});
+ await api.getReceiptSettingsResponse();await api.getReceiptSettingsResponse();assert.equal(calls,2);
+});
+test("settings saves from a previous shop cannot cancel a new shop fetch",async()=>{
+ const h=providerHarness();h.setSession(1,"a");const old=h.render().updateCurrency;await h.effects();
+ h.setSession(2,"b");h.render();await h.effects();old({region:"JAPAN"});
+ h.requests[0].resolve({region:"JAPAN"});h.requests[1].resolve({region:"MYANMAR"});await settle();
+ assert.equal(h.render().formatMoney(1000),"1,000 Ks");
+});
+test("region beats saved currency, stale fetches and shop switches", async () => {
   const h = providerHarness();
-  assert.equal(h.render().formatMoney(10000), "10,000 Ks");
-  await h.effects();
+  assert.equal(h.render().formatMoney(1000), "1,000"); await h.effects();
   h.setSession(1, "first"); h.render(); await h.effects();
-  h.requests[0].resolve(config("USD", "$", 2, "BEFORE")); await settle();
-  assert.equal(h.render().formatMoney(10000), "$ 10,000.00");
+  h.requests[0].resolve({ region: "JAPAN", currencyCode: "MMK", currencySymbol: "Ks" }); await settle();
+  assert.equal(h.render().formatMoney(1000), "¥1,000");
   h.emit("online"); await settle();
-  h.render().updateCurrency(config("JPY", "¥", 0, "BEFORE"));
-  h.requests[1].resolve(config("USD", "$", 2, "BEFORE")); await settle();
-  assert.equal(h.render().formatMoney(10000), "¥ 10,000");
-  h.setSession(2, "second");
-  assert.equal(h.render().formatMoney(10000), "10,000 Ks");
-  await h.effects(); h.requests[2].reject(new Error("offline")); await settle();
-  assert.equal(h.render().formatMoney(10000), "10,000 Ks");
-  h.setSession(1, "first"); h.render(); await h.effects();
-  h.requests[3].reject(new Error("offline")); await settle();
-  assert.equal(h.render().formatMoney(10000), "¥ 10,000");
+  h.render().updateCurrency({ region: "JAPAN", currencyCode: "MMK" });
+  h.requests[1].resolve({ region: "MYANMAR" }); await settle();
+  assert.equal(h.render().formatMoney(1000), "¥1,000");
+  h.setSession(2, "second"); assert.equal(h.render().formatMoney(1000), "1,000");
+  await h.effects(); h.requests[2].resolve({ region: "MYANMAR", currencyCode: "JPY", currencySymbol: "¥" }); await settle();
+  assert.equal(h.render().formatMoney(1000), "1,000 Ks");
+  h.emit("focus"); await settle(); h.requests[3].resolve({ region: "JAPAN" }); await settle();
+  assert.equal(h.render().formatMoney(1000), "¥1,000");
 });
-test("reload starts with SSR defaults then restores only the current shop cache", async () => {
+test("reload discards conflicting shop cache and unknown regions stay unlabelled", async () => {
   const h = providerHarness();
-  h.storage.set("pos-receipt-currency:v1:1", JSON.stringify(config("USD", "$", 2, "BEFORE")));
-  h.setSession(1, "fresh-token");
-  assert.equal(h.render().formatMoney(0), "0 Ks");
-  await h.effects();
-  h.requests[0].reject(new Error("offline")); await settle();
-  assert.equal(h.render().formatMoney(0), "$ 0.00");
+  h.storage.set("pos-receipt-currency:v1:1", JSON.stringify(config("MMK", "Ks", 0, "AFTER")));
+  h.setSession(1, "fresh-token"); assert.equal(h.render().formatMoney(0), "0");
+  await h.effects(); assert.equal(h.storage.has("pos-receipt-currency:v1:1"), false);
+  h.requests[0].resolve({ region: "JAPAN", currencySymbol: "Ks" }); await settle();
+  assert.equal(h.render().formatMoney(1000), "¥1,000");
+  for (const region of [null, undefined, "UNKNOWN"]) assert.equal(currency.currencyForRegion(region).currencyCode, "");
 });
-
-test("cross-window currency saves update only the matching shop", async () => {
-  const h = providerHarness();
-  h.setSession(1, "first"); h.render(); await h.effects();
-  h.requests[0].resolve(config("USD", "$", 2, "BEFORE")); await settle();
-  h.emit("storage", { key: "pos-receipt-currency:v1:2", newValue: JSON.stringify(config("JPY", "¥", 0, "BEFORE")) });
-  assert.equal(h.render().formatMoney(0), "$ 0.00");
-  h.emit("storage", { key: "pos-receipt-currency:v1:1", newValue: JSON.stringify(config("JPY", "¥", 0, "BEFORE")) });
-  assert.equal(h.render().formatMoney(0), "¥ 0");
+test("cross-window cache updates trigger authoritative fetch instead of trusting cache", async () => {
+  const h=providerHarness();h.setSession(1,"first");h.render();await h.effects();
+  h.requests[0].resolve({region:"JAPAN"});await settle();
+  h.emit("storage",{key:"pos-receipt-currency:v1:2",newValue:'{}'});assert.equal(h.requests.length,1);
+  h.emit("storage",{key:"pos-receipt-currency:v1:1",newValue:JSON.stringify({currencyCode:"MMK"})});await settle();
+  assert.equal(h.render().formatMoney(0),"¥0");h.requests[1].resolve({region:"MYANMAR"});await settle();
+  assert.equal(h.render().formatMoney(0),"0 Ks");
+});
+test("region formatting overrides all four conflicting fields without converting amounts",()=>{
+ for(const [region,expected] of [["JAPAN","¥1,235"],["MYANMAR","1,235 Ks"]])
+  assert.equal(currency.formatCurrency(1234.5,currency.normalizeCurrency({region,currencyCode:"USD",currencySymbol:"$",currencyDecimalDigits:2,currencyPosition:"AFTER"})),expected);
 });
 
 for (const [path, name] of [
@@ -150,4 +159,10 @@ for (const [path, name] of [
     assert.ok(html.includes(escapeHtml(formatter(0))));
     assert.ok(!html.includes("<symbol>"));
   }
+});
+
+test("historical receipts preserve snapshots and never infer from current region",()=>{
+ assert.equal(currency.formatHistoricalMoney(1000,{region:"JAPAN"}),"1,000");
+ assert.equal(currency.formatHistoricalMoney(1000,{region:"JAPAN",currencyCode:"MMK",currencySymbol:"Ks",currencyDecimalDigits:0,currencyPosition:"AFTER"}),"1,000 Ks");
+ assert.equal(currency.formatHistoricalMoney(1000,{currencySnapshot:{currencyCode:"JPY",currencySymbol:"¥",currencyDecimalDigits:0,currencyPosition:"BEFORE"}}),"¥1,000");
 });

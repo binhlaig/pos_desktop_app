@@ -2,7 +2,7 @@
 
 import { useShopTimezone } from "@/components/shop-timezone-provider";
 import { formatShopDateTime } from "@/lib/date-time";
-import { useCurrency } from "@/components/currency-provider";
+import { formatHistoricalMoney } from "@/lib/currency";
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -171,7 +171,7 @@ function normalizeReceipt(data: any): ReceiptDetail | null {
 }
 
 export default function POSRefundPage() {
-  const { formatMoney: jpy } = useCurrency();
+  const jpy = (amount: number) => formatHistoricalMoney(amount, receipt);
 
   const router = useRouter();
 
@@ -637,7 +637,7 @@ function ReceiptPanel({
   clearSelection: () => void;
 }) {
   const timezone = useShopTimezone();
-  const { formatMoney: jpy } = useCurrency();
+  const jpy = (amount: number) => formatHistoricalMoney(amount, receipt);
 
   const [expanded, setExpanded] = useState(true);
 

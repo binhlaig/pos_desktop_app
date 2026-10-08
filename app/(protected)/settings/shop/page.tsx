@@ -818,17 +818,17 @@ function ReceiptShopInfoForm() {
               <CardContent className="p-5">
                 <div className="mb-4 grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2"><Label htmlFor="currency-code">Currency Code</Label>
-                    <Input id="currency-code" value={info.currencyCode} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, currencyCode: e.target.value }))} list="currency-codes" />
+                    <Input id="currency-code" value={info.currencyCode} disabled onChange={e => setInfo(current => ({ ...current, currencyCode: e.target.value }))} list="currency-codes" />
                     <datalist id="currency-codes"><option value="MMK" /><option value="JPY" /><option value="USD" /></datalist>
                   </div>
                   <div className="grid gap-2"><Label htmlFor="currency-symbol">Currency Symbol</Label>
-                    <Input id="currency-symbol" value={info.currencySymbol} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, currencySymbol: e.target.value }))} />
+                    <Input id="currency-symbol" value={info.currencySymbol} disabled onChange={e => setInfo(current => ({ ...current, currencySymbol: e.target.value }))} />
                   </div>
                   <div className="grid gap-2"><Label htmlFor="currency-digits">Decimal Digits</Label>
-                    <Input id="currency-digits" type="number" min={0} max={20} step={1} value={info.currencyDecimalDigits} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, ...normalizeCurrency({ ...current, currencyDecimalDigits: e.target.value }) }))} />
+                    <Input id="currency-digits" type="number" min={0} max={20} step={1} value={info.currencyDecimalDigits} disabled onChange={e => setInfo(current => ({ ...current, ...normalizeCurrency({ ...current, currencyDecimalDigits: e.target.value }) }))} />
                   </div>
                   <div className="grid gap-2"><Label htmlFor="currency-position">Symbol Position</Label>
-                    <select id="currency-position" className="h-9 rounded-md border bg-transparent px-3" value={info.currencyPosition} disabled={loading || savingTax} onChange={e => setInfo(current => ({ ...current, currencyPosition: e.target.value === "BEFORE" ? "BEFORE" : "AFTER" }))}>
+                    <select id="currency-position" className="h-9 rounded-md border bg-transparent px-3" value={info.currencyPosition} disabled onChange={e => setInfo(current => ({ ...current, currencyPosition: e.target.value === "BEFORE" ? "BEFORE" : "AFTER" }))}>
                       <option value="BEFORE">Before amount</option><option value="AFTER">After amount</option>
                     </select>
                   </div>

@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
-import { DEFAULT_CURRENCY, formatCurrency, normalizeCurrency, type CurrencyConfig, type MoneyFormatter } from "@/lib/currency";
+import { DEFAULT_CURRENCY, formatCurrency, currencyForRegion, receiptSettingsPayload, type CurrencyConfig, type MoneyFormatter } from "@/lib/currency";
 import { getReceiptSettings, invalidateReceiptSettings } from "@/lib/settings-api";
 
 type State = { scope: string; currency: CurrencyConfig };
@@ -44,7 +44,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, status]);
   const sessionToken = session?.accessToken || session?.user?.accessToken;
-  const token = sessionToken || storedToken;
+  const token = sessionToken && storedToken && sessionToken !== storedToken ? "" : sessionToken || storedToken;
   const shop = sessionToken
     ? session?.user?.shopId ?? session?.user?.shopCode ?? tokenShop(token)
     : tokenShop(token);
@@ -53,54 +53,48 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const scope = token ? `${shop || "unknown"}:${token}` : "";
   const cacheKey = shop ? `pos-receipt-currency:v1:${shop}` : "";
   const currency = scope && state.scope === scope ? state.currency : DEFAULT_CURRENCY;
+  const activeScope = useRef(scope);
+  activeScope.current = scope;
   const updateCurrency = useCallback((data: unknown) => {
-    if (!scope) return;
-    const next = normalizeCurrency(data);
+    if (!scope || activeScope.current !== scope) return;
+    const next = currencyForRegion(receiptSettingsPayload(data).region);
     revision.current += 1;
     setState({ scope, currency: next });
-    try { if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next)); } catch { /* Storage is optional. */ }
+
     invalidateReceiptSettings();
   }, [scope, cacheKey]);
   useEffect(() => {
     if (!scope || status === "loading") return;
     let active = true;
-    const load = async (restoreCache = false) => {
+    const load = async () => {
       const requestRevision = ++revision.current;
-      // Restore browser storage after the initial hydration render.
+      // Defer until hydration has completed.
       await Promise.resolve();
       if (!active || requestRevision !== revision.current) return;
-      if (restoreCache) {
-        try {
-          const cached = cacheKey && localStorage.getItem(cacheKey);
-          if (cached) setState({ scope, currency: normalizeCurrency(JSON.parse(cached)) });
-        } catch { /* Ignore unavailable or damaged cache. */ }
-      }
+      // Legacy cached currency is never authoritative.
+      try { if (cacheKey) localStorage.removeItem(cacheKey); } catch { /* Optional storage. */ }
       try {
         const data = await getReceiptSettings({ headers: { Authorization: /^Bearer\s/i.test(token) ? token : `${session?.tokenType || "Bearer"} ${token}` } });
         if (active && requestRevision === revision.current) {
-          const next = normalizeCurrency(data);
+          const next = currencyForRegion(receiptSettingsPayload(data).region);
           setState({ scope, currency: next });
-          try { if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next)); } catch { /* Offline display still works in memory. */ }
+
         }
       } catch { /* Keep this shop's last successfully loaded settings. */ }
     };
     const refresh = () => { invalidateReceiptSettings(); void load(); };
     const syncCache = (event: StorageEvent) => {
-      if (!cacheKey || event.key !== cacheKey || !event.newValue) return;
-      try {
-        const next = normalizeCurrency(JSON.parse(event.newValue));
-        revision.current += 1;
-        setState({ scope, currency: next });
-        invalidateReceiptSettings();
-      } catch { /* Ignore damaged cache updates. */ }
+      if (event.key === cacheKey) refresh();
     };
-    void load(true);
+    void load();
     window.addEventListener("online", refresh);
+    window.addEventListener("focus", refresh);
     window.addEventListener("receipt-shop-settings-updated", refresh);
     window.addEventListener("storage", syncCache);
     return () => {
       active = false;
       window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", refresh);
       window.removeEventListener("receipt-shop-settings-updated", refresh);
       window.removeEventListener("storage", syncCache);
     };

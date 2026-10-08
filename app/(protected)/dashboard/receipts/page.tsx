@@ -2,7 +2,7 @@
 
 import { useShopTimezone } from "@/components/shop-timezone-provider";
 import { formatShopDateTime } from "@/lib/date-time";
-import { useCurrency } from "@/components/currency-provider";
+import { formatHistoricalMoney } from "@/lib/currency";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -436,7 +436,7 @@ function normalizeReceipts(data: unknown): ReceiptRow[] {
 
 export default function ReceiptsPage() {
   const timezone = useShopTimezone();
-  const { formatMoney: jpy } = useCurrency();
+  const jpy = (amount: number) => formatHistoricalMoney(amount);
 
   const router = useRouter();
 
@@ -665,6 +665,7 @@ export default function ReceiptsPage() {
   }
 
   async function printReceipt(receipt: ReceiptRow) {
+    const jpy = (amount: number) => formatHistoricalMoney(amount, receipt);
     const win = window.open("", "_blank", "width=420,height=720");
 
     if (!win) {
@@ -1313,7 +1314,7 @@ function ReceiptCard({
   onPrint: () => void;
 }) {
   const timezone = useShopTimezone();
-  const { formatMoney: jpy } = useCurrency();
+  const jpy = (amount: number) => formatHistoricalMoney(amount, receipt);
 
   const itemCount = receipt.items.reduce((sum, item) => sum + item.qty, 0);
 
@@ -1333,7 +1334,7 @@ function ReceiptCard({
           </div>
         </button>
         <div className="text-right">
-          <p className="text-base font-black tabular-nums text-[var(--brand-accent)]">{jpy(receipt.grandTotal)}</p>
+          <p className="text-base font-black tabular-nums text-[var(--brand-accent)]">{formatHistoricalMoney(receipt.grandTotal, receipt)}</p>
           <p className="text-xs text-muted-foreground">{itemCount} items</p>
         </div>
         <div className="col-span-2 flex justify-end gap-1.5 md:col-span-1">
@@ -1423,7 +1424,7 @@ function ReceiptCard({
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black">Grand Total</span>
                     <span className="text-2xl font-black text-[var(--brand-accent)]">
-                      {jpy(receipt.grandTotal)}
+                      {formatHistoricalMoney(receipt.grandTotal, receipt)}
                     </span>
                   </div>
 

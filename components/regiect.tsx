@@ -10,7 +10,6 @@ import { withReceiptRequestId, type ReceiptRequest } from "@/lib/receipt-request
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { useZxing } from "react-zxing";
 import { fetchStaffById } from "@/lib/staff-validation";
 
@@ -658,6 +657,7 @@ export default function RegisterPOSPage() {
   const [staffCameraOpen, setStaffCameraOpen] = useState(false);
   const staffInputRef = useRef<HTMLInputElement>(null);
   const [staffLoginError, setStaffLoginError] = useState("");
+  const [inlineError, setInlineError] = useState("");
   const [productsLoading, setProductsLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [receiptSaving, setReceiptSaving] = useState(false);
@@ -1028,10 +1028,15 @@ export default function RegisterPOSPage() {
     localStorage.setItem("pos-theme", next ? "dark" : "light");
   }
 
+  function reportError(message: string) {
+    if (!isLoggedIn) setStaffLoginError(message);
+    else setInlineError(message);
+  }
+
   function requireStaff() {
     if (isLoggedIn) return true;
 
-    toast.error(staffRequiredMessage);
+    reportError(staffRequiredMessage);
     return false;
   }
 
@@ -1074,7 +1079,7 @@ export default function RegisterPOSPage() {
       if (!receiptRes.ok) {
         console.error("Receipt setting load failed:", receiptRes.status, receiptData);
 
-        toast.error(
+        reportError(
           receiptData?.message ||
             `Receipt setting မဖတ်နိုင်ပါ။ Status: ${receiptRes.status}`
         );
@@ -1182,7 +1187,7 @@ export default function RegisterPOSPage() {
       );
     } catch (error) {
       console.error("Receipt setting error:", error);
-      toast.error("Receipt setting API ခေါ်မရပါ။ Backend URL / token ကိုစစ်ပါ။");
+      reportError("Receipt setting API ခေါ်မရပါ။ Backend URL / token ကိုစစ်ပါ။");
       setReceiptSetting(DEFAULT_RECEIPT_SETTING);
       setTaxRatePercent(readPercent(getStoredTaxRatePercent()));
     }
@@ -1239,18 +1244,18 @@ export default function RegisterPOSPage() {
       setCatalog(loadedProducts);
 
       if (loadedProducts.length === 0) {
-        toast.error(lastError || "Products မရောက်သေးပါ။ API path/token စစ်ပါ။");
+        reportError(lastError || "Products မရောက်သေးပါ။ API path/token စစ်ပါ။");
         return loadedProducts;
       }
 
-      if (!options.silent) toast.success(`${loadedProducts.length} products loaded`);
+      
       return loadedProducts;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Products load failed.";
 
       setCatalog([]);
-      if (!options.silent) toast.error(message);
+      if (!options.silent) reportError(message);
       return [];
     } finally {
       if (!options.silent) setProductsLoading(false);
@@ -1287,12 +1292,13 @@ export default function RegisterPOSPage() {
   }
 
   async function startStaffSession(event: React.FormEvent<HTMLFormElement>) {
+    setInlineError("");
     event.preventDefault();
     if (staffLoginBusyRef.current) return;
     const nextStaffId = staffIdDraft.trim();
 
     if (!nextStaffId) {
-      toast.error(staffRequiredMessage);
+      reportError(staffRequiredMessage);
       return;
     }
 
@@ -1323,7 +1329,7 @@ export default function RegisterPOSPage() {
       await loadReceiptSetting();
 
       setTimeout(() => focusScanner(), 150);
-      toast.success("Staff session started");
+      
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Staff validation failed.";
@@ -1332,7 +1338,7 @@ export default function RegisterPOSPage() {
       setStaffId("");
       setStaffName("");
       setStaffRole("staff");
-      toast.error(message);
+      reportError(message);
     } finally {
       staffLoginBusyRef.current = false;
       setStaffLoginLoading(false);
@@ -1341,16 +1347,17 @@ export default function RegisterPOSPage() {
 
   function addToCart(p: Product, qty = 1) {
     if (!requireStaff()) return false;
+    setInlineError("");
 
     if (!p.availableForSale) {
-      toast.error(unavailableToastMessage(p.name));
+      reportError(unavailableToastMessage(p.name));
       return false;
     }
 
     const availableStock = Number(p.stock ?? 0);
 
     if (availableStock <= 0) {
-      toast.error(`${p.name} is out of stock`);
+      reportError(`${p.name} is out of stock`);
       return false;
     }
 
@@ -1371,7 +1378,7 @@ export default function RegisterPOSPage() {
         const nextQty = found.qty + qty;
 
         if (nextQty > availableStock) {
-          toast.error(
+          reportError(
             `${p.name} stock မလုံလောက်ပါ။ Available stock: ${availableStock}`
           );
           return prev;
@@ -1385,7 +1392,7 @@ export default function RegisterPOSPage() {
       }
 
       if (qty > availableStock) {
-        toast.error(
+        reportError(
           `${p.name} stock မလုံလောက်ပါ။ Available stock: ${availableStock}`
         );
         return prev;
@@ -1411,7 +1418,7 @@ export default function RegisterPOSPage() {
     });
 
     if (added) {
-      toast.success(`${p.name} added`);
+      
       return true;
     }
 
@@ -1425,6 +1432,7 @@ export default function RegisterPOSPage() {
   ) {
     if (!requireStaff()) return;
 
+    setInlineError("");
     const raw = rawValue.trim();
     if (!raw) return;
     if (scanInFlightRef.current) return;
@@ -1482,7 +1490,7 @@ export default function RegisterPOSPage() {
       }
 
       if (!allowNameSearch) {
-        toast.error(`Barcode not found: ${raw}`);
+        reportError(`Barcode not found: ${raw}`);
         return;
       }
 
@@ -1510,7 +1518,7 @@ export default function RegisterPOSPage() {
         return;
       }
 
-      toast.error(`Barcode not found: ${raw}`);
+      reportError(`Barcode not found: ${raw}`);
     } finally {
       scanInFlightRef.current = false;
       setScanLoading(false);
@@ -1532,6 +1540,7 @@ export default function RegisterPOSPage() {
   }
 
   function updateQty(id: string, qty: number) {
+    setInlineError("");
     if (qty <= 0) {
       removeLine(id);
       return;
@@ -1551,12 +1560,12 @@ export default function RegisterPOSPage() {
     const availableStock = Number(product?.stock ?? 0);
 
     if (availableStock <= 0) {
-      toast.error(`${line.name} is out of stock`);
+      reportError(`${line.name} is out of stock`);
       return;
     }
 
     if (qty > availableStock) {
-      toast.error(
+      reportError(
         `${line.name} stock မလုံလောက်ပါ။ Available stock: ${availableStock}`
       );
       return;
@@ -1580,11 +1589,12 @@ export default function RegisterPOSPage() {
   }
 
   function openPayment() {
+    setInlineError("");
     if (paymentOpen || paymentOpeningRef.current || receiptSavingRef.current) return;
     if (!requireStaff()) return;
 
     if (cart.length === 0) {
-      toast.error("No cart item");
+      reportError("No cart item");
       return;
     }
 
@@ -1599,13 +1609,14 @@ export default function RegisterPOSPage() {
     cashGivenAmount = 0
   ) {
     if (receiptSavingRef.current) return;
+    setInlineError("");
     receiptSavingRef.current = true;
     setReceiptSaving(true);
     try {
       if (!requireStaff()) return;
 
       if (cart.length === 0) {
-        toast.error("No cart item");
+        reportError("No cart item");
         return;
       }
 
@@ -1622,14 +1633,14 @@ export default function RegisterPOSPage() {
       });
 
       if (unavailableItem) {
-        toast.error(unavailableToastMessage(unavailableItem.name));
+        reportError(unavailableToastMessage(unavailableItem.name));
         return;
       }
 
       const invalidItem = cart.find((line) => !line.dbId && !/^\d+$/.test(line.id));
 
       if (invalidItem) {
-        toast.error(
+        reportError(
           `${invalidItem.name} has no valid productId. DB ထဲက product ကိုသာ checkout လုပ်ပါ။`
         );
         return;
@@ -1647,7 +1658,7 @@ export default function RegisterPOSPage() {
         const availableStock = Number(product?.stock ?? 0);
 
         if (availableStock < line.qty) {
-          toast.error(
+          reportError(
             `${line.name} stock မလုံလောက်ပါ။ Available stock: ${availableStock}, Cart qty: ${line.qty}`
           );
           return;
@@ -1698,7 +1709,7 @@ export default function RegisterPOSPage() {
         throw new Error(data?.message || "Receipt save failed.");
       }
 
-      toast.success(`Payment complete ✅ Receipt: ${data?.receiptNo || "saved"}`);
+      
 
       setPaymentOpen(false);
       receiptAttemptsRef.current.clear();
@@ -1713,7 +1724,7 @@ export default function RegisterPOSPage() {
       const message =
         error instanceof Error ? error.message : "Receipt save failed.";
 
-      toast.error(message);
+      reportError(message);
     } finally {
       receiptSavingRef.current = false;
       setReceiptSaving(false);
@@ -1782,7 +1793,7 @@ export default function RegisterPOSPage() {
     if (!requireStaff()) return;
 
     if (cart.length === 0) {
-      toast.error("No cart item to print");
+      reportError("No cart item to print");
       return;
     }
 
@@ -2095,7 +2106,7 @@ export default function RegisterPOSPage() {
     const printWindow = window.open("", "_blank", "width=420,height=720");
 
     if (!printWindow) {
-      toast.error("Popup blocked. Please allow popup for print.");
+      reportError("Popup blocked. Please allow popup for print.");
       return;
     }
 
@@ -2111,18 +2122,19 @@ export default function RegisterPOSPage() {
   }
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-muted/30 text-foreground">
+    <div className="binhlaig-register flex h-[100dvh] overflow-hidden text-foreground">
+      <RegisterDesignStyles />
 
       <div className="relative z-10 flex min-h-0 w-full flex-col">
-        <header className="shrink-0 border-b border-border bg-background">
+        <header className="register-header shrink-0 border-b border-border">
           <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-3 px-3 py-2 md:px-4">
             <div className="flex min-w-0 items-center gap-2.5">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                <ShoppingBag className="h-5 w-5" />
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[#D4A017]/40 text-[#D4A017]">
+                <span className="text-xl font-bold text-white">B</span>
               </div>
               <div className="min-w-0">
-                <h1 className="truncate text-base font-bold tracking-tight">Nimi Mark <span className="text-primary">POS</span></h1>
-                <p className="truncate text-[11px] text-muted-foreground">Register · {currentCurrency.currencyCode}</p>
+                <h1 className="truncate text-base font-bold tracking-tight">BINHLAIG</h1>
+                <p className="truncate text-[11px] text-muted-foreground">Mini Market · {currentCurrency.currencyCode}</p>
               </div>
             </div>
 
@@ -2142,7 +2154,7 @@ export default function RegisterPOSPage() {
                 variant="outline"
                 onClick={toggleTheme}
                 aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-                className="h-9 w-9 rounded-lg p-0"
+                className="h-10 w-10 rounded-lg border-white/20 bg-transparent p-0 text-white hover:bg-white/10 hover:text-white"
               >
                 {dark ? (
                   <Sun className="h-4 w-4" />
@@ -2154,6 +2166,12 @@ export default function RegisterPOSPage() {
           </div>
         </header>
 
+        {!paymentOpen && !quickViewOpen && inlineError && (
+          <div className="shrink-0 px-3 pt-2 md:px-4">
+            <RegisterInlineError message={inlineError} dismiss={() => setInlineError("")} />
+          </div>
+        )}
+
         {staffCameraOpen && !isLoggedIn && (
           <CameraBarcodeScanner
             mode="staff"
@@ -2162,7 +2180,7 @@ export default function RegisterPOSPage() {
               setStaffCameraOpen(false);
               setStaffIdDraft(code.trim());
               setStaffLoginError("");
-              toast.success("Staff ID ဖတ်ပြီးပါပြီ။ POS စတင်မည် ကိုနှိပ်ပါ။");
+              
               window.setTimeout(() => staffInputRef.current?.focus(), 100);
             }}
           />
@@ -2250,153 +2268,101 @@ export default function RegisterPOSPage() {
           </main>
         ) : (
           <>
-            <section className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-1 flex-col gap-2 overflow-hidden px-3 py-2 md:px-4">
-              <div className="flex shrink-0 items-center gap-2">
+            <section className="register-workspace">
+              <div className="register-toolbar">
                 <div className="relative min-w-0 flex-1">
-                  <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-sky-500" />
-                  <Input
-                    id="scan-input"
-                    autoFocus
-                    value={query}
+                  <Barcode className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input id="scan-input" autoFocus value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleScanOrSearch();
-                      }
-                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleScanOrSearch(); } }}
                     placeholder={productsLoading ? "Loading products..." : "Scan barcode / SKU or search product"}
                     disabled={productsLoading || scanLoading}
-                    className="h-12 rounded-xl border-sky-400/40 bg-background pl-11 pr-10 text-base"
-                  />
-                  {query && (
-                    <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg">
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                  {!!nameHints.length && (
-                    <div className="absolute inset-x-0 top-14 z-30 max-h-[45vh] overflow-y-auto rounded-xl border border-border bg-background shadow-xl">
-                      {nameHints.map((product) => (
-                        <button
-                          key={`${product.id}-${product.dbId}`}
-                          type="button"
-                          onClick={() => { addToCart(product); setQuery(""); focusScanner(); }}
-                          className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-border px-4 py-2 text-left last:border-0 hover:bg-muted/50"
-                        >
-                          <span className="min-w-0 truncate font-semibold">{product.name}</span>
-                          <span className="shrink-0 tabular-nums">{product.availableForSale ? money(product.price) : "Out of Stock"}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                    className="register-search h-12 rounded-xl bg-card pl-12 pr-12 text-base shadow-none" />
+                  {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-lg"><X className="h-4 w-4" /></button>}
+                  {!!nameHints.length && <div className="absolute inset-x-0 top-14 z-30 max-h-[45vh] overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
+                    {nameHints.map((product) => <button key={`${product.id}-${product.dbId}`} type="button"
+                      onClick={() => { addToCart(product); setQuery(""); focusScanner(); }}
+                      className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-border px-4 py-3 text-left last:border-0 hover:bg-muted/50">
+                      <span className="min-w-0 truncate font-semibold">{product.name}</span>
+                      <span className="shrink-0 tabular-nums">{product.availableForSale ? money(product.price) : "Out of Stock"}</span>
+                    </button>)}
+                  </div>}
                 </div>
-                <Button type="button" variant="secondary" onClick={() => setCameraScannerOpen(true)} disabled={productsLoading || scanLoading} className="h-12 shrink-0 rounded-xl px-3">
-                  <Camera className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Camera</span>
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setActionsOpen(true)} className="h-12 shrink-0 rounded-xl px-3">
-                  <Settings2 className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Actions</span>
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setCameraScannerOpen(true)} disabled={productsLoading || scanLoading} className="h-12 shrink-0 rounded-xl bg-card px-4"><Camera className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Camera</span></Button>
+                <Button type="button" variant="outline" onClick={() => setActionsOpen(true)} className="h-12 shrink-0 rounded-xl bg-card px-4"><Settings2 className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Actions</span></Button>
               </div>
 
-              <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5" aria-label="Items without barcode">
-                {quickGroups.map((group) => (
-                  <Button
-                    key={group.id}
-                    type="button"
-                    variant={group.id === "fried" ? "warning" : group.id === "drink" ? "default" : "success"}
-                    onClick={() => {
-                      if (!requireStaff()) return;
-                      setQuickItemGroup(group.id);
-                      setQuickViewOpen(true);
-                    }}
-                    disabled={productsLoading}
-                    className="group flex h-12 min-w-[170px] flex-1 items-center justify-start gap-2 rounded-xl px-3 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/20">
-                      <ManualGroupIcon groupId={group.id} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">{group.label}</span>
-                      <span className="block truncate text-[10px] font-medium opacity-75">{group.description}</span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold tabular-nums">{group.count}</span>
-                  </Button>
-                ))}
+              <div className="register-quick-groups" aria-label="Items without barcode">
+                {quickGroups.map((group) => <button key={group.id} type="button" disabled={productsLoading}
+                  onClick={() => { if (!requireStaff()) return; setQuickItemGroup(group.id); setQuickViewOpen(true); }}
+                  className="register-quick-tile">
+                  <span className="register-quick-icon"><ManualGroupIcon groupId={group.id} /></span>
+                  <span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{group.label}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{group.description}</span></span>
+                  <span className="register-count">{group.count}</span>
+                </button>)}
               </div>
 
-              <Card className="flex min-h-0 flex-1 flex-col !gap-0 overflow-hidden border-border bg-card !py-0 shadow-sm">
-                <CardHeader className="relative z-10 flex shrink-0 flex-row items-center justify-between border-b border-border px-4 py-2">
-                  <CardTitle className="flex items-center gap-2 text-lg"><ShoppingCart className="h-5 w-5 text-primary" />Cart <Badge variant="info">{cart.length}</Badge></CardTitle>
-                  <span className="truncate text-xs text-muted-foreground">{lastScan ? `Last scan: ${lastScan.code}` : `${catalog.length} products ready`}</span>
-                </CardHeader>
-                <CardContent className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 py-0 touch-pan-y min-[1000px]:overflow-hidden" aria-label="Cart items">
-                  {cart.length === 0 ? <EmptyState /> : (
-                    <div className="divide-y divide-border min-[1000px]:grid min-[1000px]:h-full min-[1000px]:grid-rows-[repeat(5,minmax(0,1fr))] min-[1000px]:divide-y-0">
-                      {visibleCartLines.map((line) => (
-                        <div key={line.id} className="grid min-h-[76px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_150px_130px_44px] sm:px-4 min-[1000px]:min-h-0 min-[1000px]:py-1">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"><CartLineVisual line={line} /></div>
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold">{line.name}</div>
-                              <div className="truncate text-xs text-muted-foreground">{money(line.price)} each{line.barcode ? ` · ${line.barcode}` : ""}</div>
-                              <div className="mt-1 flex items-center gap-2 text-xs">
-                                <span className="text-muted-foreground">Discount</span>
-                                {canEditDiscount ? (
-                                  <select value={Math.round(line.discount * 100)} onChange={(e) => updateDisc(line.id, Number(e.target.value))} aria-label={`Discount for ${line.name}`} className="h-8 rounded-md border border-input bg-background px-2">
-                                    {[0, 5, 10, 15, 20, 30, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
-                                  </select>
-                                ) : <span>{Math.round(line.discount * 100)}%</span>}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-end gap-1 sm:justify-center">
-                            <IconButton onClick={() => updateQty(line.id, line.qty - 1)} icon={<Minus className="h-4 w-4" />} />
-                            <span className="w-7 text-center font-bold tabular-nums">{line.qty}</span>
-                            <IconButton onClick={() => updateQty(line.id, line.qty + 1)} icon={<Plus className="h-4 w-4" />} />
-                          </div>
-                          <div className="col-start-1 pl-14 text-sm font-bold tabular-nums sm:col-start-auto sm:pl-0 sm:text-right">{money(line.qty * line.price * (1 - line.discount))}</div>
-                          <button type="button" onClick={() => removeLine(line.id)} aria-label={`Remove ${line.name}`} className="grid h-11 w-11 place-items-center justify-self-end rounded-lg text-red-500 hover:bg-red-500/10 sm:col-start-auto"><Trash2 className="h-4 w-4" /></button>
+              <div className="register-cart">
+                <div className="register-cart-heading">
+                  <div className="flex items-center gap-3"><h2 className="text-lg font-bold tracking-tight">Current sale</h2><span className="register-count">{cart.length} items</span></div>
+                  <span className="hidden max-w-[45%] truncate text-xs text-muted-foreground sm:block">{lastScan ? `Last scanned: ${lastScan.code}` : `${catalog.length} products ready`}</span>
+                </div>
+                <div className="register-table-head register-row-grid" aria-hidden="true"><span>Item</span><span className="text-center">Quantity</span><span className="text-right">Unit price</span><span className="text-right">Amount</span><span /></div>
+                <div className="register-cart-body" aria-label="Cart items">
+                  {cart.length === 0 ? <EmptyState /> : visibleCartLines.map((line) => {
+                    const recentlyScanned = !!lastScan && [line.barcode, line.sku, line.id, line.dbId].some((code) => code === lastScan.code);
+                    return <div key={line.id} className={`register-cart-row register-row-grid ${recentlyScanned ? "register-row-selected" : ""}`}>
+                      <div className="register-item flex min-w-0 items-center gap-3">
+                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"><CartLineVisual line={line} /></div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">{line.name}</div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{line.barcode || line.sku || line.id}</div>
+                          {(canEditDiscount || line.discount > 0) && <details className="register-line-discount mt-1 text-xs">
+                            <summary className="cursor-pointer text-muted-foreground">{line.discount > 0 ? `${Math.round(line.discount * 100)}% discount` : "Item discount"}</summary>
+                            {canEditDiscount ? <select value={Math.round(line.discount * 100)} onChange={(e) => updateDisc(line.id, Number(e.target.value))} aria-label={`Discount for ${line.name}`} className="mt-1 h-9 rounded-lg border border-input bg-card px-2">
+                              {[0, 5, 10, 15, 20, 30, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
+                            </select> : <span>{Math.round(line.discount * 100)}%</span>}
+                          </details>}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-                {cart.length > CART_PAGE_SIZE && (
-                  <nav className="flex h-11 shrink-0 items-center justify-center gap-3 border-t border-border bg-card px-3" aria-label="Cart pages">
-                    <Button type="button" variant="outline" onClick={() => setCartPage((current) => Math.max(1, current - 1))} disabled={cartPage <= 1} className="h-8 min-w-20 rounded-lg">Prev</Button>
-                    <span className="min-w-28 text-center text-xs font-semibold tabular-nums" aria-live="polite">
-                      {cartPageStart + 1}–{Math.min(cartPageStart + CART_PAGE_SIZE, cart.length)} / {cart.length}
-                    </span>
-                    <Button type="button" variant="outline" onClick={() => setCartPage((current) => Math.min(cartPageCount, current + 1))} disabled={cartPage >= cartPageCount} className="h-8 min-w-20 rounded-lg">Next</Button>
-                  </nav>
-                )}
-                <CardFooter className="relative z-10 shrink-0 flex-col gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4">
-                  <div className="flex w-full items-center justify-between gap-3 text-xs sm:text-sm">
-                    <span className="text-muted-foreground">Subtotal {money(subtotal)} · Tax {money(tax)}</span>
-                    <div className="flex items-center gap-2">
-                      <Button type="button" variant="ghost" onClick={() => void loadOwnerProducts()} disabled={productsLoading} className="hidden h-9 px-2 text-xs sm:inline-flex"><RotateCcw className="mr-1 h-3.5 w-3.5" />Products</Button>
-                      <Button type="button" variant="ghost" onClick={loadReceiptSetting} className="hidden h-9 px-2 text-xs sm:inline-flex"><Receipt className="mr-1 h-3.5 w-3.5" />Receipt info</Button>
-                      <Button type="button" variant="ghost" onClick={exportCSV} disabled={!cart.length} aria-label="Export cart CSV" className="h-9 px-2"><Download className="h-4 w-4" /></Button>
-                      <Button type="button" variant="ghost" onClick={printReceipt} disabled={!cart.length} aria-label="Print receipt" className="h-9 px-2"><Printer className="h-4 w-4" /></Button>
-                      <label className="flex items-center gap-2">Discount
-                        <select value={globalDiscount} onChange={(e) => setGlobalDiscount(Number(e.target.value))} disabled={!canEditDiscount} aria-label="Global discount" className="h-9 rounded-lg border border-input bg-background px-2 disabled:opacity-60">
-                          {[0, 5, 10, 15, 20, 30, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
-                        </select>
-                      </label>
-                    </div>
+                      </div>
+                      <div className="register-quantity flex items-center justify-center">
+                        <button type="button" onClick={() => updateQty(line.id, line.qty - 1)} aria-label={`Decrease quantity of ${line.name}`} className="register-qty-button"><Minus className="h-4 w-4" /></button>
+                        <span className="grid h-11 min-w-10 place-items-center border-y border-border bg-card text-sm font-semibold tabular-nums">{line.qty}</span>
+                        <button type="button" onClick={() => updateQty(line.id, line.qty + 1)} aria-label={`Increase quantity of ${line.name}`} className="register-qty-button"><Plus className="h-4 w-4" /></button>
+                      </div>
+                      <span className="register-unit text-right text-sm tabular-nums">{money(line.price)}</span>
+                      <span className="register-amount text-right text-base font-semibold tabular-nums">{money(line.qty * line.price * (1 - line.discount))}</span>
+                      <button type="button" onClick={() => removeLine(line.id)} aria-label={`Remove ${line.name}`} className="register-remove grid h-11 w-11 place-items-center rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    </div>;
+                  })}
+                </div>
+                <nav className="register-pagination" aria-label="Cart pages">
+                  <span className="text-xs text-muted-foreground">{cart.length ? `Showing ${cartPageStart + 1}–${Math.min(cartPageStart + CART_PAGE_SIZE, cart.length)} of ${cart.length} items` : "No items added"}</span>
+                  <div className="flex items-center gap-3">
+                    <Button type="button" variant="outline" onClick={() => setCartPage((current) => Math.max(1, current - 1))} disabled={cartPage <= 1} className="h-10 rounded-lg px-3">Prev</Button>
+                    <span className="text-xs font-medium tabular-nums" aria-live="polite">{cartPage} / {cartPageCount}</span>
+                    <Button type="button" variant="outline" onClick={() => setCartPage((current) => Math.min(cartPageCount, current + 1))} disabled={cartPage >= cartPageCount} className="h-10 rounded-lg px-3">Next</Button>
                   </div>
-                  <div className="flex w-full items-center gap-2">
-                    <Button type="button" variant="danger" onClick={clearCart} disabled={!cart.length} className="h-12 shrink-0 rounded-xl px-3"><Trash2 className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Void</span></Button>
-                    <div className="min-w-0 flex-1 text-right"><div className="text-xs text-muted-foreground">Total due</div><div className="truncate text-xl font-black tabular-nums text-red-500 sm:text-2xl">{money(grandTotal)}</div></div>
-                    <Button type="button" onClick={openPayment} disabled={!cart.length || receiptSaving || paymentOpen} className="h-12 min-w-[120px] touch-manipulation shrink-0 rounded-xl text-base font-bold sm:min-w-[180px]"><CreditCard className="mr-2 h-5 w-5" />Pay</Button>
-                  </div>
-                </CardFooter>
-              </Card>
+                </nav>
+              </div>
+
+              <footer className="register-checkout">
+                <div className="register-breakdown">
+                  <div><span className="text-xs text-muted-foreground">Subtotal</span><strong className="mt-1 block text-sm tabular-nums">{money(subtotal)}</strong></div>
+                  <div><label htmlFor="register-discount" className="text-xs text-muted-foreground">Discount</label><div className="mt-1 flex items-center gap-2"><strong className="text-sm tabular-nums">−{money(total - grandTotal)}</strong><select id="register-discount" value={globalDiscount} onChange={(e) => setGlobalDiscount(Number(e.target.value))} disabled={!canEditDiscount} className="h-8 max-w-20 rounded-md border border-input bg-card px-1 text-xs disabled:opacity-60">{[0, 5, 10, 15, 20, 30, 50].map((v) => <option key={v} value={v}>{v}%</option>)}</select></div></div>
+                  <div><span className="text-xs text-muted-foreground">Tax ({taxRatePercent}%)</span><strong className="mt-1 block text-sm tabular-nums">{money(tax)}</strong></div>
+                </div>
+                <div className="register-void"><Button type="button" variant="outline" onClick={clearCart} disabled={!cart.length || receiptSaving} className="h-10 rounded-lg border-red-500/30 bg-transparent px-3 text-red-600 hover:bg-red-500/10 dark:text-red-400"><Trash2 className="mr-2 h-4 w-4" />Void sale</Button><span className="hidden text-xs text-muted-foreground lg:inline">{scanLoading ? "Reading barcode…" : "Ready to scan"}</span></div>
+                <div className="register-total"><span className="text-xs text-muted-foreground">Total due</span><strong className="block text-3xl font-bold tracking-tight tabular-nums">{money(grandTotal)}</strong></div>
+                <Button type="button" onClick={openPayment} disabled={!cart.length || receiptSaving || paymentOpen} className="register-pay h-16 touch-manipulation rounded-xl px-6 text-lg font-bold"><span className="truncate">Pay · {money(grandTotal)}</span><ArrowRight className="ml-4 h-5 w-5 shrink-0" /></Button>
+              </footer>
             </section>
 
             <BarcodeLessProductDialog
               open={quickViewOpen}
               setOpen={setQuickViewOpen}
+              errorMessage={inlineError}
+              dismissError={() => setInlineError("")}
               products={quickViewProducts}
               activeGroup={activeQuickGroup}
               addItem={addQuickItem}
@@ -2423,11 +2389,17 @@ export default function RegisterPOSPage() {
               openPayment={openPayment}
               clearCart={clearCart}
               cartItemCount={cart.length}
+              refreshProducts={() => void loadOwnerProducts()}
+              refreshReceiptSettings={() => void loadReceiptSetting()}
+              exportCart={exportCSV}
+              printCart={printReceipt}
               routerPush={(path) => router.push(path)}
             />
 
             <PaymentDialog
               open={paymentOpen}
+              errorMessage={inlineError}
+              dismissError={() => setInlineError("")}
               setOpen={(next) => { if (!receiptSavingRef.current) setPaymentOpen(next); }}
               cart={cart}
               subtotal={subtotal}
@@ -2689,13 +2661,10 @@ function EmptyState() {
 }
 
 function BarcodeLessProductDialog({
-  open,
-  setOpen,
-  products,
-  activeGroup,
-  addItem,
-  money,
+  open, setOpen, products, activeGroup, addItem, money, errorMessage, dismissError,
 }: {
+  errorMessage: string;
+  dismissError: () => void;
   open: boolean;
   setOpen: (v: boolean) => void;
   products: Product[];
@@ -2704,12 +2673,20 @@ function BarcodeLessProductDialog({
   money: (amount: number) => string;
 }) {
   const [dialogPage, setDialogPage] = useState(1);
-  const pageCount = Math.max(1, Math.ceil(products.length / MANUAL_DIALOG_PAGE_SIZE));
-  const pageStart = (dialogPage - 1) * MANUAL_DIALOG_PAGE_SIZE;
-  const pageProducts = products.slice(pageStart, pageStart + MANUAL_DIALOG_PAGE_SIZE);
+  const [productSearch, setProductSearch] = useState("");
+  const searchTerm = productSearch.trim().toLocaleLowerCase();
+  const filteredProducts = products.filter((product) =>
+    [product.name, product.sku, product.barcode].some((value) =>
+      String(value ?? "").toLocaleLowerCase().includes(searchTerm)
+    )
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / MANUAL_DIALOG_PAGE_SIZE));
+  const currentPage = Math.min(dialogPage, pageCount);
+  const pageStart = (currentPage - 1) * MANUAL_DIALOG_PAGE_SIZE;
+  const pageProducts = filteredProducts.slice(pageStart, pageStart + MANUAL_DIALOG_PAGE_SIZE);
 
   useEffect(() => {
-    if (open) setDialogPage(1);
+    if (open) { setDialogPage(1); setProductSearch(""); }
   }, [open, activeGroup.id]);
 
   useEffect(() => {
@@ -2718,141 +2695,76 @@ function BarcodeLessProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden border-border bg-card p-0 text-card-foreground sm:max-w-6xl">
-        <DialogHeader className="shrink-0 border-b border-border bg-background/80 px-5 py-4 pr-14">
-          <div className="flex min-w-0 flex-col gap-2">
-            <DialogTitle className="flex min-w-0 items-center gap-3 text-xl font-black tracking-tight">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 text-emerald-500">
-                <Eye className="h-5 w-5" />
-              </span>
-              <span className="shrink-0">{activeGroup.emoji}</span>
-              <span className="truncate">{activeGroup.label}</span>
-            </DialogTitle>
-
-            <div>
-              <Badge className="rounded-full bg-emerald-500 px-3 py-1 text-white">
-                {products.length} item(s)
-              </Badge>
+      <DialogContent className="register-product-dialog flex h-[min(760px,calc(100dvh-32px))] w-[calc(100vw-24px)] max-w-[1120px] flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0 text-card-foreground sm:max-w-[1120px]">
+        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-14 text-left sm:px-5">
+          <div className="flex items-center gap-3">
+            <span className="register-product-group-icon"><ManualGroupIcon groupId={activeGroup.id} /></span>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-lg font-semibold tracking-tight">{activeGroup.label}</DialogTitle>
+              <DialogDescription className="mt-1 text-xs">{activeGroup.description} · Select a product to add to this sale.</DialogDescription>
             </div>
+            <span className="hidden rounded-full bg-muted px-3 py-1.5 text-xs font-medium tabular-nums sm:inline-flex">{products.length} items</span>
           </div>
         </DialogHeader>
+        {errorMessage && <div className="shrink-0 px-4 pt-3 sm:px-5"><RegisterInlineError message={errorMessage} dismiss={dismissError} /></div>}
 
-        <div className="min-h-0 flex-1 overflow-auto p-4 md:p-5">
-          {products.length === 0 ? (
-            <div className="grid min-h-[320px] place-items-center rounded-3xl border border-dashed border-border bg-background/45 p-8 text-center">
-              <div>
-                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-muted text-3xl">
-                  🛒
-                </div>
-                <h3 className="mt-4 text-xl font-black">No product found</h3>
-                <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                  ဒီ action button နဲ့ကိုက်တဲ့ product မရှိသေးပါ။ Add Product မှာ category/name ကို သက်ဆိုင်ရာ type နဲ့သိမ်းထားပါ။
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {pageProducts.map((product) => {
-                const stock = Number(product.stock ?? 0);
-                const outOfStock = !product.availableForSale || stock <= 0;
-
-                return (
-                  <motion.div
-                    key={`${product.id}-${product.dbId}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`group overflow-hidden rounded-2xl border bg-background/60 transition hover:bg-muted/30 ${
-                      outOfStock
-                        ? "border-red-300/30 opacity-70"
-                        : "border-border hover:border-emerald-300/50"
-                    }`}
-                  >
-                    <div className="relative h-24 overflow-hidden bg-muted">
-                      <ProductVisual product={product} />
-                      <Badge className="absolute left-3 top-3 rounded-full bg-background/85 text-foreground backdrop-blur">
-                        {product.category || "General"}
-                      </Badge>
-                      <Badge
-                        className={`absolute right-3 top-3 rounded-full ${
-                          outOfStock
-                            ? "bg-red-500 text-white"
-                            : "bg-emerald-500 text-white"
-                        }`}
-                      >
-                        {!product.availableForSale ? "Out of Stock" : `Stock ${stock}`}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-2 p-3">
-                      <div className="min-h-[44px]">
-                        <h4 className="line-clamp-2 text-base font-black leading-6">
-                          {product.name}
-                        </h4>
-                        <p className="mt-1 truncate text-xs text-muted-foreground">
-                          {product.barcode ? `Barcode ${product.barcode}` : "No barcode"}
-                          {product.sku ? ` · SKU ${product.sku}` : ""}
-                        </p>
-                      </div>
-
-                      <div className="flex items-end justify-between gap-3">
-                        <div>
-                          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                            Price
-                          </div>
-                          <div className="text-lg font-black tabular-nums text-emerald-500">
-                            {money(product.price)}
-                          </div>
-                        </div>
-
-                        <Button
-                          onClick={() => addItem(product)}
-                          aria-disabled={outOfStock}
-                          className="h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-400 px-3 font-black text-white shadow-[0_0_24px_-12px_rgba(16,185,129,0.9)] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add
-                        </Button>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2 sm:px-5">
+          <div className="relative min-w-0 flex-1">
+            <Input value={productSearch}
+              onChange={(event) => { setProductSearch(event.target.value); setDialogPage(1); }}
+              placeholder="Search name, SKU or barcode"
+              aria-label={`Search products in ${activeGroup.label}`}
+              className="h-11 rounded-lg border-input bg-background pr-11 text-sm shadow-none" />
+            {productSearch && <button type="button" onClick={() => { setProductSearch(""); setDialogPage(1); }} aria-label="Clear product search" className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>}
+          </div>
+          <span className="hidden shrink-0 text-xs text-muted-foreground md:inline">{filteredProducts.length} products</span>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border bg-background/45 px-5 py-3">
-          <div className="mr-auto text-sm font-semibold text-muted-foreground">
-            {products.length > 0
-              ? `Showing ${pageStart + 1}-${Math.min(pageStart + MANUAL_DIALOG_PAGE_SIZE, products.length)} of ${products.length}`
-              : "Showing 0 item"}
-          </div>
-
-          {products.length > MANUAL_DIALOG_PAGE_SIZE && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                disabled={dialogPage <= 1}
-                onClick={() => setDialogPage((page) => Math.max(1, page - 1))}
-                className="h-10 rounded-xl"
-              >
-                Prev
-              </Button>
-
-              <span className="min-w-20 text-center text-sm font-black tabular-nums text-muted-foreground">
-                {dialogPage} / {pageCount}
-              </span>
-
-              <Button
-                variant="outline"
-                disabled={dialogPage >= pageCount}
-                onClick={() => setDialogPage((page) => Math.min(pageCount, page + 1))}
-                className="h-10 rounded-xl border-emerald-400/35 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-300"
-              >
-                Next
-              </Button>
+        <div className="register-product-body min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
+          {pageProducts.length === 0 ? <div className="grid h-full min-h-48 place-items-center p-6 text-center">
+            <div><span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-muted text-muted-foreground"><ShoppingBag className="h-6 w-6" /></span>
+              <h3 className="mt-4 text-base font-semibold">{searchTerm ? "No matching products" : "No products yet"}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{searchTerm ? "Try another name, SKU or barcode." : "This category has no products available to display."}</p>
+              {searchTerm && <Button type="button" variant="outline" className="mt-4 h-11 rounded-lg" onClick={() => { setProductSearch(""); setDialogPage(1); }}>Clear search</Button>}
             </div>
-          )}
+          </div> : <div className="register-product-grid">
+            {pageProducts.map((product) => {
+              const rawStock = Number(product.stock ?? 0);
+              const stock = Number.isFinite(rawStock) ? Math.max(0, rawStock) : 0;
+              const unavailable = !product.availableForSale || stock <= 0;
+              const lowStock = !unavailable && stock <= 5;
+              return <article key={`${product.id}-${product.dbId}`} className={`register-product-card ${unavailable ? "register-product-unavailable" : ""}`}>
+                <div className="register-product-image"><ProductVisual product={product} />
+                  {(unavailable || lowStock) && <span className={`register-product-status ${unavailable ? "register-product-status-out" : "register-product-status-low"}`}>{unavailable ? "Out of stock" : "Low stock"}</span>}
+                </div>
+                <div className="register-product-info">
+                  <p className="truncate text-[11px] text-muted-foreground">{product.category || activeGroup.label}</p>
+                  <h3 className="register-product-name" title={product.name}>{product.name}</h3>
+                  <div className="flex min-w-0 items-baseline justify-between gap-2">
+                    <strong className="min-w-0 break-words text-lg font-semibold leading-tight tabular-nums">{money(product.price)}</strong>
+                    <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">Stock {stock}</span>
+                  </div>
+                  <Button type="button" onClick={() => addItem(product)} disabled={unavailable}
+                    aria-label={unavailable ? `${product.name} is out of stock` : `Add ${product.name} to cart`}
+                    className="register-product-add mt-2 h-11 w-full rounded-lg text-sm font-semibold shadow-none">
+                    <Plus className="mr-2 h-4 w-4" />{unavailable ? "Unavailable" : "Add to cart"}
+                  </Button>
+                </div>
+              </article>;
+            })}
+          </div>}
+        </div>
+
+        <DialogFooter className="!flex-row !items-center !justify-between gap-2 border-t border-border bg-card px-4 py-2 sm:px-5">
+          <span className="text-xs text-muted-foreground" aria-live="polite">{filteredProducts.length ? `${pageStart + 1}–${Math.min(pageStart + MANUAL_DIALOG_PAGE_SIZE, filteredProducts.length)} of ${filteredProducts.length}` : "0 products"}</span>
+          <div className="flex items-center gap-2">
+            {filteredProducts.length > MANUAL_DIALOG_PAGE_SIZE && <>
+              <Button type="button" variant="outline" disabled={currentPage <= 1} onClick={() => setDialogPage(Math.max(1, currentPage - 1))} className="h-11 rounded-lg px-3">Prev</Button>
+              <span className="min-w-9 text-center text-xs tabular-nums">{currentPage}/{pageCount}</span>
+              <Button type="button" variant="outline" disabled={currentPage >= pageCount} onClick={() => setDialogPage(Math.min(pageCount, currentPage + 1))} className="h-11 rounded-lg px-3">Next</Button>
+            </>}
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="h-11 rounded-lg px-3">Done</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2866,6 +2778,10 @@ function POSActionsDialog({
   openPayment,
   clearCart,
   cartItemCount,
+  refreshProducts,
+  refreshReceiptSettings,
+  exportCart,
+  printCart,
   routerPush,
 }: {
   open: boolean;
@@ -2874,6 +2790,10 @@ function POSActionsDialog({
   openPayment: () => void;
   clearCart: () => void;
   cartItemCount: number;
+  refreshProducts: () => void;
+  refreshReceiptSettings: () => void;
+  exportCart: () => void;
+  printCart: () => void;
   routerPush: (path: string) => void;
 }) {
   const actions: {
@@ -2883,6 +2803,10 @@ function POSActionsDialog({
     icon: React.ReactElement<{ className?: string }>;
     onClick: () => void;
   }[] = [
+    { label: "Refresh Products", desc: "Reload current product data", badge: "Refresh", icon: <RotateCcw />, onClick: refreshProducts },
+    { label: "Refresh Receipt Settings", desc: "Reload receipt and tax settings", badge: "Refresh", icon: <Receipt />, onClick: refreshReceiptSettings },
+    { label: "Export Cart CSV", desc: "Download the current cart", badge: "CSV", icon: <Download />, onClick: exportCart },
+    { label: "Print Cart Preview", desc: "Print the current cart preview", badge: "Preview", icon: <Printer />, onClick: printCart },
     {
       label: "Scan Product",
       desc: "Barcode scanner input ကို focus ပြန်လုပ်မယ်",
@@ -2929,7 +2853,7 @@ function POSActionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="border-border bg-card text-card-foreground sm:max-w-3xl">
+      <DialogContent className="register-payment max-h-[calc(100dvh-32px)] overflow-y-auto border-border bg-card text-card-foreground sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="h-5 w-5 text-sky-400" />
@@ -2984,6 +2908,8 @@ function POSActionsDialog({
 
 function PaymentDialog({
   open,
+  errorMessage,
+  dismissError,
   setOpen,
   cart,
   subtotal,
@@ -2996,6 +2922,8 @@ function PaymentDialog({
   onComplete,
   money,
 }: {
+  errorMessage: string;
+  dismissError: () => void;
   open: boolean;
   setOpen: (v: boolean) => void;
   cart: CartLine[];
@@ -3026,7 +2954,7 @@ function PaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="flex h-[calc(100dvh-24px)] max-h-[760px] w-[calc(100vw-24px)] max-w-[1000px] flex-col gap-0 overflow-hidden border-border bg-card p-0 text-card-foreground sm:w-[calc(100vw-32px)] sm:max-w-[1000px]">
+      <DialogContent className="register-payment flex h-[calc(100dvh-24px)] max-h-[760px] w-[calc(100vw-24px)] max-w-[1000px] flex-col gap-0 overflow-hidden border-border bg-card p-0 text-card-foreground sm:w-[calc(100vw-32px)] sm:max-w-[1000px]">
         <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-12 sm:px-5">
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-sky-400" />
@@ -3036,6 +2964,7 @@ function PaymentDialog({
             Cash / Card payment ကိုရွေးပြီး receipt save လုပ်ပါ။
           </DialogDescription>
         </DialogHeader>
+        {errorMessage && <div className="shrink-0 px-4 pt-3 sm:px-5"><RegisterInlineError message={errorMessage} dismiss={dismissError} /></div>}
 
         <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 sm:overflow-hidden sm:p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
           <div className="flex min-h-[220px] flex-col rounded-xl border border-border bg-background/40 p-3 sm:min-h-0">
@@ -3197,7 +3126,7 @@ function PaymentDialog({
             type="button"
             onClick={() => void onComplete(payMethod, cashNum)}
             disabled={saving || (payMethod === "cash" && !cashEnough)}
-            className="touch-manipulation bg-gradient-to-r from-blue-500 to-cyan-400 font-bold text-white"
+            className="register-pay h-12 touch-manipulation font-bold text-white"
           >
             {saving ? (
               <>
@@ -3211,5 +3140,122 @@ function PaymentDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Register-only tokens avoid changing the dashboard or global brand preferences.
+function RegisterDesignStyles() {
+  return <style jsx global>{`
+    .register-product-dialog { --primary:#0b1f3a; --primary-foreground:#fff; --ring:#617c9f; }
+    .register-product-group-icon { display:grid; place-items:center; width:42px; height:42px; flex-shrink:0; border-radius:12px; background:#edf2f8; color:#0b1f3a; }
+    .dark .register-product-group-icon { background:#23344c; color:#dbe5f3; }
+    .register-product-body { background:#f5f7fa; }
+    .dark .register-product-body { background:#101827; }
+    .register-product-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:start; }
+    .register-product-card { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--card); box-shadow:0 1px 2px rgba(11,31,58,.03); }
+    .register-product-card:focus-within { border-color:#617c9f; box-shadow:0 0 0 2px rgba(97,124,159,.2); }
+    .register-product-image { height:100px; position:relative; overflow:hidden; background:var(--muted); }
+    .register-product-image img { object-fit:contain; padding:8px; }
+    .register-product-status { position:absolute; top:8px; left:8px; border-radius:6px; padding:3px 7px; font-size:10px; font-weight:600; }
+    .register-product-status-low { background:#fff4d6; color:#7a4e00; }
+    .register-product-status-out { background:#fee9e9; color:#9d2525; }
+    .dark .register-product-status-low { background:#47371d; color:#f6d58c; }
+    .dark .register-product-status-out { background:#482727; color:#f5b4b4; }
+    .register-product-info { padding:12px; }
+    .register-product-name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:36px; margin:4px 0 6px; font-size:14px; line-height:18px; font-weight:600; }
+    .register-product-add { background:#0b1f3a !important; color:#fff !important; border:1px solid #29405d; }
+    .register-product-add:hover:not(:disabled) { background:#173454 !important; }
+    .register-product-add:disabled { background:var(--muted) !important; color:var(--muted-foreground) !important; border-color:var(--border); opacity:1; cursor:not-allowed; }
+    .register-product-unavailable .register-product-image img { opacity:.65; }
+    @media (max-width:899px) { .register-product-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+    @media (max-width:599px) {
+      .register-product-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+      .register-product-image { height:96px; }
+      .register-product-info { padding:10px; }
+    }
+    .binhlaig-register, .register-payment {
+      --primary: #0b1f3a; --primary-foreground: #fff; --ring: #0b1f3a;
+    }
+    .binhlaig-register { background: #f2f5f9; }
+    .dark .binhlaig-register { background: #0c1422; }
+    .dark .binhlaig-register, .dark .register-payment { --ring: #92aaca; }
+    .register-header { background: #0b1f3a; color: #fff; }
+    .register-header .text-muted-foreground { color: #bac6d6; }
+    .register-workspace { display:flex; flex-direction:column; flex:1; min-height:0; width:100%; max-width:1680px; margin:0 auto; gap:12px; padding:16px; overflow:hidden; }
+    .register-toolbar { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+    .register-search { border-color:#b7c6d9; }
+    .register-search:focus-visible { border-color:#0b1f3a; outline:2px solid #0b1f3a; outline-offset:1px; }
+    .dark .register-search:focus-visible { border-color:#92aaca; outline-color:#92aaca; }
+    .register-quick-groups { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; flex-shrink:0; }
+    .register-quick-tile { display:flex; align-items:center; gap:12px; min-height:68px; padding:12px 16px; border:1px solid var(--border); background:var(--card); border-radius:12px; transition:background .15s,border-color .15s; }
+    .register-quick-tile:hover { background:var(--muted); border-color:#9cabbf; }
+    .register-quick-tile:disabled { opacity:.5; cursor:not-allowed; }
+    .register-quick-icon { display:grid; place-items:center; width:40px; height:40px; flex-shrink:0; border-radius:10px; background:var(--muted); }
+    .register-count { display:inline-flex; align-items:center; justify-content:center; min-width:32px; padding:4px 10px; background:var(--muted); border-radius:999px; font-size:12px; font-weight:600; font-variant-numeric:tabular-nums; }
+    .register-cart { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; border:1px solid var(--border); background:var(--card); border-radius:12px; box-shadow:0 1px 2px rgba(11,31,58,.03); }
+    .register-cart-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:52px; padding:10px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .register-row-grid { display:grid; grid-template-columns:minmax(0,1fr) 148px 130px 150px 44px; align-items:center; gap:16px; padding:0 20px; }
+    .register-table-head { height:36px; background:var(--muted); color:var(--muted-foreground); font-size:12px; font-weight:600; flex-shrink:0; }
+    .register-cart-body { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+    .register-cart-row { min-height:76px; padding-top:10px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+    .register-row-selected { background:#edf2f8; box-shadow:inset 4px 0 #0b1f3a; }
+    .dark .register-row-selected { background:#1b2d45; box-shadow:inset 4px 0 #d4a017; }
+    .register-qty-button { display:grid; place-items:center; height:44px; width:44px; background:var(--card); border:1px solid var(--border); }
+    .register-qty-button:first-child { border-radius:9px 0 0 9px; }
+    .register-qty-button:last-child { border-radius:0 9px 9px 0; }
+    .register-qty-button:hover { background:var(--muted); }
+    .register-pagination { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 20px; border-top:1px solid var(--border); flex-shrink:0; }
+    .register-checkout { display:grid; grid-template-columns:minmax(0,1fr) minmax(180px,auto) minmax(220px,auto); grid-template-rows:auto auto; gap:6px 24px; align-items:center; flex-shrink:0; border:1px solid var(--border); border-radius:12px; padding:12px 20px; background:var(--card); }
+    .register-breakdown { display:flex; align-items:flex-start; gap:24px; min-width:0; }
+    .register-breakdown > div + div { border-left:1px solid var(--border); padding-left:24px; }
+    .register-void { grid-column:1; display:flex; align-items:center; gap:16px; }
+    .register-total { grid-column:2; grid-row:1 / 3; border-left:1px solid var(--border); padding-left:24px; }
+    .register-pay { background:#0b1f3a !important; color:#fff !important; border:1px solid #29405d; }
+    .register-checkout .register-pay { grid-column:3; grid-row:1 / 3; }
+    .register-pay:hover { background:#173454 !important; }
+    .register-pay:focus-visible { outline:3px solid #d4a017; outline-offset:3px; }
+    .register-payment .text-sky-400 { color:var(--foreground); }
+    .register-payment { --primary:#0b1f3a; --primary-foreground:#fff; }
+    @media (max-height:850px) and (min-width:800px) {
+      .register-workspace { gap:8px; padding:10px 16px; }
+      .register-quick-tile { min-height:56px; padding:8px 12px; }
+      .register-cart-heading { min-height:44px; }
+      .register-cart-row { min-height:64px; padding-top:6px; padding-bottom:6px; }
+      .register-checkout { padding:8px 16px; }
+    }
+    @media (max-width:1000px) {
+      .register-row-grid { grid-template-columns:minmax(0,1fr) 132px 100px 120px 44px; gap:10px; padding-left:12px; padding-right:12px; }
+      .register-checkout { gap:6px 14px; grid-template-columns:minmax(0,1fr) minmax(130px,auto) minmax(160px,auto); padding:10px 12px; }
+      .register-breakdown { gap:12px; } .register-breakdown > div + div { padding-left:12px; }
+      .register-total { padding-left:14px; }
+    }
+    @media (max-width:767px) {
+      .register-workspace { padding:8px; gap:8px; }
+      .register-quick-groups { display:flex; overflow-x:auto; gap:8px; }
+      .register-quick-tile { min-width:200px; min-height:58px; padding:8px 12px; }
+      .register-table-head { display:none; }
+      .register-cart-row { grid-template-columns:minmax(0,1fr) 132px 44px; gap:8px; }
+      .register-item { grid-column:1; grid-row:1 / 3; } .register-quantity { grid-column:2; grid-row:1; }
+      .register-unit { display:none; } .register-amount { grid-column:2; grid-row:2; text-align:center; }
+      .register-remove { grid-column:3; grid-row:1 / 3; }
+      .register-checkout { grid-template-columns:minmax(0,1fr) minmax(140px,1fr); gap:10px; }
+      .register-breakdown { grid-column:1 / 3; justify-content:space-between; gap:8px; }
+      .register-breakdown > div + div { padding-left:8px; }
+      .register-total { grid-column:1; grid-row:2; border:0; padding:0; }
+      .register-total strong { font-size:24px; }
+      .register-checkout .register-pay { grid-column:2; grid-row:2; height:56px; padding:0 12px; font-size:15px; }
+      .register-void { grid-column:1 / 3; grid-row:3; }
+      .register-pagination { padding:6px 10px; gap:6px; }
+    }
+  `}</style>;
+}
+
+function RegisterInlineError({ message, dismiss }: { message: string; dismiss: () => void }) {
+  return (
+    <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <p className="min-w-0 flex-1 break-words leading-5">{message}</p>
+      <button type="button" onClick={dismiss} aria-label="Dismiss error" className="-my-1 -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md hover:bg-red-500/10"><X className="h-4 w-4" /></button>
+    </div>
   );
 }
