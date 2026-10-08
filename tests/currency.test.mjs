@@ -66,6 +66,7 @@ test("authenticated settings requests deduplicate and retry failures", async () 
 // storage and deferred API responses, including stale response races.
 function providerHarness() {
   const slots = [], effects = [], listeners = new Map(), storage = new Map(), requests = [];
+  let storedToken = "";
   let index = 0, session = { data: null, status: "loading" };
   const react = {
     createContext: value => ({ value, Provider: "provider" }),
@@ -80,14 +81,15 @@ function providerHarness() {
   const provider = compileModule("components/currency-provider.tsx", {
     react, "react/jsx-runtime": { jsx: (type, props) => ({ type, props }) },
     "next-auth/react": { useSession: () => session }, "next/navigation": { usePathname: () => "/dashboard" },
-    "@/lib/auth-storage": { getStoredOwnerToken: () => "" }, "@/lib/currency": currency,
-    "@/lib/settings-api": { invalidateReceiptSettings() {}, getReceiptSettings: () => new Promise((resolve, reject) => requests.push({ resolve, reject })) },
-  }, { localStorage, atob, window: {
+    "@/lib/auth-storage": { getStoredOwnerToken: () => storedToken }, "@/lib/currency": currency,
+    "@/lib/settings-api": { getShopSettings: init => new Promise((resolve, reject) => requests.push({ resolve, reject, init })) },
+  }, { localStorage, atob, Event, window: {
+    dispatchEvent: event => listeners.get(event.type)?.forEach(fn => fn(event)),
     addEventListener: (name, fn) => { const handlers = listeners.get(name) || new Set(); handlers.add(fn); listeners.set(name, handlers); },
     removeEventListener: (name, fn) => listeners.get(name)?.delete(fn),
   } });
   const render = () => { index = 0; return provider.CurrencyProvider({ children: null }).props.value; };
-  return { render, storage, requests, setSession: (shopId, token) => { session = { status: "authenticated", data: { accessToken: token, user: { shopId } } }; },
+  return { render, storage, requests, setStoredToken: token => { storedToken = token; }, setSession: (shopId, token) => { session = { status: "authenticated", data: { accessToken: token, user: { shopId } } }; },
     effects: async () => { effects.splice(0).forEach(fn => fn()); await settle(); },
     emit: (name, event) => listeners.get(name)?.forEach(fn => fn(event)),
   };
@@ -96,48 +98,30 @@ test("cookie-only settings requests never share an account cache",async()=>{
  let calls=0;const api=compileModule("lib/settings-api.ts",{}, {fetch:async()=>{calls++;return new Response('{}')}});
  await api.getReceiptSettingsResponse();await api.getReceiptSettingsResponse();assert.equal(calls,2);
 });
-test("settings saves from a previous shop cannot cancel a new shop fetch",async()=>{
- const h=providerHarness();h.setSession(1,"a");const old=h.render().updateCurrency;await h.effects();
- h.setSession(2,"b");h.render();await h.effects();old({region:"JAPAN"});
- h.requests[0].resolve({region:"JAPAN"});h.requests[1].resolve({region:"MYANMAR"});await settle();
- assert.equal(h.render().formatMoney(1000),"1,000 Ks");
+
+const productionCurrency = { shopId:8375, shopCode:"SHP-JB5", currencyCode:"JPY", currencySymbol:"¥", currencyDecimalDigits:0, currencyPosition:"AFTER", taxPercent:0 };
+test("production currency preserves AFTER with missing or conflicting region",()=>{
+ for(const region of [undefined,null,"","JAPAN","MYANMAR"]) assert.equal(currency.formatCurrency(180,currency.normalizeCurrency({...productionCurrency,region})),"180 ¥");
+ assert.equal(currency.formatCurrency(180,currency.normalizeCurrency({region:"JAPAN"})),"180");
+ assert.equal(currency.normalizeCurrency({currencyCode:"JPY"}).currencySymbol,"");
 });
-test("region beats saved currency, stale fetches and shop switches", async () => {
-  const h = providerHarness();
-  assert.equal(h.render().formatMoney(1000), "1,000"); await h.effects();
-  h.setSession(1, "first"); h.render(); await h.effects();
-  h.requests[0].resolve({ region: "JAPAN", currencyCode: "MMK", currencySymbol: "Ks" }); await settle();
-  assert.equal(h.render().formatMoney(1000), "¥1,000");
-  h.emit("online"); await settle();
-  h.render().updateCurrency({ region: "JAPAN", currencyCode: "MMK" });
-  h.requests[1].resolve({ region: "MYANMAR" }); await settle();
-  assert.equal(h.render().formatMoney(1000), "¥1,000");
-  h.setSession(2, "second"); assert.equal(h.render().formatMoney(1000), "1,000");
-  await h.effects(); h.requests[2].resolve({ region: "MYANMAR", currencyCode: "JPY", currencySymbol: "¥" }); await settle();
-  assert.equal(h.render().formatMoney(1000), "1,000 Ks");
-  h.emit("focus"); await settle(); h.requests[3].resolve({ region: "JAPAN" }); await settle();
-  assert.equal(h.render().formatMoney(1000), "¥1,000");
+test("session refresh wins over stored token",async()=>{
+ const h=providerHarness();h.setStoredToken("old");h.setSession(8375,"fresh");h.render();await h.effects();h.render();await h.effects();
+ assert.equal(h.requests[0].init.headers.Authorization,"Bearer fresh");h.requests[0].resolve(productionCurrency);await settle();assert.equal(h.render().formatMoney(180),"180 ¥");
+ h.setSession(8375,"refreshed");h.render();await h.effects();assert.equal(h.requests[1].init.headers.Authorization,"Bearer refreshed");h.requests[1].resolve(productionCurrency);await settle();assert.equal(h.render().formatMoney(180),"180 ¥");
 });
-test("reload discards conflicting shop cache and unknown regions stay unlabelled", async () => {
-  const h = providerHarness();
-  h.storage.set("pos-receipt-currency:v1:1", JSON.stringify(config("MMK", "Ks", 0, "AFTER")));
-  h.setSession(1, "fresh-token"); assert.equal(h.render().formatMoney(0), "0");
-  await h.effects(); assert.equal(h.storage.has("pos-receipt-currency:v1:1"), false);
-  h.requests[0].resolve({ region: "JAPAN", currencySymbol: "Ks" }); await settle();
-  assert.equal(h.render().formatMoney(1000), "¥1,000");
-  for (const region of [null, undefined, "UNKNOWN"]) assert.equal(currency.currencyForRegion(region).currencyCode, "");
+test("account switch rejects stale responses and old settings saves",async()=>{
+ const h=providerHarness();h.setSession(1,"a");const old=h.render().updateCurrency;await h.effects();h.requests[0].resolve(productionCurrency);await settle();assert.equal(h.render().formatMoney(180),"180 ¥");
+ h.emit("online");await settle();h.setSession(2,"b");assert.equal(h.render().formatMoney(180),"180");await h.effects();old(productionCurrency);
+ h.requests[2].resolve({currencyCode:"USD",currencySymbol:"$",currencyDecimalDigits:2,currencyPosition:"BEFORE"});await settle();h.requests[1].resolve(productionCurrency);await settle();assert.equal(h.render().formatMoney(180),"$ 180.00");
 });
-test("cross-window cache updates trigger authoritative fetch instead of trusting cache", async () => {
-  const h=providerHarness();h.setSession(1,"first");h.render();await h.effects();
-  h.requests[0].resolve({region:"JAPAN"});await settle();
-  h.emit("storage",{key:"pos-receipt-currency:v1:2",newValue:'{}'});assert.equal(h.requests.length,1);
-  h.emit("storage",{key:"pos-receipt-currency:v1:1",newValue:JSON.stringify({currencyCode:"MMK"})});await settle();
-  assert.equal(h.render().formatMoney(0),"¥0");h.requests[1].resolve({region:"MYANMAR"});await settle();
-  assert.equal(h.render().formatMoney(0),"0 Ks");
+test("latest request wins; empty and failed responses preserve valid currency",async()=>{
+ const h=providerHarness();h.setSession(1,"a");h.render();await h.effects();h.emit("online");await settle();h.requests[1].resolve(productionCurrency);await settle();h.requests[0].resolve({currencySymbol:"Ks"});await settle();assert.equal(h.render().formatMoney(180),"180 ¥");
+ h.emit("focus");await settle();h.requests[2].resolve({region:""});await settle();assert.equal(h.render().formatMoney(180),"180 ¥");h.emit("online");await settle();h.requests[3].reject(new Error("offline"));await settle();assert.equal(h.render().formatMoney(180),"180 ¥");
 });
-test("region formatting overrides all four conflicting fields without converting amounts",()=>{
- for(const [region,expected] of [["JAPAN","¥1,235"],["MYANMAR","1,235 Ks"]])
-  assert.equal(currency.formatCurrency(1234.5,currency.normalizeCurrency({region,currencyCode:"USD",currencySymbol:"$",currencyDecimalDigits:2,currencyPosition:"AFTER"})),expected);
+test("shop currency and receipt metadata use distinct authenticated endpoints",async()=>{
+ const calls=[];const api=compileModule("lib/settings-api.ts",{}, {fetch:async(url,init)=>{calls.push({url,init});return new Response(JSON.stringify(url==="/api/shop/settings"?productionCurrency:{shopName:"Shop"}));}});const init={headers:{Authorization:"Bearer fresh"}};
+ assert.equal(currency.formatCurrency(180,currency.normalizeCurrency(await api.getShopSettings(init))),"180 ¥");assert.equal((await api.getReceiptSettings(init)).shopName,"Shop");assert.deepEqual(calls.map(c=>c.url),["/api/shop/settings","/api/receipt-settings/my-shop"]);for(const c of calls){assert.equal(c.init.headers.Authorization,"Bearer fresh");assert.equal(c.init.cache,"no-store");}
 });
 
 for (const [path, name] of [
@@ -165,4 +149,24 @@ test("historical receipts preserve snapshots and never infer from current region
  assert.equal(currency.formatHistoricalMoney(1000,{region:"JAPAN"}),"1,000");
  assert.equal(currency.formatHistoricalMoney(1000,{region:"JAPAN",currencyCode:"MMK",currencySymbol:"Ks",currencyDecimalDigits:0,currencyPosition:"AFTER"}),"1,000 Ks");
  assert.equal(currency.formatHistoricalMoney(1000,{currencySnapshot:{currencyCode:"JPY",currencySymbol:"¥",currencyDecimalDigits:0,currencyPosition:"BEFORE"}}),"¥1,000");
+});
+
+function shopProxy({status=200,body=JSON.stringify(productionCurrency),session={accessToken:"session-token"},env={REMOTE_API_BASE_URL:"https://upstream.example/",NODE_ENV:"production"}}={}) {
+ const calls=[];
+ const route=compileModule("app/api/shop/settings/route.ts",{"next-auth":{getServerSession:async()=>session},"next/server":{NextResponse:{json:(data,init)=>Response.json(data,init)}},"@/lib/auth":{authOptions:{}}},{Response,process:{env},fetch:async(url,init)=>{calls.push({url,init});return new Response(body,{status,headers:{"Content-Type":"application/json"}});}});
+ return {route,calls};
+}
+test("shop proxy preserves authorization, full body, status and no-store",async()=>{
+ for(const status of [200,401,403,503]) {
+  const body=status===200?JSON.stringify(productionCurrency):JSON.stringify({message:"upstream failure",detail:"unchanged"});
+  const {route,calls}=shopProxy({status,body});const response=await route.GET(new Request("https://pos.example/api/shop/settings",{headers:{Authorization:"Bearer refreshed"}}));
+  assert.equal(response.status,status);assert.equal(await response.text(),body);assert.match(response.headers.get("Cache-Control"),/no-store/);
+  assert.equal(calls[0].url,"https://upstream.example/api/shop/settings");assert.equal(calls[0].init.headers.Authorization,"Bearer refreshed");
+ }
+ const cookie=shopProxy();await cookie.route.GET(new Request("https://pos.example/api/shop/settings"));assert.equal(cookie.calls[0].init.headers.Authorization,"Bearer session-token");
+ const missing=shopProxy({env:{NODE_ENV:"production"}});assert.equal((await missing.route.GET(new Request("https://pos.example/api/shop/settings"))).status,503);assert.equal(missing.calls.length,0);
+ const unauthorized=shopProxy({session:null});assert.equal((await unauthorized.route.GET(new Request("https://pos.example/api/shop/settings"))).status,401);assert.equal(unauthorized.calls.length,0);
+});
+test("authenticated cookie session never uses another stored account token",async()=>{
+ const h=providerHarness();h.setStoredToken("other-account");h.setSession(8375,undefined);h.render();await h.effects();h.render();await h.effects();assert.equal(h.requests[0].init.headers.Authorization,undefined);h.requests[0].resolve(productionCurrency);await settle();assert.equal(h.render().formatMoney(180),"180 \u00a5");
 });

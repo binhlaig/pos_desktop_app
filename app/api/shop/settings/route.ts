@@ -3,15 +3,18 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 
-const API_BASE =
-  process.env.REMOTE_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://localhost:8080";
+const API_BASE = (
+  process.env.REMOTE_API_BASE_URL?.trim() ||
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:8080")
+).replace(/\/+$/, "");
 
 const SHOP_SETTINGS_PATH =
   process.env.REMOTE_SHOP_SETTINGS_PATH || "/api/shop/settings";
 
 async function getAuthorization(req: Request) {
+  const supplied = req.headers.get("authorization")?.trim();
+  if (supplied) return supplied;
   const session = await getServerSession(authOptions);
 
   const accessToken = (session as { accessToken?: string | null } | null)
@@ -43,6 +46,8 @@ export async function GET(req: Request) {
       );
     }
 
+    if (!API_BASE) return noStoreJson({ message: "Shop settings API base URL is not configured." }, 503);
+
     const res = await fetch(`${API_BASE}${SHOP_SETTINGS_PATH}`, {
       method: "GET",
       headers: {
@@ -52,8 +57,13 @@ export async function GET(req: Request) {
       cache: "no-store",
     });
 
-    const data = await res.json().catch(() => null);
-    return noStoreJson(data, res.status);
+    return new Response(await res.text() || null, {
+      status: res.status,
+      headers: {
+        "Content-Type": res.headers.get("Content-Type") || "application/json",
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (error) {
     return noStoreJson(
       {

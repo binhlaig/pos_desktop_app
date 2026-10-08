@@ -55,7 +55,7 @@ function checkout(path, receiptFetch) {
     toast: { error: noop, success: noop }, router: { refresh: noop },
     tableKitchenOrdersRef: { current: new Map() }, shopInfo: {},
     clearCart: noop, focusScanner: noop, loadReceiptSetting: noop, fetchTables: noop,
-    logRequestAuth: noop,
+    logRequestAuth: noop, reportError: noop,
   };
   for (const name of source.matchAll(/\b(set[A-Z]\w*)\(/g)) context[name[1]] = noop;
   context.fetch = async (url, init) => {

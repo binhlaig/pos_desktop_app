@@ -38,3 +38,12 @@ export async function getReceiptSettings(init: RequestInit = {}): Promise<unknow
   if (!data || typeof data !== "object") throw new Error("Invalid receipt settings response");
   return data;
 }
+
+// Currency belongs to shop settings; receipt-settings/my-shop is print metadata.
+export async function getShopSettings(init: RequestInit = {}): Promise<unknown> {
+  const response = await fetch("/api/shop/settings", { ...init, method: "GET", cache: "no-store" });
+  if (!response.ok) throw new Error(`Shop settings request failed (${response.status})`);
+  const data: unknown = await response.json();
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Invalid shop settings response");
+  return data;
+}

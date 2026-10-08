@@ -34,23 +34,12 @@ export function receiptSettingsPayload(data: unknown): Record<string, unknown> {
 
 export function normalizeCurrency(data: unknown): CurrencyConfig {
   const value = receiptSettingsPayload(data);
-  const regionCurrency = currencyForRegion(value.region);
-  if (regionCurrency.currencyCode) return regionCurrency;
   const text = (input: unknown) => typeof input === "string" ? input.trim() : "";
   const code = text(value.currencyCode ?? value.currency_code ?? value.code).toUpperCase();
-  let symbol = text(value.currencySymbol ?? value.currency_symbol ?? value.symbol);
-  if (!symbol && code) {
-    if (code === "MMK") symbol = "Ks";
-    else {
-      try {
-        symbol = new Intl.NumberFormat("en-US", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
-          .formatToParts(0).find(part => part.type === "currency")?.value || code;
-      } catch { symbol = code; }
-    }
-  }
+  const symbol = text(value.currencySymbol ?? value.currency_symbol ?? value.symbol);
   const rawDigits = value.currencyDecimalDigits ?? value.currency_decimal_digits ?? value.decimalDigits;
   const digits = typeof rawDigits === "number" || (typeof rawDigits === "string" && rawDigits.trim()) ? Number(rawDigits) : NaN;
-  const position = String(value.currencyPosition ?? value.currency_position ?? value.position ?? (code && code !== "MMK" ? "BEFORE" : "AFTER")).toUpperCase();
+  const position = String(value.currencyPosition ?? value.currency_position ?? value.position ?? "AFTER").toUpperCase();
   return {
     currencyCode: code, currencySymbol: symbol,
     currencyDecimalDigits: Number.isInteger(digits) && digits >= 0 && digits <= 20 ? digits : 0,
