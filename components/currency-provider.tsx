@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { getStoredOwnerToken } from "@/lib/auth-storage";
-import { DEFAULT_CURRENCY, formatCurrency, normalizeCurrency, currencyForRegion, receiptSettingsPayload, type CurrencyConfig, type MoneyFormatter } from "@/lib/currency";
+import { DEFAULT_CURRENCY, formatCurrency, normalizeCurrency, type CurrencyConfig, type MoneyFormatter } from "@/lib/currency";
 import { getReceiptSettings, invalidateReceiptSettings } from "@/lib/settings-api";
 
 type State = { scope: string; currency: CurrencyConfig };
@@ -76,7 +76,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
         }),
       ]);
       if (!active || activeScope.current !== scope || requestRevision !== revision.current) return;
-      const shopCurrency = profile.status === "fulfilled" ? currencyForRegion(receiptSettingsPayload(profile.value).region) : DEFAULT_CURRENCY;
+      const shopCurrency = profile.status === "fulfilled" ? normalizeCurrency(profile.value) : DEFAULT_CURRENCY;
       const next = shopCurrency.currencyCode ? shopCurrency : settings.status === "fulfilled" ? normalizeCurrency(settings.value) : DEFAULT_CURRENCY;
       // An empty/failed response must not erase this scope's known currency.
       if (next.currencyCode || next.currencySymbol) setState({ scope, currency: next });
