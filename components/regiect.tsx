@@ -2364,6 +2364,7 @@ export default function RegisterPOSPage() {
               errorMessage={inlineError}
               dismissError={() => setInlineError("")}
               products={quickViewProducts}
+              cart={cart}
               activeGroup={activeQuickGroup}
               addItem={addQuickItem}
               money={money}
@@ -2660,18 +2661,33 @@ function EmptyState() {
   );
 }
 
+function productPickerPageSize() {
+  if (typeof window === "undefined") return MANUAL_DIALOG_PAGE_SIZE;
+  if (window.matchMedia("(max-width: 599px)").matches) return 4;
+  if (window.matchMedia("(max-width: 899px)").matches) return 6;
+  return MANUAL_DIALOG_PAGE_SIZE;
+}
+
+function subscribeProductPickerSize(onChange: () => void) {
+  const queries = [window.matchMedia("(max-width: 599px)"), window.matchMedia("(max-width: 899px)")];
+  queries.forEach((query) => query.addEventListener("change", onChange));
+  return () => queries.forEach((query) => query.removeEventListener("change", onChange));
+}
+
 function BarcodeLessProductDialog({
-  open, setOpen, products, activeGroup, addItem, money, errorMessage, dismissError,
+  open, setOpen, products, cart, activeGroup, addItem, money, errorMessage, dismissError,
 }: {
   errorMessage: string;
   dismissError: () => void;
   open: boolean;
   setOpen: (v: boolean) => void;
   products: Product[];
+  cart: CartLine[];
   activeGroup: QuickItemGroup;
   addItem: (product: Product) => void;
   money: (amount: number) => string;
 }) {
+  const pageSize = React.useSyncExternalStore(subscribeProductPickerSize, productPickerPageSize, () => MANUAL_DIALOG_PAGE_SIZE);
   const [dialogPage, setDialogPage] = useState(1);
   const [productSearch, setProductSearch] = useState("");
   const searchTerm = productSearch.trim().toLocaleLowerCase();
@@ -2680,10 +2696,10 @@ function BarcodeLessProductDialog({
       String(value ?? "").toLocaleLowerCase().includes(searchTerm)
     )
   );
-  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / MANUAL_DIALOG_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const currentPage = Math.min(dialogPage, pageCount);
-  const pageStart = (currentPage - 1) * MANUAL_DIALOG_PAGE_SIZE;
-  const pageProducts = filteredProducts.slice(pageStart, pageStart + MANUAL_DIALOG_PAGE_SIZE);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageProducts = filteredProducts.slice(pageStart, pageStart + pageSize);
 
   useEffect(() => {
     if (open) { setDialogPage(1); setProductSearch(""); }
@@ -2695,7 +2711,7 @@ function BarcodeLessProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="register-product-dialog flex h-[min(760px,calc(100dvh-32px))] w-[calc(100vw-24px)] max-w-[1120px] flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0 text-card-foreground sm:max-w-[1120px]">
+      <DialogContent className="register-product-dialog flex flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0 text-card-foreground">
         <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-14 text-left sm:px-5">
           <div className="flex items-center gap-3">
             <span className="register-product-group-icon"><ManualGroupIcon groupId={activeGroup.id} /></span>
@@ -2729,12 +2745,22 @@ function BarcodeLessProductDialog({
             </div>
           </div> : <div className="register-product-grid">
             {pageProducts.map((product) => {
+              const inCart = cart.reduce((quantity, line) => {
+                const matches = line.id === (product.barcode || product.sku || product.id) ||
+                  (!!product.dbId && line.dbId === product.dbId) ||
+                  (!!product.barcode && line.barcode === product.barcode) ||
+                  (!!product.sku && line.sku === product.sku);
+                return quantity + (matches ? line.qty : 0);
+              }, 0);
               const rawStock = Number(product.stock ?? 0);
               const stock = Number.isFinite(rawStock) ? Math.max(0, rawStock) : 0;
               const unavailable = !product.availableForSale || stock <= 0;
               const lowStock = !unavailable && stock <= 5;
-              return <article key={`${product.id}-${product.dbId}`} className={`register-product-card ${unavailable ? "register-product-unavailable" : ""}`}>
+              return <article key={`${product.id}-${product.dbId}`} className={`register-product-card ${unavailable ? "register-product-unavailable" : ""} ${inCart > 0 ? "register-product-in-cart" : ""}`}>
                 <div className="register-product-image"><ProductVisual product={product} />
+                  {inCart > 0 && <span className="register-product-cart-quantity" aria-live="polite" aria-label={`${product.name}: ${inCart} in cart`}>
+                    <ShoppingCart className="h-3.5 w-3.5" /><span>Cart · {inCart}</span>
+                  </span>}
                   {(unavailable || lowStock) && <span className={`register-product-status ${unavailable ? "register-product-status-out" : "register-product-status-low"}`}>{unavailable ? "Out of stock" : "Low stock"}</span>}
                 </div>
                 <div className="register-product-info">
@@ -2756,13 +2782,13 @@ function BarcodeLessProductDialog({
         </div>
 
         <DialogFooter className="!flex-row !items-center !justify-between gap-2 border-t border-border bg-card px-4 py-2 sm:px-5">
-          <span className="text-xs text-muted-foreground" aria-live="polite">{filteredProducts.length ? `${pageStart + 1}–${Math.min(pageStart + MANUAL_DIALOG_PAGE_SIZE, filteredProducts.length)} of ${filteredProducts.length}` : "0 products"}</span>
+          <span className="text-xs text-muted-foreground" aria-live="polite">{filteredProducts.length ? `${pageStart + 1}–${Math.min(pageStart + pageSize, filteredProducts.length)} of ${filteredProducts.length}` : "0 products"}</span>
           <div className="flex items-center gap-2">
-            {filteredProducts.length > MANUAL_DIALOG_PAGE_SIZE && <>
+            <>
               <Button type="button" variant="outline" disabled={currentPage <= 1} onClick={() => setDialogPage(Math.max(1, currentPage - 1))} className="h-11 rounded-lg px-3">Prev</Button>
               <span className="min-w-9 text-center text-xs tabular-nums">{currentPage}/{pageCount}</span>
               <Button type="button" variant="outline" disabled={currentPage >= pageCount} onClick={() => setDialogPage(Math.min(pageCount, currentPage + 1))} className="h-11 rounded-lg px-3">Next</Button>
-            </>}
+            </>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} className="h-11 rounded-lg px-3">Done</Button>
           </div>
         </DialogFooter>
@@ -3146,23 +3172,35 @@ function PaymentDialog({
 // Register-only tokens avoid changing the dashboard or global brand preferences.
 function RegisterDesignStyles() {
   return <style jsx global>{`
-    .register-product-dialog { --primary:#0b1f3a; --primary-foreground:#fff; --ring:#617c9f; }
+    .register-product-dialog {
+      box-sizing:border-box;
+      width:min(1120px,calc(100vw - 40px)) !important;
+      max-width:calc(100vw - 40px) !important;
+      height:min(740px,calc(100vh - 40px));
+      height:min(740px,calc(100dvh - 40px));
+      max-height:calc(100vh - 40px);
+      max-height:calc(100dvh - 40px);
+      min-height:0;
+      --primary:#0b1f3a; --primary-foreground:#fff; --ring:#617c9f; }
     .register-product-group-icon { display:grid; place-items:center; width:42px; height:42px; flex-shrink:0; border-radius:12px; background:#edf2f8; color:#0b1f3a; }
     .dark .register-product-group-icon { background:#23344c; color:#dbe5f3; }
     .register-product-body { background:#f5f7fa; }
     .dark .register-product-body { background:#101827; }
-    .register-product-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:start; }
-    .register-product-card { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--card); box-shadow:0 1px 2px rgba(11,31,58,.03); }
+    .register-product-grid { display:grid; height:100%; min-height:0; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); gap:12px; align-items:stretch; }
+    .register-product-card { display:flex; flex-direction:column; min-height:0; min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--card); box-shadow:0 1px 2px rgba(11,31,58,.03); }
+    .register-product-cart-quantity { position:absolute; right:8px; top:8px; display:inline-flex; align-items:center; gap:5px; padding:5px 8px; border-radius:7px; background:#0b1f3a; color:#fff; font-size:11px; line-height:16px; font-weight:600; font-variant-numeric:tabular-nums; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+    .register-product-in-cart { border-color:#7086a1; }
+    .dark .register-product-in-cart { border-color:#7d96b7; }
     .register-product-card:focus-within { border-color:#617c9f; box-shadow:0 0 0 2px rgba(97,124,159,.2); }
-    .register-product-image { height:100px; position:relative; overflow:hidden; background:var(--muted); }
+    .register-product-image { flex:1; min-height:40px; position:relative; overflow:hidden; background:var(--muted); }
     .register-product-image img { object-fit:contain; padding:8px; }
     .register-product-status { position:absolute; top:8px; left:8px; border-radius:6px; padding:3px 7px; font-size:10px; font-weight:600; }
     .register-product-status-low { background:#fff4d6; color:#7a4e00; }
     .register-product-status-out { background:#fee9e9; color:#9d2525; }
     .dark .register-product-status-low { background:#47371d; color:#f6d58c; }
     .dark .register-product-status-out { background:#482727; color:#f5b4b4; }
-    .register-product-info { padding:12px; }
-    .register-product-name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:36px; margin:4px 0 6px; font-size:14px; line-height:18px; font-weight:600; }
+    .register-product-info { flex-shrink:0; padding:10px 12px; }
+    .register-product-name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; height:44px; min-height:44px; overflow-wrap:anywhere; margin:4px 0 6px; font-size:14px; line-height:22px; font-weight:600; }
     .register-product-add { background:#0b1f3a !important; color:#fff !important; border:1px solid #29405d; }
     .register-product-add:hover:not(:disabled) { background:#173454 !important; }
     .register-product-add:disabled { background:var(--muted) !important; color:var(--muted-foreground) !important; border-color:var(--border); opacity:1; cursor:not-allowed; }
@@ -3170,8 +3208,20 @@ function RegisterDesignStyles() {
     @media (max-width:899px) { .register-product-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
     @media (max-width:599px) {
       .register-product-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-      .register-product-image { height:96px; }
+      .register-product-image { min-height:32px; }
       .register-product-info { padding:10px; }
+    }
+    .register-product-dialog > [data-slot="dialog-header"], .register-product-dialog > [data-slot="dialog-footer"] { flex-shrink:0; }
+    .register-product-dialog [role="alert"] { max-height:64px; overflow-y:auto; }
+    @media (max-width:599px) {
+      .register-product-dialog { width:calc(100vw - 24px) !important; max-width:calc(100vw - 24px) !important; height:calc(100dvh - 24px); max-height:calc(100dvh - 24px); }
+      .register-product-name { font-size:13px; line-height:20px; height:40px; min-height:40px; }
+      .register-product-dialog [data-slot="dialog-footer"] { padding-left:12px; padding-right:12px; }
+    }
+    @media (max-height:650px) {
+      .register-product-body { overflow-y:auto; }
+      .register-product-grid { height:auto; grid-template-rows:repeat(2,minmax(205px,auto)); }
+      .register-product-image { height:56px; flex:none; }
     }
     .binhlaig-register, .register-payment {
       --primary: #0b1f3a; --primary-foreground: #fff; --ring: #0b1f3a;
