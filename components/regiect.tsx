@@ -2270,16 +2270,17 @@ export default function RegisterPOSPage() {
           <>
             <section className="register-workspace">
               <div className="register-toolbar">
+                <div className="register-scan-tools">
                 <div className="relative min-w-0 flex-1">
                   <Barcode className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <Input id="scan-input" autoFocus value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleScanOrSearch(); } }}
-                    placeholder={productsLoading ? "Loading products..." : "Scan barcode / SKU or search product"}
+                    placeholder={productsLoading ? "Loading products..." : "Scan barcode / SKU"}
                     disabled={productsLoading || scanLoading}
-                    className="register-search h-12 rounded-xl bg-card pl-12 pr-12 text-base shadow-none" />
+                    className="register-search h-11 rounded-xl bg-card pl-12 pr-12 text-base shadow-none" />
                   {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-lg"><X className="h-4 w-4" /></button>}
-                  {!!nameHints.length && <div className="absolute inset-x-0 top-14 z-30 max-h-[45vh] overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
+                  {!!nameHints.length && <div className="absolute inset-x-0 top-full mt-2 z-30 max-h-[45vh] overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
                     {nameHints.map((product) => <button key={`${product.id}-${product.dbId}`} type="button"
                       onClick={() => { addToCart(product); setQuery(""); focusScanner(); }}
                       className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-border px-4 py-3 text-left last:border-0 hover:bg-muted/50">
@@ -2288,8 +2289,8 @@ export default function RegisterPOSPage() {
                     </button>)}
                   </div>}
                 </div>
-                <Button type="button" variant="outline" onClick={() => setCameraScannerOpen(true)} disabled={productsLoading || scanLoading} className="h-12 shrink-0 rounded-xl bg-card px-4"><Camera className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Camera</span></Button>
-                <Button type="button" variant="outline" onClick={() => setActionsOpen(true)} className="h-12 shrink-0 rounded-xl bg-card px-4"><Settings2 className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Actions</span></Button>
+                <Button type="button" variant="outline" onClick={() => setCameraScannerOpen(true)} disabled={productsLoading || scanLoading} className="register-scan-control h-11 shrink-0 rounded-xl bg-card px-3" aria-label="Scan with camera"><Camera className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Camera</span></Button>
+                <Button type="button" variant="outline" onClick={() => setActionsOpen(true)} className="register-scan-control h-11 shrink-0 rounded-xl bg-card px-3" aria-label="Sale actions"><Settings2 className="h-5 w-5 sm:mr-2" /><span className="hidden sm:inline">Actions</span></Button>
               </div>
 
               <div className="register-quick-groups" aria-label="Items without barcode">
@@ -2297,9 +2298,10 @@ export default function RegisterPOSPage() {
                   onClick={() => { if (!requireStaff()) return; setQuickItemGroup(group.id); setQuickViewOpen(true); }}
                   className="register-quick-tile">
                   <span className="register-quick-icon"><ManualGroupIcon groupId={group.id} /></span>
-                  <span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{group.label}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{group.description}</span></span>
+                  <span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{group.label}</span><span className="register-quick-description mt-0.5 block truncate text-xs text-muted-foreground">{group.description}</span></span>
                   <span className="register-count">{group.count}</span>
                 </button>)}
+              </div>
               </div>
 
               <div className="register-cart">
@@ -3232,15 +3234,19 @@ function RegisterDesignStyles() {
     .register-header { background: #0b1f3a; color: #fff; }
     .register-header .text-muted-foreground { color: #bac6d6; }
     .register-workspace { display:flex; flex-direction:column; flex:1; min-height:0; width:100%; max-width:1680px; margin:0 auto; gap:12px; padding:16px; overflow:hidden; }
-    .register-toolbar { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+    .register-toolbar { display:grid; grid-template-columns:minmax(280px,.9fr) minmax(0,1.1fr); align-items:center; gap:12px; flex-shrink:0; }
+    .register-scan-tools { display:flex; align-items:center; gap:8px; min-width:0; }
     .register-search { border-color:#b7c6d9; }
     .register-search:focus-visible { border-color:#0b1f3a; outline:2px solid #0b1f3a; outline-offset:1px; }
     .dark .register-search:focus-visible { border-color:#92aaca; outline-color:#92aaca; }
-    .register-quick-groups { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; flex-shrink:0; }
-    .register-quick-tile { display:flex; align-items:center; gap:12px; min-height:68px; padding:12px 16px; border:1px solid var(--border); background:var(--card); border-radius:12px; transition:background .15s,border-color .15s; }
+    .register-quick-groups { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; min-width:0; flex-shrink:0; }
+    .register-quick-tile { display:flex; align-items:center; gap:8px; min-width:0; min-height:44px; padding:6px 10px; border:1px solid var(--border); background:var(--card); border-radius:12px; transition:background .15s,border-color .15s; }
     .register-quick-tile:hover { background:var(--muted); border-color:#9cabbf; }
     .register-quick-tile:disabled { opacity:.5; cursor:not-allowed; }
-    .register-quick-icon { display:grid; place-items:center; width:40px; height:40px; flex-shrink:0; border-radius:10px; background:var(--muted); }
+    .register-quick-icon { display:grid; place-items:center; width:28px; height:28px; flex-shrink:0; border-radius:8px; background:var(--muted); }
+    .register-quick-icon svg { width:18px; height:18px; }
+    .register-quick-description { display:none; }
+    .register-quick-tile .register-count { min-width:24px; padding:3px 6px; font-size:11px; }
     .register-count { display:inline-flex; align-items:center; justify-content:center; min-width:32px; padding:4px 10px; background:var(--muted); border-radius:999px; font-size:12px; font-weight:600; font-variant-numeric:tabular-nums; }
     .register-cart { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; border:1px solid var(--border); background:var(--card); border-radius:12px; box-shadow:0 1px 2px rgba(11,31,58,.03); }
     .register-cart-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:52px; padding:10px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -3268,12 +3274,18 @@ function RegisterDesignStyles() {
     .register-payment { --primary:#0b1f3a; --primary-foreground:#fff; }
     @media (max-height:850px) and (min-width:800px) {
       .register-workspace { gap:8px; padding:10px 16px; }
-      .register-quick-tile { min-height:56px; padding:8px 12px; }
+      .register-quick-tile { min-height:44px; padding:6px 10px; }
       .register-cart-heading { min-height:44px; }
-      .register-cart-row { min-height:64px; padding-top:6px; padding-bottom:6px; }
+      .register-cart-row { min-height:76px; padding-top:10px; padding-bottom:10px; }
       .register-checkout { padding:8px 16px; }
     }
+    @media (min-width:768px) and (max-width:1279px) {
+      .register-scan-control { width:44px; padding:0; }
+      .register-scan-control span { display:none; }
+      .register-scan-control svg { margin-right:0; }
+    }
     @media (max-width:1000px) {
+      .register-toolbar { grid-template-columns:1fr; gap:8px; }
       .register-row-grid { grid-template-columns:minmax(0,1fr) 132px 100px 120px 44px; gap:10px; padding-left:12px; padding-right:12px; }
       .register-checkout { gap:6px 14px; grid-template-columns:minmax(0,1fr) minmax(130px,auto) minmax(160px,auto); padding:10px 12px; }
       .register-breakdown { gap:12px; } .register-breakdown > div + div { padding-left:12px; }
