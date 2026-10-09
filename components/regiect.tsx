@@ -67,6 +67,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
@@ -75,6 +76,8 @@ import {
   readAvailableForSale,
   unavailableToastMessage,
 } from "@/lib/product-availability";
+
+type RegisterAlert = { title: string; message: string; warning?: boolean; confirmLabel?: string; onConfirm?: () => void };
 
 type Product = {
   id: string;
@@ -658,6 +661,17 @@ export default function RegisterPOSPage() {
   const staffInputRef = useRef<HTMLInputElement>(null);
   const [staffLoginError, setStaffLoginError] = useState("");
   const [inlineError, setInlineError] = useState("");
+  const [registerAlerts, setRegisterAlerts] = useState<RegisterAlert[]>([]);
+  const alertOpenRef = useRef(false);
+  alertOpenRef.current = registerAlerts.length > 0;
+  function enqueueAlert(alert: RegisterAlert) {
+    alertOpenRef.current = true;
+    setRegisterAlerts(current => current.some(item => item.title === alert.title && item.message === alert.message)
+      ? current : [...current, alert]);
+  }
+  function dismissAlert() {
+    setRegisterAlerts(current => current.slice(1));
+  }
   const [productsLoading, setProductsLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [receiptSaving, setReceiptSaving] = useState(false);
@@ -887,6 +901,7 @@ export default function RegisterPOSPage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (alertOpenRef.current) return;
       const target = e.target as HTMLElement | null;
 
       const isTyping =
@@ -930,6 +945,7 @@ export default function RegisterPOSPage() {
     };
 
     const onHardwareScannerKey = (event: KeyboardEvent) => {
+      if (alertOpenRef.current) { resetBuffer(); return; }
       if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
 
       const target = event.target as HTMLElement | null;
@@ -1011,7 +1027,7 @@ export default function RegisterPOSPage() {
     if (!exactLocalMatch && !shouldLookupBarcode) return;
 
     const timer = window.setTimeout(() => {
-      if (lastAutoScanRef.current === raw) return;
+      if (alertOpenRef.current || lastAutoScanRef.current === raw) return;
 
       lastAutoScanRef.current = raw;
       void handleScanOrSearch();
@@ -1029,8 +1045,11 @@ export default function RegisterPOSPage() {
   }
 
   function reportError(message: string) {
-    if (!isLoggedIn) setStaffLoginError(message);
-    else setInlineError(message);
+    enqueueAlert({
+      title: /Barcode not found/i.test(message) ? "Product မတွေ့ပါ" : "လုပ်ဆောင်မှု မအောင်မြင်ပါ",
+      message,
+      warning: /stock|No cart item|Barcode not found/i.test(message),
+    });
   }
 
   function requireStaff() {
@@ -1334,7 +1353,7 @@ export default function RegisterPOSPage() {
       const message =
         error instanceof Error ? error.message : "Staff validation failed.";
 
-      setStaffLoginError(message);
+
       setStaffId("");
       setStaffName("");
       setStaffRole("staff");
@@ -2116,14 +2135,24 @@ export default function RegisterPOSPage() {
   }
 
   function clearCart() {
-    if (receiptSavingRef.current || !requireStaff()) return;
-    receiptAttemptsRef.current.clear();
-    setCart([]);
+    if (receiptSavingRef.current || !requireStaff() || !cart.length) return;
+    enqueueAlert({
+      title: "Void sale လုပ်မလား?",
+      message: `Current sale ထဲက product ${cart.length} မျိုးကို ဖယ်ရှားပါမယ်။ ဆက်လုပ်မလား?`,
+      warning: true,
+      confirmLabel: "Void sale",
+      onConfirm: () => {
+        if (receiptSavingRef.current) return;
+        receiptAttemptsRef.current.clear();
+        setCart([]);
+      },
+    });
   }
 
   return (
     <div className="binhlaig-register flex h-[100dvh] overflow-hidden text-foreground">
       <RegisterDesignStyles />
+      <RegisterAlertDialog alert={registerAlerts[0] ?? null} dismiss={dismissAlert} />
 
       <div className="relative z-10 flex min-h-0 w-full flex-col">
         <header className="register-header shrink-0 border-b border-border">
@@ -2166,11 +2195,7 @@ export default function RegisterPOSPage() {
           </div>
         </header>
 
-        {!paymentOpen && !quickViewOpen && inlineError && (
-          <div className="shrink-0 px-3 pt-2 md:px-4">
-            <RegisterInlineError message={inlineError} dismiss={() => setInlineError("")} />
-          </div>
-        )}
+
 
         {staffCameraOpen && !isLoggedIn && (
           <CameraBarcodeScanner
@@ -2240,11 +2265,7 @@ export default function RegisterPOSPage() {
                     ဖြစ်မှ session စတင်ပါမယ်။
                   </div>
 
-                  {staffLoginError && (
-                    <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-6 text-red-600 dark:text-red-300">
-                      {staffLoginError}
-                    </div>
-                  )}
+
                 </CardContent>
 
                 <CardFooter className="relative z-10 pt-2">
@@ -2544,14 +2565,10 @@ function CameraBarcodeScanner({
           <span className="absolute left-[8%] right-[8%] top-1/2 h-0.5 -translate-y-1/2 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent shadow-[0_0_14px_rgba(125,211,252,1)]" />
         </div>
 
-        {cameraError && (
-          <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-300/30 bg-red-950/90 p-4 text-sm font-semibold leading-6 text-red-100 backdrop-blur">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
-              <span>{cameraError}</span>
-            </div>
-          </div>
-        )}
+        <RegisterAlertDialog
+          alert={cameraError ? { title: "Camera ဖွင့်မရပါ", message: cameraError, warning: true } : null}
+          dismiss={() => { setCameraError(""); onClose(); }}
+        />
       </div>
 
       <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-2 pt-3 text-center text-xs font-semibold text-slate-300 sm:text-sm">
@@ -3320,5 +3337,32 @@ function RegisterInlineError({ message, dismiss }: { message: string; dismiss: (
       <p className="min-w-0 flex-1 break-words leading-5">{message}</p>
       <button type="button" onClick={dismiss} aria-label="Dismiss error" className="-my-1 -mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md hover:bg-red-500/10"><X className="h-4 w-4" /></button>
     </div>
+  );
+}
+
+
+// Uses only shared Alert Dialog props: no md size or radius variant.
+function RegisterAlertDialog({ alert, dismiss }: { alert: RegisterAlert | null; dismiss: () => void }) {
+  return (
+    <AlertDialog open={Boolean(alert)} onOpenChange={open => { if (!open) dismiss(); }}>
+      <style jsx global>{`
+        [data-slot="alert-dialog-overlay"] { z-index: 190 !important; }
+        [data-slot="alert-dialog-viewport"] { z-index: 200 !important; }
+      `}</style>
+      <AlertDialogContent className="register-alert z-[200] max-h-[calc(100dvh-32px)] overflow-y-auto rounded-2xl border-border bg-card text-card-foreground sm:max-w-[440px]">
+        <AlertDialogHeader className="text-left">
+          <div className={`mb-2 grid h-12 w-12 place-items-center rounded-2xl ${alert?.warning ? "bg-amber-500/10 text-amber-600 dark:text-amber-300" : "bg-red-500/10 text-red-600 dark:text-red-300"}`}><AlertTriangle className="h-6 w-6" /></div>
+          <AlertDialogTitle className="text-lg">{alert?.title || "အသိပေးချက်"}</AlertDialogTitle>
+          <AlertDialogDescription className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">{alert?.message}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="mt-2">
+          {alert?.onConfirm && <AlertDialogCancel className="rounded-xl">မလုပ်တော့ပါ</AlertDialogCancel>}
+          <AlertDialogAction
+            className={`rounded-xl ${alert?.onConfirm ? "bg-red-600 text-white hover:bg-red-500" : ""}`}
+            onClick={() => { alert?.onConfirm?.(); }}
+          >{alert?.confirmLabel || "နားလည်ပါပြီ"}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
